@@ -1,5 +1,6 @@
 import { AnalystAI } from "./ai.js";
-import { recentContent, saveDigest } from "./db.js";
+import { config } from "./config.js";
+import { countRecentContent, recentContent, saveDigest } from "./db.js";
 
 export type DigestLogger = (message: string) => void;
 
@@ -9,8 +10,16 @@ export async function createDigest(
   log: DigestLogger = () => {}
 ) {
   log(`Loading enriched entries collected during the last ${hours} hours`);
-  const sources = await recentContent(hours);
-  log(`Loaded ${sources.length} enriched entries`);
+  const eligibleCount = await countRecentContent(hours);
+  const sources = await recentContent(hours, config.DIGEST_MAX_ENTRIES);
+  if (eligibleCount > sources.length) {
+    log(
+      `${eligibleCount} enriched entries are eligible; selected the newest ${sources.length} ` +
+      `because DIGEST_MAX_ENTRIES=${config.DIGEST_MAX_ENTRIES}`
+    );
+  } else {
+    log(`Loaded ${sources.length} enriched entries`);
+  }
 
   if (sources.length === 0) {
     log("No entries available; digest generation skipped");

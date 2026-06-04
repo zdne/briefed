@@ -37,6 +37,15 @@ export interface Enrichment {
   entities: Entity[];
 }
 
+export interface ContentForEnrichment {
+  id: string;
+  title: string | null;
+  sourceSummary: string | null;
+  contentText: string;
+  sourceType: "article" | "reddit";
+  enrichmentMode: "full" | "embedded_only";
+}
+
 export interface RetrievedContent {
   id: string;
   title: string | null;

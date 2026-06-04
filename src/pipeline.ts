@@ -1,35 +1,57 @@
 import { AnalystAI } from "./ai.js";
 import {
+  enrichmentCandidates,
   getSyncCursor,
   markEnrichmentFailed,
   markEnrichmentProcessing,
+  saveEmbeddedOnly,
   saveEnrichment,
   setSyncCursor,
   upsertContent
 } from "./db.js";
+import { config } from "./config.js";
+import {
+  desiredEnrichmentMode,
+  detectSourceType,
+  type SourceType
+} from "./enrichment-policy.js";
 import { FeedbinClient } from "./feedbin.js";
 import { normalizeEntry } from "./normalize.js";
-import type { FeedbinEntry, NormalizedEntry } from "./types.js";
+import type { ContentForEnrichment, FeedbinEntry, NormalizedEntry } from "./types.js";
 
 export interface SyncResult {
   fetched: number;
   insertedOrUpdated: number;
-  enriched: number;
+  fullyEnriched: number;
+  embeddedOnly: number;
   enrichmentFailed: number;
   cursor?: string;
 }
 
 export type SyncLogger = (message: string) => void;
 
+export interface SyncOptions {
+  since?: string;
+}
+
 export async function enrichContent(id: string, entry: NormalizedEntry, ai: AnalystAI): Promise<void> {
+  return fullyEnrichContent(id, entry.title, entry.contentText, ai);
+}
+
+export async function fullyEnrichContent(
+  id: string,
+  title: string | null,
+  contentText: string,
+  ai: AnalystAI
+): Promise<void> {
   await markEnrichmentProcessing(id);
   try {
-    const enrichment = await ai.enrich(entry.title, entry.contentText);
+    const enrichment = await ai.enrich(title, contentText);
     const embeddingInput = [
-      entry.title,
+      title,
       enrichment.summary,
       enrichment.topics.join(", "),
-      entry.contentText
+      contentText
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -41,17 +63,40 @@ export async function enrichContent(id: string, entry: NormalizedEntry, ai: Anal
   }
 }
 
+export async function embedOnlyContent(
+  id: string,
+  entry: Pick<NormalizedEntry, "title" | "sourceSummary" | "contentText">,
+  ai: AnalystAI
+): Promise<void> {
+  await markEnrichmentProcessing(id);
+  try {
+    const summary = entry.sourceSummary ?? entry.title ?? entry.contentText.slice(0, 500);
+    const embedding = await ai.embed([entry.title, entry.contentText].filter(Boolean).join("\n\n"));
+    await saveEmbeddedOnly(id, summary, embedding);
+  } catch (error) {
+    await markEnrichmentFailed(id, error);
+    throw error;
+  }
+}
+
 export async function syncFeedbin(
   client: FeedbinClient,
   ai: AnalystAI,
-  log: SyncLogger = () => {}
+  log: SyncLogger = () => {},
+  options: SyncOptions = {}
 ): Promise<SyncResult> {
-  const since = await getSyncCursor();
-  log(since ? `Starting incremental sync from ${since}` : "Starting initial sync of all Feedbin entries");
+  const storedCursor = await getSyncCursor();
+  const since = options.since ?? storedCursor;
+  if (options.since) {
+    log(`Starting sync with explicit lookback from ${since}`);
+  } else {
+    log(since ? `Starting incremental sync from ${since}` : "Starting initial sync of all Feedbin entries");
+  }
   const result: SyncResult = {
     fetched: 0,
     insertedOrUpdated: 0,
-    enriched: 0,
+    fullyEnriched: 0,
+    embeddedOnly: 0,
     enrichmentFailed: 0,
     cursor: since
   };
@@ -71,18 +116,26 @@ export async function syncFeedbin(
       result.fetched++;
       newestCreatedAt = laterTimestamp(newestCreatedAt, raw);
       const entry = normalizeEntry(raw);
-      const stored = await upsertContent(entry);
+      const sourceType = detectSourceType(entry);
+      const mode = desiredEnrichmentMode(sourceType, config.REDDIT_ENRICHMENT_MODE);
+      const stored = await upsertContent(entry, sourceType, mode);
       result.insertedOrUpdated++;
       const label = entry.title ?? entry.canonicalUrl ?? `Feedbin entry ${entry.feedbinEntryId}`;
       const progress = formatProgress(result.fetched, totalEntries);
       log(`${progress} Stored: ${label}`);
 
       if (stored.needsEnrichment && entry.contentText) {
-        log(`${progress} Enriching content ${stored.id}`);
+        log(`${progress} Processing content ${stored.id} (${sourceType}, ${mode})`);
         try {
-          await enrichContent(stored.id, entry, ai);
-          result.enriched++;
-          log(`${progress} Enrichment complete`);
+          if (mode === "embedded_only") {
+            await embedOnlyContent(stored.id, entry, ai);
+            result.embeddedOnly++;
+            log(`${progress} Embedding-only processing complete`);
+          } else {
+            await enrichContent(stored.id, entry, ai);
+            result.fullyEnriched++;
+            log(`${progress} Full enrichment complete`);
+          }
         } catch (error) {
           result.enrichmentFailed++;
           log(`${progress} Enrichment failed: ${errorMessage(error)}`);
@@ -96,12 +149,19 @@ export async function syncFeedbin(
 
     log(
       `Completed page ${pageNumber}: ${formatProgress(result.fetched, totalEntries)} fetched, ` +
-      `${result.enriched} enriched, ` +
+      `${result.fullyEnriched} fully enriched, ${result.embeddedOnly} embedded only, ` +
       `${result.enrichmentFailed} enrichment failures`
     );
+
+    if (!page.hasNextPage && totalEntries !== null && result.fetched < totalEntries) {
+      throw new Error(
+        `Incomplete Feedbin pagination: fetched ${result.fetched} of ${totalEntries} entries; ` +
+        "cursor was not advanced"
+      );
+    }
   }
 
-  if (newestCreatedAt && newestCreatedAt !== since) {
+  if (result.fetched > 0 && newestCreatedAt && newestCreatedAt !== storedCursor) {
     await setSyncCursor(newestCreatedAt);
     result.cursor = newestCreatedAt;
     log(`Advanced Feedbin cursor to ${newestCreatedAt}`);
@@ -110,6 +170,45 @@ export async function syncFeedbin(
   }
   log("Sync complete");
   return result;
+}
+
+export function lookbackSince(now: Date, hours: number): string {
+  return new Date(now.getTime() - hours * 60 * 60 * 1000).toISOString();
+}
+
+export interface EnrichStoredOptions {
+  sourceType?: SourceType;
+  hours?: number;
+  limit: number;
+}
+
+export async function enrichStoredContent(
+  options: EnrichStoredOptions,
+  ai: AnalystAI,
+  log: SyncLogger = () => {}
+): Promise<{ selected: number; enriched: number; failed: number }> {
+  const candidates = await enrichmentCandidates(options);
+  const result = { selected: candidates.length, enriched: 0, failed: 0 };
+  log(`Selected ${candidates.length} stored entries for full enrichment`);
+
+  for (const [index, candidate] of candidates.entries()) {
+    const progress = formatProgress(index + 1, candidates.length);
+    log(`${progress} Fully enriching: ${candidate.title ?? `content ${candidate.id}`}`);
+    try {
+      await fullyEnrichCandidate(candidate, ai);
+      result.enriched++;
+      log(`${progress} Full enrichment complete`);
+    } catch (error) {
+      result.failed++;
+      log(`${progress} Full enrichment failed: ${errorMessage(error)}`);
+    }
+  }
+  log("Stored-content enrichment complete");
+  return result;
+}
+
+async function fullyEnrichCandidate(candidate: ContentForEnrichment, ai: AnalystAI): Promise<void> {
+  await fullyEnrichContent(candidate.id, candidate.title, candidate.contentText, ai);
 }
 
 function laterTimestamp(current: string | undefined, entry: FeedbinEntry): string {

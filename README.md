@@ -62,6 +62,13 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | --- | --- |
 | `npm run db:migrate` | Apply SQL migrations |
 | `npm run sync` | Incrementally fetch, normalize, enrich, and embed entries |
+| `npm run cli -- sync --hours 48` | Sync only entries created within the last 48 hours |
+| `npm run cli -- sync --days 7` | Sync only entries created within the last seven days |
+| `npm run cli -- sync --reset-cursor` | Clear the cursor and safely rescan the complete Feedbin archive |
+| `npm run cli -- enrich --source reddit --limit 20` | Fully enrich the newest 20 eligible Reddit entries |
+| `npm run cli -- enrich --source reddit --limit 100 --hours 168` | Fully enrich up to 100 Reddit entries from the last seven days |
+| `npm run cli -- enrich --source reddit --all` | Fully enrich every eligible stored Reddit entry |
+| `npm run cli -- enrich --source article --limit 20` | Retry or fully enrich eligible non-Reddit entries |
 | `npm run cli -- query "<question>"` | Query the archive from the terminal |
 | `npm run digest` | Generate and store a digest for the last 24 hours |
 | `npm run cli -- digest --hours 48` | Generate a digest with a custom lookback |
@@ -82,8 +89,10 @@ See [`.env.example`](.env.example). Important values:
 - `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: Feedbin HTTP Basic Auth credentials.
 - `OPENAI_API_KEY`: always required because embeddings use OpenAI.
 - `LLM_PROVIDER`: `openai` or `anthropic`.
+- `REDDIT_ENRICHMENT_MODE`: defaults to `embedded_only`; set to `full` to fully enrich Reddit during sync.
 - `OPENAI_EMBEDDING_MODEL`: defaults to `text-embedding-3-small`; storage is fixed at 1536 dimensions.
 - `QUERY_LIMIT`: default number of vector matches passed to answer synthesis.
+- `DIGEST_MAX_ENTRIES`: maximum newest completed entries sent to one digest request; defaults to `200`.
 
 ## API
 
@@ -100,7 +109,55 @@ Failed enrichments remain stored with `enrichment_status = 'failed'` and an erro
 
 Sync prints Feedbin's total matching entry count plus per-entry counts and percentages while fetching and enriching. It is safe to interrupt with `Ctrl-C`: persisted entries remain stored, the cursor advances only after a complete run, and deduplication makes the next run idempotent.
 
+If a cursor must be rebuilt, run `npm run cli -- sync --reset-cursor`. Existing entries are deduplicated, but missing older entries are fetched and processed. Sync refuses to advance the cursor if Feedbin reports more records than pagination returned.
+
+For an MVP focused on recent digests, avoid a complete historical backfill:
+
+```bash
+# Fetch the last 48 hours, then continue incrementally on later normal syncs
+npm run cli -- sync --hours 48
+
+# Fetch the last seven days
+npm run cli -- sync --days 7
+```
+
+After a successful lookback sync, the stored cursor advances to the newest Feedbin entry fetched, which is normally close to the present. If interrupted, the existing stored cursor remains unchanged; resume with the same `--hours` or `--days` option. If no matching entries are returned, the existing cursor is left unchanged.
+
 Digest generation prints progress while loading sources, waiting for LLM synthesis, and storing the completed digest.
+It sends at most `DIGEST_MAX_ENTRIES` newest eligible entries to the LLM and logs when older eligible entries are omitted.
+
+## Reddit Strategy
+
+Reddit feeds can produce many entries, and individually summarizing every post adds cost and makes initial syncs slow. By default, Reddit entries use `embedded_only` processing:
+
+- Store the complete Feedbin entry, normalized post text, title, author, URL, and Feedbin summary.
+- Generate and store an OpenAI embedding from the title and full post text.
+- Copy the Feedbin summary into `analyst_summary`.
+- Leave generated topic tags and entities empty.
+- Keep the post available to semantic queries and daily digests.
+
+Non-Reddit entries continue to receive full LLM enrichment. Fully enrich selected stored Reddit posts later:
+
+```bash
+# Fully enrich the newest 20 embedded-only Reddit entries
+npm run cli -- enrich --source reddit --limit 20
+
+# Fully enrich up to 100 Reddit entries collected in the last seven days
+npm run cli -- enrich --source reddit --limit 100 --hours 168
+
+# Upgrade every stored embedded-only Reddit entry to full enrichment
+npm run cli -- enrich --source reddit --all
+```
+
+To fully enrich Reddit entries during future syncs, set:
+
+```env
+REDDIT_ENRICHMENT_MODE=full
+```
+
+Completed fully enriched entries are never downgraded. The selective `enrich` command upgrades `embedded_only` entries, retries failed or pending entries, and recovers entries stuck in `processing` for more than 15 minutes.
+
+See [`docs/HowItWorks.md`](docs/HowItWorks.md) for the processing and Reddit-policy details.
 
 ## Current MVP Boundaries
 

@@ -1,110 +1,183 @@
-# How it works
+# How PND Works
 
-## Sync
-• npm run sync performs this workflow:
+PND uses Feedbin as its collector, Postgres and pgvector as its local archive, OpenAI for embeddings, and OpenAI or Anthropic for language-model synthesis.
 
-  1. Reads the last successful Feedbin cursor from Postgres.
-  2. Fetches Feedbin entries created after that timestamp.
-  3. Follows pagination until all new entries are fetched.
-  4. Normalizes each entry:
-      - Converts HTML to plain text.
-      - Cleans canonical URLs.
-      - Preserves the original Feedbin JSON.
+## Sync Pipeline
 
-  5. Stores or updates the entry in Postgres.
-  6. Prevents duplicates using:
-      - Feedbin entry ID.
-      - Canonical URL.
+Run:
 
-  7. For entries not already enriched:
-      - Generates a summary.
-      - Extracts topic tags.
-      - Extracts named entities.
-      - Creates an OpenAI embedding.
-      - Stores enrichment results and the pgvector embedding.
+```bash
+npm run sync
+```
 
-  8. After all entries finish, advances the Feedbin cursor.
+The sync command:
 
-  If enrichment fails, the original entry remains stored with the error recorded. If interrupted, the cursor does not advance,
-  so the next sync revisits entries safely.
+1. Reads the last successful Feedbin cursor from `sync_state`.
+2. Requests Feedbin entries created after that timestamp.
+3. Follows Feedbin pagination and reports total and per-entry progress.
+4. Normalizes each entry:
+   - Converts HTML into plain text.
+   - Removes common tracking parameters from canonical URLs.
+   - Preserves the original Feedbin JSON.
+5. Stores or updates the entry in `content`.
+6. Deduplicates entries using Feedbin entry ID and canonical URL.
+7. Selects the entry's enrichment strategy.
+8. Stores enrichment results and an embedding.
+9. Advances the Feedbin cursor only after the complete sync finishes.
 
+It is safe to interrupt sync with `Ctrl-C`. Already processed entries remain stored, but the cursor is not advanced. The next sync may revisit those entries, and deduplication prevents duplicate rows.
 
-### Enrichment
+Feedbin limits pages to 100 entries. PND follows Feedbin's pagination links and refuses to advance the cursor if Feedbin reports more matching records than were fetched.
 
-• For each new article, step 7 makes two AI requests.
+To clear a bad cursor and safely rescan the full Feedbin archive:
 
-  Analysis Request
+```bash
+npm run cli -- sync --reset-cursor
+```
 
-  The configured LLM, OpenAI by default or Anthropic, receives the article title and text. It returns structured JSON
-  containing:
+Existing entries are deduplicated during the rescan.
 
-  - summary: factual summary, limited to roughly 120 words.
-  - topics: 3–8 lowercase tags, such as artificial intelligence, semiconductors, or regulation.
-  - entities: important named items and their types, such as:
+For a recent-only initial sync or backfill:
 
-    [
-      { "name": "OpenAI", "type": "company" },
-      { "name": "Sam Altman", "type": "person" },
-      { "name": "European Union", "type": "organization" }
-    ]
+```bash
+npm run cli -- sync --hours 48
+npm run cli -- sync --days 7
+```
 
-  These values are stored in analyst_summary, topic_tags, and entities.
+These options temporarily override the starting cursor without changing the stored cursor before processing. After all matching pages finish successfully, PND stores the newest fetched Feedbin timestamp as the next incremental cursor. This is normally close to the present, but deliberately uses Feedbin's timestamp rather than the local clock to avoid skipping entries.
 
-  Embedding Request
+If a recent-only sync is interrupted, the previous stored cursor remains unchanged. Resume using the same lookback option. If Feedbin returns no matching entries, PND also leaves the existing cursor unchanged.
 
-  PND combines the article title, generated summary, topic tags, and full text into one document. OpenAI converts that document
-  into a 1,536-number vector.
+## Source Detection
 
-  That vector represents the article’s meaning rather than exact keywords. During /query, the question is also embedded, and
-  pgvector finds articles with nearby vectors.
+PND currently assigns one of two `source_type` values:
 
-  For example, a query about “companies building AI chips” could retrieve articles mentioning NVIDIA, accelerators, or
-  semiconductor capacity even when they do not use the query’s exact wording.
+- `article`: every non-Reddit entry.
+- `reddit`: canonical URLs on a Reddit hostname with a path beginning with `/r/`.
 
-  The current implementation enriches articles serially, one at a time, to keep API usage and rate limits predictable.
+This source type controls the default enrichment policy. It does not prevent an entry from appearing in queries or digests.
 
-## Digest
+## Enrichment Modes
 
-• npm run digest:
+Each entry records an `enrichment_mode`:
 
-  1. Loads all successfully enriched entries collected during the last 24 hours.
-  2. Sends their titles, summaries, URLs, and publication dates to the configured LLM.
-  3. Asks it to:
-      - Group related developments.
-      - Highlight notable signals.
-      - Produce a concise analyst-style digest.
-      - Add [1]-style source citations.
+- `full`: LLM analysis plus embedding.
+- `embedded_only`: embedding without individual LLM analysis.
 
-  4. Stores the generated digest locally in the digests Postgres table.
-  5. Prints the digest and its source list to the terminal.
+### Full Enrichment
 
-  It does not currently email or publish the digest.
+Full enrichment makes two AI requests per entry.
 
-  Use a different lookback period with:
+First, the configured LLM receives the title and normalized text and returns:
 
-  npm run cli -- digest --hours 48
+- `summary`: a concise factual summary.
+- `topics`: short lowercase topic tags.
+- `entities`: important named entities and their types.
 
-  The digest uses the configured LLM provider:
+PND validates the response, normalizes and deduplicates tags/entities, and caps them at 10 topics and 30 entities. Excess valid items are trimmed instead of failing the complete enrichment.
 
-  LLM_PROVIDER=openai
+Second, OpenAI creates a 1,536-dimension embedding from the title, generated summary, topics, and full text.
 
-  or:
+Full enrichment is the default for non-Reddit entries.
 
-  LLM_PROVIDER=anthropic
+### Reddit Embedding-Only Strategy
 
-  The LLM receives the locally stored titles, summaries, URLs, and dates from the chosen period. It groups related developments
-  and writes a cited digest.
+Reddit feeds can be high volume. Individually summarizing every post would increase LLM calls, token usage, and sync duration before the MVP has demonstrated that Reddit-level analysis is valuable.
 
-  OpenAI embeddings are not used during digest generation. They are used for semantic archive queries.
+By default:
 
-mbeddings are currently used only for semantic archive queries.
+```env
+REDDIT_ENRICHMENT_MODE=embedded_only
+```
 
-  When you ask a question:
+For each Reddit post, PND stores:
 
-  1. PND creates an embedding for the question.
-  2. pgvector compares it against stored article embeddings.
-  3. It retrieves the most semantically relevant articles.
-  4. The LLM writes an answer using those articles with citations.
+- Feedbin entry ID, feed ID, and original JSON.
+- Canonical Reddit URL, title, author, and timestamps.
+- Original HTML and normalized full post text.
+- Feedbin-provided summary.
+- An OpenAI embedding generated from the title and full post text.
+- `analyst_summary` copied from Feedbin's summary.
+- Empty generated topic tags and entities.
+- `source_type = 'reddit'`.
+- `enrichment_mode = 'embedded_only'`.
+- `enrichment_status = 'complete'`.
 
-  Digests currently select articles by collection time, not embedding similarity. Embeddings could later support topic-specific
-  digests, clustering, related-article discovery, and trend detection.
+This keeps every Reddit post semantically searchable and eligible for digests while avoiding one LLM analysis call per post.
+
+Feedbin's Reddit content generally contains the original post body, but it does not contain comments, discussion summaries, scores, or reliable engagement signals.
+
+## Upgrading Reddit Enrichment
+
+The Reddit policy is reversible. Stored embedding-only entries can be upgraded to full enrichment without fetching them from Feedbin again.
+
+```bash
+# Fully enrich the newest 20 eligible Reddit entries
+npm run cli -- enrich --source reddit --limit 20
+
+# Fully enrich up to 100 Reddit entries collected in the last seven days
+npm run cli -- enrich --source reddit --limit 100 --hours 168
+
+# Fully enrich every eligible stored Reddit entry
+npm run cli -- enrich --source reddit --all
+```
+
+The command selects newest entries first. It upgrades `embedded_only` entries, retries pending or failed entries, and retries entries stuck in `processing` for more than 15 minutes.
+
+To fully enrich Reddit entries encountered by future syncs:
+
+```env
+REDDIT_ENRICHMENT_MODE=full
+```
+
+Completed fully enriched entries are not downgraded if the setting later changes back to `embedded_only`.
+
+## Semantic Queries
+
+Run:
+
+```bash
+npm run cli -- query "What changed in AI agent observability?"
+```
+
+Or send a request to `POST /query`.
+
+PND:
+
+1. Creates an OpenAI embedding for the question.
+2. Uses pgvector cosine similarity to retrieve relevant archived entries.
+3. Sends the retrieved titles, summaries, URLs, and dates to the configured LLM.
+4. Returns a synthesized answer with `[1]`-style citations and a source list.
+
+Both fully enriched and embedding-only Reddit entries participate in semantic retrieval.
+
+## Daily Digest
+
+Run:
+
+```bash
+npm run digest
+npm run cli -- digest --hours 48
+```
+
+The digest command:
+
+1. Loads completed entries collected during the lookback period.
+2. Sends their titles, stored summaries, URLs, and dates to the configured LLM.
+3. Asks the LLM to group related developments, highlight signals, and cite sources.
+4. Stores the digest in the local `digests` table.
+5. Prints the digest and source list.
+
+Reddit embedding-only entries remain eligible for the digest. The digest sees their Feedbin-provided summaries rather than individually generated LLM summaries. Embeddings are not used to select digest entries; selection is currently based on collection time.
+
+To prevent unexpectedly large or expensive LLM requests, PND sends at most the newest `DIGEST_MAX_ENTRIES` eligible entries. The default is `200`. Digest logs report the total eligible count and clearly state when older entries were omitted.
+
+## Local And External Data
+
+The normalized archive, generated enrichment, embeddings, cursors, and digests are stored locally in Postgres.
+
+External requests still occur:
+
+- Feedbin supplies entries.
+- OpenAI receives text for embeddings.
+- The configured LLM provider receives text for full enrichment, queries, and digests.

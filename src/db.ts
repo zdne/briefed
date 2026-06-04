@@ -2,7 +2,13 @@ import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import pg from "pg";
 import { config } from "./config.js";
-import type { Enrichment, NormalizedEntry, RetrievedContent } from "./types.js";
+import type {
+  ContentForEnrichment,
+  Enrichment,
+  NormalizedEntry,
+  RetrievedContent
+} from "./types.js";
+import type { EnrichmentMode, SourceType } from "./enrichment-policy.js";
 
 const { Pool } = pg;
 export const pool = new Pool({ connectionString: config.DATABASE_URL });
@@ -55,12 +61,24 @@ export async function setSyncCursor(value: string): Promise<void> {
   );
 }
 
-export async function upsertContent(entry: NormalizedEntry): Promise<{ id: string; needsEnrichment: boolean }> {
+export async function resetSyncCursor(): Promise<void> {
+  await pool.query("DELETE FROM sync_state WHERE key = 'feedbin_entries_since'");
+}
+
+export async function upsertContent(
+  entry: NormalizedEntry,
+  sourceType: SourceType,
+  desiredMode: EnrichmentMode
+): Promise<{ id: string; needsEnrichment: boolean }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const existing = await client.query<{ id: string; enrichment_status: string }>(
-      `SELECT id, enrichment_status FROM content
+    const existing = await client.query<{
+      id: string;
+      enrichment_status: string;
+      enrichment_mode: EnrichmentMode;
+    }>(
+      `SELECT id, enrichment_status, enrichment_mode FROM content
        WHERE feedbin_entry_id = $1 OR ($2::text IS NOT NULL AND canonical_url = $2)
        ORDER BY feedbin_entry_id = $1 DESC
        LIMIT 1
@@ -72,31 +90,34 @@ export async function upsertContent(entry: NormalizedEntry): Promise<{ id: strin
     let needsEnrichment = true;
     if (existing.rows[0]) {
       id = existing.rows[0].id;
-      needsEnrichment = existing.rows[0].enrichment_status !== "complete";
+      needsEnrichment =
+        existing.rows[0].enrichment_status !== "complete" ||
+        (desiredMode === "full" && existing.rows[0].enrichment_mode !== "full");
       await client.query(
         `UPDATE content SET
           feedbin_entry_id = $2, feed_id = $3, canonical_url = COALESCE($4, canonical_url),
           title = $5, author = $6, source_summary = $7, content_html = $8,
           content_text = $9, published_at = $10, feedbin_created_at = $11,
-          raw_entry = $12, updated_at = now()
+          raw_entry = $12, source_type = $13, updated_at = now()
          WHERE id = $1`,
         [
           id, entry.feedbinEntryId, entry.feedId, entry.canonicalUrl, entry.title,
           entry.author, entry.sourceSummary, entry.contentHtml, entry.contentText,
-          entry.publishedAt, entry.feedbinCreatedAt, entry.rawEntry
+          entry.publishedAt, entry.feedbinCreatedAt, entry.rawEntry, sourceType
         ]
       );
     } else {
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO content (
           feedbin_entry_id, feed_id, canonical_url, title, author, source_summary,
-          content_html, content_text, published_at, feedbin_created_at, raw_entry
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          content_html, content_text, published_at, feedbin_created_at, raw_entry,
+          source_type, enrichment_mode
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
          RETURNING id`,
         [
           entry.feedbinEntryId, entry.feedId, entry.canonicalUrl, entry.title,
           entry.author, entry.sourceSummary, entry.contentHtml, entry.contentText,
-          entry.publishedAt, entry.feedbinCreatedAt, entry.rawEntry
+          entry.publishedAt, entry.feedbinCreatedAt, entry.rawEntry, sourceType, desiredMode
         ]
       );
       id = inserted.rows[0]!.id;
@@ -125,10 +146,25 @@ export async function saveEnrichment(
 ): Promise<void> {
   await pool.query(
     `UPDATE content SET analyst_summary = $2, topic_tags = $3, entities = $4,
-      embedding = $5::vector, enrichment_status = 'complete', enrichment_error = NULL,
+      embedding = $5::vector, enrichment_mode = 'full',
+      enrichment_status = 'complete', enrichment_error = NULL,
       updated_at = now()
      WHERE id = $1`,
     [id, enrichment.summary, enrichment.topics, JSON.stringify(enrichment.entities), vectorLiteral(embedding)]
+  );
+}
+
+export async function saveEmbeddedOnly(
+  id: string,
+  summary: string,
+  embedding: number[]
+): Promise<void> {
+  await pool.query(
+    `UPDATE content SET analyst_summary = $2, topic_tags = '{}', entities = '[]',
+      embedding = $3::vector, enrichment_mode = 'embedded_only',
+      enrichment_status = 'complete', enrichment_error = NULL, updated_at = now()
+     WHERE id = $1`,
+    [id, summary, vectorLiteral(embedding)]
   );
 }
 
@@ -139,6 +175,34 @@ export async function markEnrichmentFailed(id: string, error: unknown): Promise<
      WHERE id = $1`,
     [id, message.slice(0, 2000)]
   );
+}
+
+export interface EnrichmentCandidateFilters {
+  sourceType?: SourceType;
+  hours?: number;
+  limit: number;
+}
+
+export async function enrichmentCandidates(
+  filters: EnrichmentCandidateFilters
+): Promise<ContentForEnrichment[]> {
+  const result = await pool.query<ContentForEnrichment>(
+    `SELECT id::text, title, source_summary AS "sourceSummary", content_text AS "contentText",
+      source_type AS "sourceType", enrichment_mode AS "enrichmentMode"
+     FROM content
+     WHERE ($1::text IS NULL OR source_type = $1)
+       AND ($2::int IS NULL OR feedbin_created_at >= now() - ($2 * interval '1 hour'))
+       AND (
+         enrichment_mode = 'embedded_only'
+         OR enrichment_status IN ('pending', 'failed')
+         OR (enrichment_status = 'processing' AND updated_at < now() - interval '15 minutes')
+       )
+       AND content_text <> ''
+     ORDER BY feedbin_created_at DESC
+     LIMIT $3`,
+    [filters.sourceType ?? null, filters.hours ?? null, filters.limit]
+  );
+  return result.rows;
 }
 
 export async function retrieveRelevant(embedding: number[], limit: number): Promise<RetrievedContent[]> {
@@ -155,15 +219,26 @@ export async function retrieveRelevant(embedding: number[], limit: number): Prom
   return result.rows;
 }
 
-export async function recentContent(hours: number): Promise<RetrievedContent[]> {
+export async function countRecentContent(hours: number): Promise<number> {
+  const result = await pool.query<{ count: string }>(
+    `SELECT count(*)::text AS count
+     FROM content
+     WHERE enrichment_status = 'complete' AND feedbin_created_at >= now() - ($1 * interval '1 hour')`,
+    [hours]
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+export async function recentContent(hours: number, limit: number): Promise<RetrievedContent[]> {
   const result = await pool.query<RetrievedContent>(
     `SELECT id::text, title, canonical_url AS "canonicalUrl", author,
       published_at::text AS "publishedAt", analyst_summary AS summary, content_text AS "contentText",
       0::float AS score
      FROM content
      WHERE enrichment_status = 'complete' AND feedbin_created_at >= now() - ($1 * interval '1 hour')
-     ORDER BY feedbin_created_at DESC`,
-    [hours]
+     ORDER BY feedbin_created_at DESC
+     LIMIT $2`,
+    [hours, limit]
   );
   return result.rows;
 }

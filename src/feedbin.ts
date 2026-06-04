@@ -10,6 +10,7 @@ export interface FeedbinClientOptions {
 export interface FeedbinEntriesPage {
   entries: FeedbinEntry[];
   total: number | null;
+  hasNextPage: boolean;
 }
 
 export class FeedbinClient {
@@ -44,11 +45,15 @@ export class FeedbinClient {
 
       const totalHeader = response.headers.get("x-feedbin-record-count");
       const total = totalHeader === null ? null : Number.parseInt(totalHeader, 10);
+      const nextPage = parseNextLink(
+        response.headers.get("links") ?? response.headers.get("link")
+      );
       yield {
         entries: (await response.json()) as FeedbinEntry[],
-        total: Number.isNaN(total) ? null : total
+        total: Number.isNaN(total) ? null : total,
+        hasNextPage: nextPage !== null
       };
-      next = parseNextLink(response.headers.get("link"));
+      next = nextPage;
     }
   }
 }

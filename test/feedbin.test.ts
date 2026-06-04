@@ -18,7 +18,7 @@ describe("FeedbinClient", () => {
       .mockResolvedValueOnce(
         new Response(JSON.stringify([{ id: 1 }]), {
           headers: {
-            link: '<https://feedbin.test/v2/entries.json?page=2>; rel="next"',
+            links: '<https://feedbin.test/v2/entries.json?page=2>; rel="next"',
             "x-feedbin-record-count": "2"
           }
         })
@@ -37,13 +37,16 @@ describe("FeedbinClient", () => {
 
     const ids: number[] = [];
     const totals: Array<number | null> = [];
+    const hasNextPages: boolean[] = [];
     for await (const page of client.entriesSince("2026-06-01T00:00:00.123456Z")) {
       ids.push(...page.entries.map((entry) => entry.id));
       totals.push(page.total);
+      hasNextPages.push(page.hasNextPage);
     }
 
     expect(ids).toEqual([1, 2]);
     expect(totals).toEqual([2, 2]);
+    expect(hasNextPages).toEqual([true, false]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const [url, options] = fetchImpl.mock.calls[0]!;
     expect(String(url)).toContain("since=2026-06-01T00%3A00%3A00.123456Z");

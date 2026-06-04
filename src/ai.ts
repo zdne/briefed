@@ -6,8 +6,8 @@ import type { Enrichment, RetrievedContent } from "./types.js";
 
 const enrichmentSchema = z.object({
   summary: z.string().min(1),
-  topics: z.array(z.string()).max(10),
-  entities: z.array(z.object({ name: z.string(), type: z.string() })).max(30)
+  topics: z.array(z.string()),
+  entities: z.array(z.object({ name: z.string(), type: z.string() }))
 });
 
 export class AnalystAI {
@@ -39,13 +39,13 @@ export class AnalystAI {
     const prompt = `Analyze this archive entry.
 Return JSON with:
 - summary: a concise factual summary of at most 120 words
-- topics: 3-8 short lowercase topic tags
-- entities: important named entities as {"name": string, "type": string}
+- topics: 3-8 short lowercase topic tags, never more than 10
+- entities: only the 30 most important named entities as {"name": string, "type": string}
 
 Title: ${title ?? "(untitled)"}
 Content:
 ${content.slice(0, 40_000)}`;
-    return enrichmentSchema.parse(await this.generateJson(prompt));
+    return normalizeEnrichment(enrichmentSchema.parse(await this.generateJson(prompt)));
   }
 
   async answer(question: string, sources: RetrievedContent[]): Promise<string> {
@@ -92,6 +92,31 @@ ${formatSources(sources)}`);
     });
     return response.choices[0]?.message.content ?? "";
   }
+}
+
+export function normalizeEnrichment(enrichment: Enrichment): Enrichment {
+  return {
+    summary: enrichment.summary.trim(),
+    topics: uniqueStrings(enrichment.topics.map((topic) => topic.trim().toLowerCase())).slice(0, 10),
+    entities: uniqueEntities(enrichment.entities).slice(0, 30)
+  };
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function uniqueEntities(entities: Enrichment["entities"]): Enrichment["entities"] {
+  const seen = new Set<string>();
+  return entities
+    .map((entity) => ({ name: entity.name.trim(), type: entity.type.trim().toLowerCase() }))
+    .filter((entity) => {
+      if (!entity.name || !entity.type) return false;
+      const key = `${entity.name.toLowerCase()}\0${entity.type}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function formatSources(sources: RetrievedContent[]): string {
