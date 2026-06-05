@@ -35,7 +35,10 @@ export async function createDigest(
   const end = new Date();
   const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
   log(`Generating digest with ${sources.length} sources using the configured LLM`);
-  const body = await ai.digest(sources, hours);
+  const body = await ai.digest(sources, hours, {
+    requiredTopics: config.DIGEST_REQUIRED_TOPICS,
+    focusAreas: config.DIGEST_FOCUS_AREAS
+  });
   log("Digest generation complete; storing result");
   const id = await saveDigest(start, end, sources.map((source) => source.id), body);
   log(`Stored digest ${id}`);

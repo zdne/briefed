@@ -100,6 +100,8 @@ See [`.env.example`](.env.example). Important values:
 - `OPENAI_EMBEDDING_MODEL`: defaults to `text-embedding-3-small`; storage is fixed at 1536 dimensions.
 - `QUERY_LIMIT`: default number of vector matches passed to answer synthesis.
 - `DIGEST_MAX_ENTRIES`: maximum newest completed entries sent to one digest request; defaults to `200`.
+- `DIGEST_REQUIRED_TOPICS`: comma-separated durable watchlist topics that always appear in digests, even with no new signal.
+- `DIGEST_FOCUS_AREAS`: comma-separated softer interests that are highlighted only when relevant source-backed signal exists.
 - `DIGEST_OUTPUT_DIR`: directory for generated digest Markdown; defaults to `output/digests`.
 - `QUERY_OUTPUT_DIR`: directory for generated query Markdown and JSON sidecars; defaults to `output/queries`.
 
@@ -134,6 +136,15 @@ After a successful lookback sync, the stored cursor advances to the newest Feedb
 
 Digest generation prints progress while loading sources, waiting for LLM synthesis, and storing the completed digest.
 It sends at most `DIGEST_MAX_ENTRIES` newest eligible entries to the LLM and logs when older eligible entries are omitted.
+
+Use digest topic config to shape the writeup without filtering the source set:
+
+```env
+DIGEST_REQUIRED_TOPICS=agentic payments, agentic B2B, agentic commerce, personal memory
+DIGEST_FOCUS_AREAS=MCP, AI observability, agent frameworks
+```
+
+Required topics always get a watchlist subsection. If there is no source-backed update, the digest says so. Focus areas are included only when the selected entries contain meaningful signal.
 
 ## Markdown Output
 

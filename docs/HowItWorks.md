@@ -186,6 +186,15 @@ Embedding-only lightweight entries remain eligible for the digest. The digest se
 
 To prevent unexpectedly large or expensive LLM requests, PND sends at most the newest `DIGEST_MAX_ENTRIES` eligible entries. The default is `200`. Digest logs report the total eligible count and clearly state when older entries were omitted.
 
+Digest topic config shapes the synthesis prompt without filtering entries:
+
+```env
+DIGEST_REQUIRED_TOPICS=agentic payments, agentic B2B, agentic commerce, personal memory
+DIGEST_FOCUS_AREAS=MCP, AI observability, agent frameworks
+```
+
+Required topics always appear under a required watchlist section. If the selected sources have no meaningful update for one of those topics, the digest explicitly says there was no signal in the window. Focus areas are softer interests; the digest highlights them only when there is meaningful source-backed signal.
+
 Each digest is stored in Postgres and written as a timestamped Markdown file under `DIGEST_OUTPUT_DIR`. The Markdown contains Obsidian-compatible frontmatter, the digest body, and clickable sources. Inline citations use Obsidian heading links such as `[[#Source 32|32]]`, and source titles link to original URLs. Point `DIGEST_OUTPUT_DIR` at an Obsidian vault folder to make generated digests appear there without an additional integration.
 
 CLI Markdown is the default and is written to a file without echoing the document to stdout. `--format json` prints machine-readable output. Progress logs are written to stderr so JSON stdout remains parseable.

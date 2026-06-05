@@ -106,10 +106,15 @@ Follow-up question: ${question}
 ${formatSources(sources)}`);
   }
 
-  async digest(sources: RetrievedContent[], hours: number): Promise<string> {
+  async digest(
+    sources: RetrievedContent[],
+    hours: number,
+    options: { requiredTopics?: string[]; focusAreas?: string[] } = {}
+  ): Promise<string> {
     return this.generateText(`Create a concise analyst digest of the entries collected in the last ${hours} hours.
 Group related developments, highlight notable signals, and use inline citations like [1].
 Do not add facts not present in the sources.
+${formatDigestTopicInstructions(options.requiredTopics ?? [], options.focusAreas ?? [])}
 
 ${formatSources(sources)}`);
   }
@@ -176,4 +181,28 @@ Published: ${source.publishedAt ?? "unknown"}
 Summary: ${source.summary ?? source.contentText.slice(0, 1200)}`
     )
     .join("\n\n");
+}
+
+function formatDigestTopicInstructions(requiredTopics: string[], focusAreas: string[]): string {
+  const sections: string[] = [];
+  if (requiredTopics.length > 0) {
+    sections.push(`Required watchlist topics:
+${requiredTopics.map((topic) => `- ${topic}`).join("\n")}
+
+Always include a "## Required Watchlist" section.
+For every required watchlist topic, include a subsection even if there is no new signal.
+If the supplied sources contain relevant signal for that topic, summarize it with citations.
+If they do not, write "No meaningful new signal found in this window." Do not invent updates.`);
+  }
+
+  if (focusAreas.length > 0) {
+    sections.push(`Focus areas to highlight when relevant:
+${focusAreas.map((area) => `- ${area}`).join("\n")}
+
+Include a "## Highlighted Focus Areas" section only for focus areas with meaningful source-backed signal.
+Do not create empty focus-area sections.`);
+  }
+
+  if (sections.length === 0) return "";
+  return `\n${sections.join("\n\n")}`;
 }

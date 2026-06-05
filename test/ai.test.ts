@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeEnrichment } from "../src/ai.js";
+import { parseCommaSeparatedList } from "../src/config.js";
 
 describe("normalizeEnrichment", () => {
   it("normalizes, deduplicates, and caps model output", () => {
@@ -22,5 +23,15 @@ describe("normalizeEnrichment", () => {
     expect(result.entities).toHaveLength(30);
     expect(result.entities[0]).toEqual({ name: "OpenAI", type: "company" });
     expect(result.entities.filter((entity) => entity.name.toLowerCase() === "openai")).toHaveLength(1);
+  });
+});
+
+describe("parseCommaSeparatedList", () => {
+  it("trims items and drops empty values", () => {
+    expect(parseCommaSeparatedList("agentic payments, , personal memory ,MCP")).toEqual([
+      "agentic payments",
+      "personal memory",
+      "MCP"
+    ]);
   });
 });
