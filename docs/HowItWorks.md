@@ -198,16 +198,19 @@ npm run cli -- digest render
 The digest command:
 
 1. Loads completed entries collected during the lookback period.
-2. Sends their titles, stored summaries, URLs, and dates to the configured LLM.
-3. Asks the LLM to group related developments, highlight signals, and cite sources.
-4. Stores the digest in the local `digests` table.
-5. Writes the digest Markdown file.
+2. Loads a broader recent candidate pool controlled by `DIGEST_CANDIDATE_LIMIT`.
+3. Uses vector search for each configured required topic and focus area.
+4. Selects protected topic buckets, then fills the remaining budget with newest general entries.
+5. Sends selected titles, stored summaries, URLs, and dates to the configured LLM.
+6. Asks the LLM to group related developments, highlight signals, and cite sources.
+7. Stores the digest in the local `digests` table.
+8. Writes the digest Markdown file.
 
-Embedding-only lightweight entries remain eligible for the digest. The digest sees their Feedbin-provided summaries rather than individually generated LLM summaries. Embeddings are not used to select digest entries; selection is currently based on collection time.
+Embedding-only lightweight entries remain eligible for the digest. The digest sees their source-provided summaries rather than individually generated LLM summaries. Their embeddings are still used for required-topic and focus-area source selection.
 
-To prevent unexpectedly large or expensive LLM requests, PND sends at most the newest `DIGEST_MAX_ENTRIES` eligible entries. The default is `200`. Digest logs report the total eligible count and clearly state when older entries were omitted.
+To prevent unexpectedly large or expensive LLM requests, PND sends at most `DIGEST_MAX_ENTRIES` selected entries. The default is `200`. Digest logs report the total eligible count, candidate count, and final required-topic, focus-area, and general source counts.
 
-Digest topic config shapes the synthesis prompt without filtering entries:
+Digest topic config protects important topics during selection and shapes the synthesis prompt:
 
 ```env
 DIGEST_REQUIRED_TOPICS=agentic payments, agentic B2B, agentic commerce, personal memory

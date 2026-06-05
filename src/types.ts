@@ -56,6 +56,14 @@ export interface RetrievedContent {
   score: number;
 }
 
+export interface DigestCandidate extends RetrievedContent {
+  sourceType: "article" | "reddit" | "hackernews" | "twitter";
+  sourceKey: string;
+  topicTags: string[];
+  entities: unknown;
+  rawEntry: unknown;
+}
+
 export interface DigestForRendering {
   id: string;
   periodStart: string;

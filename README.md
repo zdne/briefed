@@ -104,7 +104,11 @@ See [`.env.example`](.env.example). Important values:
 - `LIGHTWEIGHT_SOURCE_TYPES`: comma-separated source types that use embedding-only sync by default; defaults to `reddit,hackernews,twitter`.
 - `OPENAI_EMBEDDING_MODEL`: defaults to `text-embedding-3-small`; storage is fixed at 1536 dimensions.
 - `QUERY_LIMIT`: default number of vector matches passed to answer synthesis.
-- `DIGEST_MAX_ENTRIES`: maximum newest completed entries sent to one digest request; defaults to `200`.
+- `DIGEST_MAX_ENTRIES`: hard cap on selected entries sent to one digest request; defaults to `200`.
+- `DIGEST_CANDIDATE_LIMIT`: newest completed entries loaded before topic-aware selection; defaults to `1000`.
+- `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES`, `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES`: per-topic vector bucket sizing for required topics; defaults to `6` and `16`.
+- `DIGEST_FOCUS_AREA_MIN_ENTRIES`, `DIGEST_FOCUS_AREA_MAX_ENTRIES`: per-topic vector bucket sizing for focus areas; defaults to `3` and `10`.
+- `DIGEST_GENERAL_MAX_ENTRIES`: cap for newest general-fill entries after protected topic buckets; defaults to `120`.
 - `DIGEST_REQUIRED_TOPICS`: comma-separated durable watchlist topics that always appear in digests, even with no new signal.
 - `DIGEST_FOCUS_AREAS`: comma-separated softer interests that are highlighted only when relevant source-backed signal exists.
 - `DIGEST_OUTPUT_DIR`: directory for generated digest Markdown; defaults to `output/digests`.
@@ -148,9 +152,9 @@ npm run sync-twitter
 It reads `TWITTERAPI_LIST_IDS`, fetches newest tweets first, stops when it reaches the stored latest tweet ID for each list, and otherwise stops at `TWITTERAPI_LIST_MAX_PAGES` or `TWITTERAPI_LIST_MAX_TWEETS`. Tweets use `source_key = twitterapi:list:<list_id>` and `source_type = twitter`.
 
 Digest generation prints progress while loading sources, waiting for LLM synthesis, and storing the completed digest.
-It sends at most `DIGEST_MAX_ENTRIES` newest eligible entries to the LLM and logs when older eligible entries are omitted.
+It loads up to `DIGEST_CANDIDATE_LIMIT` recent eligible entries, uses vector search to reserve source buckets for configured required topics and focus areas, then fills the remaining prompt budget with newest general entries. `DIGEST_MAX_ENTRIES` remains the final hard cap.
 
-Use digest topic config to shape the writeup without filtering the source set:
+Use digest topic config to protect important topics during source selection and shape the writeup:
 
 ```env
 DIGEST_REQUIRED_TOPICS=agentic payments, agentic B2B, agentic commerce, personal memory

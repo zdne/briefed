@@ -1,6 +1,15 @@
 import { AnalystAI } from "./ai.js";
 import { config } from "./config.js";
-import { countRecentContent, recentContent, saveDigest } from "./db.js";
+import {
+  countRecentContent,
+  recentDigestCandidates,
+  recentVectorMatches,
+  saveDigest
+} from "./db.js";
+import {
+  type DigestTopicMatches,
+  selectDigestSources
+} from "./digest-selection.js";
 
 export type DigestLogger = (message: string) => void;
 
@@ -11,17 +20,17 @@ export async function createDigest(
 ) {
   log(`Loading enriched entries collected during the last ${hours} hours`);
   const eligibleCount = await countRecentContent(hours);
-  const sources = await recentContent(hours, config.DIGEST_MAX_ENTRIES);
-  if (eligibleCount > sources.length) {
+  const candidates = await recentDigestCandidates(hours, config.DIGEST_CANDIDATE_LIMIT);
+  if (eligibleCount > candidates.length) {
     log(
-      `${eligibleCount} enriched entries are eligible; selected the newest ${sources.length} ` +
-      `because DIGEST_MAX_ENTRIES=${config.DIGEST_MAX_ENTRIES}`
+      `${eligibleCount} enriched entries are eligible; loaded the newest ${candidates.length} ` +
+      `as candidates because DIGEST_CANDIDATE_LIMIT=${config.DIGEST_CANDIDATE_LIMIT}`
     );
   } else {
-    log(`Loaded ${sources.length} enriched entries`);
+    log(`Loaded ${candidates.length} enriched entries`);
   }
 
-  if (sources.length === 0) {
+  if (candidates.length === 0) {
     log("No entries available; digest generation skipped");
     return {
       id: null,
@@ -31,6 +40,35 @@ export async function createDigest(
       sources: []
     };
   }
+
+  const requiredTopicMatches = await vectorMatchesForTopics(
+    config.DIGEST_REQUIRED_TOPICS,
+    config.DIGEST_REQUIRED_TOPIC_MAX_ENTRIES,
+    hours,
+    ai,
+    log
+  );
+  const focusAreaMatches = await vectorMatchesForTopics(
+    config.DIGEST_FOCUS_AREAS,
+    config.DIGEST_FOCUS_AREA_MAX_ENTRIES,
+    hours,
+    ai,
+    log
+  );
+  const selection = selectDigestSources(candidates, requiredTopicMatches, focusAreaMatches, {
+    maxEntries: config.DIGEST_MAX_ENTRIES,
+    requiredTopicMinEntries: config.DIGEST_REQUIRED_TOPIC_MIN_ENTRIES,
+    requiredTopicMaxEntries: config.DIGEST_REQUIRED_TOPIC_MAX_ENTRIES,
+    focusAreaMinEntries: config.DIGEST_FOCUS_AREA_MIN_ENTRIES,
+    focusAreaMaxEntries: config.DIGEST_FOCUS_AREA_MAX_ENTRIES,
+    generalMaxEntries: config.DIGEST_GENERAL_MAX_ENTRIES
+  });
+  const sources = selection.sources;
+  log(
+    `Selected ${sources.length} digest sources: ` +
+    `${selection.requiredCount} required-topic, ${selection.focusCount} focus-area, ` +
+    `${selection.generalCount} general`
+  );
 
   const end = new Date();
   const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
@@ -59,4 +97,26 @@ export async function createDigest(
       summary: source.summary
     }))
   };
+}
+
+async function vectorMatchesForTopics(
+  topics: string[],
+  maxEntries: number,
+  hours: number,
+  ai: AnalystAI,
+  log: DigestLogger
+): Promise<DigestTopicMatches[]> {
+  const limit = Math.max(1, maxEntries * 3);
+  const matches: DigestTopicMatches[] = [];
+
+  for (const topic of topics) {
+    log(`Finding vector matches for digest topic "${topic}"`);
+    const embedding = await ai.embed(topic);
+    matches.push({
+      topic,
+      matches: await recentVectorMatches(embedding, hours, limit)
+    });
+  }
+
+  return matches;
 }

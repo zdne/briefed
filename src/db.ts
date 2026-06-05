@@ -4,6 +4,7 @@ import pg from "pg";
 import { config } from "./config.js";
 import type {
   ContentForEnrichment,
+  DigestCandidate,
   DigestForRendering,
   Enrichment,
   SourceEntry,
@@ -241,15 +242,41 @@ export async function countRecentContent(hours: number): Promise<number> {
 }
 
 export async function recentContent(hours: number, limit: number): Promise<RetrievedContent[]> {
-  const result = await pool.query<RetrievedContent>(
+  return recentDigestCandidates(hours, limit);
+}
+
+export async function recentDigestCandidates(hours: number, limit: number): Promise<DigestCandidate[]> {
+  const result = await pool.query<DigestCandidate>(
     `SELECT id::text, title, canonical_url AS "canonicalUrl", author,
       published_at::text AS "publishedAt", analyst_summary AS summary, content_text AS "contentText",
-      0::float AS score
+      0::float AS score, source_type AS "sourceType", source_key AS "sourceKey",
+      topic_tags AS "topicTags", entities, raw_entry AS "rawEntry"
      FROM content
      WHERE enrichment_status = 'complete' AND collected_at >= now() - ($1 * interval '1 hour')
      ORDER BY collected_at DESC
      LIMIT $2`,
     [hours, limit]
+  );
+  return result.rows;
+}
+
+export async function recentVectorMatches(
+  embedding: number[],
+  hours: number,
+  limit: number
+): Promise<DigestCandidate[]> {
+  const result = await pool.query<DigestCandidate>(
+    `SELECT id::text, title, canonical_url AS "canonicalUrl", author,
+      published_at::text AS "publishedAt", analyst_summary AS summary, content_text AS "contentText",
+      1 - (embedding <=> $1::vector) AS score, source_type AS "sourceType", source_key AS "sourceKey",
+      topic_tags AS "topicTags", entities, raw_entry AS "rawEntry"
+     FROM content
+     WHERE embedding IS NOT NULL
+       AND enrichment_status = 'complete'
+       AND collected_at >= now() - ($2 * interval '1 hour')
+     ORDER BY embedding <=> $1::vector
+     LIMIT $3`,
+    [vectorLiteral(embedding), hours, limit]
   );
   return result.rows;
 }
