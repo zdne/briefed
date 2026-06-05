@@ -151,6 +151,8 @@ PND:
 
 Both fully enriched and embedding-only Reddit entries participate in semantic retrieval.
 
+The CLI renders queries as Markdown by default, including clickable source links, authors, dates, summaries, and similarity scores. Queries are only written to disk when `--output` is supplied. Use `--format json` for machine-readable output.
+
 ## Daily Digest
 
 Run:
@@ -171,6 +173,10 @@ The digest command:
 Reddit embedding-only entries remain eligible for the digest. The digest sees their Feedbin-provided summaries rather than individually generated LLM summaries. Embeddings are not used to select digest entries; selection is currently based on collection time.
 
 To prevent unexpectedly large or expensive LLM requests, PND sends at most the newest `DIGEST_MAX_ENTRIES` eligible entries. The default is `200`. Digest logs report the total eligible count and clearly state when older entries were omitted.
+
+Each digest is stored in Postgres and written as a timestamped Markdown file under `DIGEST_OUTPUT_DIR`. The Markdown contains Obsidian-compatible frontmatter, the digest body, and clickable sources. Inline citations use Obsidian heading links such as `[[#Source 32|32]]`, and source titles link to original URLs. Point `DIGEST_OUTPUT_DIR` at an Obsidian vault folder to make generated digests appear there without an additional integration.
+
+CLI Markdown is the default; `--format json` prints machine-readable output. Progress logs are written to stderr so JSON stdout remains parseable.
 
 ## Local And External Data
 

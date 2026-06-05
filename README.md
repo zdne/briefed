@@ -70,8 +70,11 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- enrich --source reddit --all` | Fully enrich every eligible stored Reddit entry |
 | `npm run cli -- enrich --source article --limit 20` | Retry or fully enrich eligible non-Reddit entries |
 | `npm run cli -- query "<question>"` | Query the archive from the terminal |
+| `npm run cli -- query "<question>" --format json` | Return machine-readable query JSON |
+| `npm run cli -- query "<question>" --output output/query.md` | Write a query result to Markdown |
 | `npm run digest` | Generate and store a digest for the last 24 hours |
 | `npm run cli -- digest --hours 48` | Generate a digest with a custom lookback |
+| `npm run cli -- digest --format json` | Print machine-readable digest JSON while still writing Markdown |
 | `npm run dev` | Start the API with reload |
 | `npm test` | Run unit tests |
 
@@ -93,6 +96,7 @@ See [`.env.example`](.env.example). Important values:
 - `OPENAI_EMBEDDING_MODEL`: defaults to `text-embedding-3-small`; storage is fixed at 1536 dimensions.
 - `QUERY_LIMIT`: default number of vector matches passed to answer synthesis.
 - `DIGEST_MAX_ENTRIES`: maximum newest completed entries sent to one digest request; defaults to `200`.
+- `DIGEST_OUTPUT_DIR`: directory for generated digest Markdown; defaults to `output/digests`.
 
 ## API
 
@@ -125,6 +129,32 @@ After a successful lookback sync, the stored cursor advances to the newest Feedb
 
 Digest generation prints progress while loading sources, waiting for LLM synthesis, and storing the completed digest.
 It sends at most `DIGEST_MAX_ENTRIES` newest eligible entries to the LLM and logs when older eligible entries are omitted.
+
+## Markdown Output
+
+Queries and digests print readable Markdown by default. Use `--format json` for automation.
+
+Digests are always stored in Postgres and written as timestamped Markdown files under `DIGEST_OUTPUT_DIR`. Files include Obsidian-compatible frontmatter, the generated digest, and clickable source citations. Inline citations emitted as `[32]`, `(32)`, or grouped forms such as `(27, 62)` are normalized into Obsidian heading links such as `[[#Source 32|32]]`; the source title opens the original URL.
+
+To write digests directly into an Obsidian vault, set an absolute folder path:
+
+```env
+DIGEST_OUTPUT_DIR=/Users/you/Documents/MyVault/PND/Digests
+```
+
+Override the configured directory for one digest:
+
+```bash
+npm run cli -- digest --output /path/to/digest.md
+```
+
+Queries are printed to the terminal and are only saved when `--output` is provided:
+
+```bash
+npm run cli -- query "What changed in AI agent observability?"
+npm run cli -- query "What changed in AI agent observability?" --output output/queries/observability.md
+npm run cli -- query "What changed in AI agent observability?" --format json
+```
 
 ## Reddit Strategy
 

@@ -23,7 +23,13 @@ export async function createDigest(
 
   if (sources.length === 0) {
     log("No entries available; digest generation skipped");
-    return { id: null, body: "No enriched entries were collected during this period.", sources: [] };
+    return {
+      id: null,
+      periodStart: null,
+      periodEnd: null,
+      body: "No enriched entries were collected during this period.",
+      sources: []
+    };
   }
 
   const end = new Date();
@@ -37,12 +43,17 @@ export async function createDigest(
 
   return {
     id,
+    periodStart: start.toISOString(),
+    periodEnd: end.toISOString(),
     body,
     sources: sources.map((source, index) => ({
       citation: index + 1,
       id: source.id,
       title: source.title,
-      url: source.canonicalUrl
+      url: source.canonicalUrl,
+      author: source.author,
+      publishedAt: source.publishedAt,
+      summary: source.summary
     }))
   };
 }

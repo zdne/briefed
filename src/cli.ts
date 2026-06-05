@@ -4,6 +4,8 @@ import { config, requireConfig } from "./config.js";
 import { migrate, pool, resetSyncCursor } from "./db.js";
 import { createDigest } from "./digest.js";
 import { FeedbinClient } from "./feedbin.js";
+import { renderDigestMarkdown, renderQueryMarkdown } from "./markdown.js";
+import { digestOutputPath, writeMarkdownFile } from "./output.js";
 import { enrichStoredContent, lookbackSince, syncFeedbin } from "./pipeline.js";
 import { queryArchive } from "./query.js";
 
@@ -26,7 +28,7 @@ program.command("sync")
   if (selectedModes > 1) {
     throw new Error("Use only one of --reset-cursor, --hours, or --days");
   }
-  const log = (message: string) => console.log(`[${new Date().toISOString()}] ${message}`);
+  const log = timestampLogger;
   let since: string | undefined;
   if (options.resetCursor) {
     await resetSyncCursor();
@@ -66,7 +68,7 @@ program
     }
     const limit = options.all ? 2_147_483_647 : positiveInteger(options.limit, "--limit");
     const hours = options.hours === undefined ? undefined : positiveInteger(options.hours, "--hours");
-    const log = (message: string) => console.log(`[${new Date().toISOString()}] ${message}`);
+    const log = timestampLogger;
     log("Initializing AI client");
     console.log(JSON.stringify(await enrichStoredContent(
       { sourceType: options.source, limit, hours },
@@ -80,18 +82,36 @@ program
   .description("Ask a question over the archive")
   .argument("<question>")
   .option("-l, --limit <number>", "number of sources", String(config.QUERY_LIMIT))
-  .action(async (question: string, options: { limit: string }) => {
-    console.log(JSON.stringify(await queryArchive(question, Number(options.limit), new AnalystAI()), null, 2));
+  .option("-f, --format <format>", "output format: markdown or json", "markdown")
+  .option("-o, --output <path>", "write Markdown result to a file")
+  .action(async (question: string, options: { limit: string; format: string; output?: string }) => {
+    const format = outputFormat(options.format);
+    const result = await queryArchive(question, positiveInteger(options.limit, "--limit"), new AnalystAI());
+    const markdown = renderQueryMarkdown(question, result);
+    if (options.output) {
+      const path = await writeMarkdownFile(options.output, markdown);
+      timestampLogger(`Wrote query Markdown to ${path}`);
+    }
+    console.log(format === "json" ? JSON.stringify(result, null, 2) : markdown);
   });
 
 program
   .command("digest")
   .description("Create and store a digest")
   .option("-H, --hours <number>", "lookback hours", String(config.DIGEST_HOURS))
-  .action(async (options: { hours: string }) => {
-    const log = (message: string) => console.log(`[${new Date().toISOString()}] ${message}`);
+  .option("-f, --format <format>", "output format: markdown or json", "markdown")
+  .option("-o, --output <path>", "write Markdown to this path instead of DIGEST_OUTPUT_DIR")
+  .action(async (options: { hours: string; format: string; output?: string }) => {
+    const format = outputFormat(options.format);
+    const log = timestampLogger;
     log("Initializing AI client");
-    console.log(JSON.stringify(await createDigest(Number(options.hours), new AnalystAI(), log), null, 2));
+    const result = await createDigest(positiveInteger(options.hours, "--hours"), new AnalystAI(), log);
+    const createdAt = new Date();
+    const markdown = renderDigestMarkdown(result, createdAt);
+    const outputPath = options.output ?? digestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt);
+    const path = await writeMarkdownFile(outputPath, markdown);
+    log(`Wrote digest Markdown to ${path}`);
+    console.log(format === "json" ? JSON.stringify(result, null, 2) : markdown);
   });
 
 program.parseAsync().catch((error) => {
@@ -107,4 +127,15 @@ function positiveInteger(value: string, option: string): number {
     throw new Error(`${option} must be a positive integer`);
   }
   return parsed;
+}
+
+function outputFormat(value: string): "markdown" | "json" {
+  if (value !== "markdown" && value !== "json") {
+    throw new Error("--format must be markdown or json");
+  }
+  return value;
+}
+
+function timestampLogger(message: string): void {
+  console.error(`[${new Date().toISOString()}] ${message}`);
 }

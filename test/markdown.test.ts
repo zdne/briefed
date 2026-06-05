@@ -1,0 +1,62 @@
+import { describe, expect, it } from "vitest";
+import { linkCitations, renderDigestMarkdown, renderQueryMarkdown } from "../src/markdown.js";
+
+describe("linkCitations", () => {
+  it("links bracketed and parenthetical citations without modifying existing or unknown links", () => {
+    expect(linkCitations(
+      "Known [1], parenthetical (1), group (1, 3), linked [1](https://example.com), unknown (2).",
+      [
+        { citation: 1, title: "Source", url: null },
+        { citation: 3, title: "Another", url: null }
+      ]
+    )).toBe(
+      "Known [[#Source 1|1]], parenthetical [[#Source 1|1]], group " +
+      "[[#Source 1|1]], [[#Source 3|3]], linked [1](https://example.com), unknown (2)."
+    );
+  });
+});
+
+describe("renderQueryMarkdown", () => {
+  it("renders a readable answer with linked source metadata", () => {
+    const markdown = renderQueryMarkdown("What changed?", {
+      answer: "A useful answer [1].",
+      sources: [{
+        citation: 1,
+        title: "Source",
+        url: "https://example.com",
+        author: "Author",
+        publishedAt: "2026-06-04T10:00:00Z",
+        summary: "Source summary.",
+        score: 0.87654
+      }]
+    });
+
+    expect(markdown).toContain("**Question:** What changed?");
+    expect(markdown).toContain("A useful answer [[#Source 1|1]].");
+    expect(markdown).toContain("### Source 1");
+    expect(markdown).toContain("[Source](https://example.com)");
+    expect(markdown).toContain("Similarity: 0.877");
+    expect(markdown).toContain("Source summary.");
+    expect(markdown).not.toContain("Back to writeup");
+  });
+});
+
+describe("renderDigestMarkdown", () => {
+  it("renders Obsidian-compatible frontmatter and sources", () => {
+    const markdown = renderDigestMarkdown({
+      id: "3",
+      periodStart: "2026-06-03T10:00:00.000Z",
+      periodEnd: "2026-06-04T10:00:00.000Z",
+      body: "Digest body [1].",
+      sources: [{ citation: 1, title: "Source", url: "https://example.com" }]
+    }, new Date("2026-06-04T10:30:00.000Z"));
+
+    expect(markdown).toContain("type: pnd-digest");
+    expect(markdown).toContain("source_count: 1");
+    expect(markdown).toContain("# Daily Digest");
+    expect(markdown).toContain("Digest body [[#Source 1|1]].");
+    expect(markdown).toContain("### Source 1");
+    expect(markdown).toContain("[Source](https://example.com)");
+    expect(markdown).not.toContain("Back to writeup");
+  });
+});

@@ -15,6 +15,7 @@ export async function queryArchive(question: string, limit: number, ai: AnalystA
       url: source.canonicalUrl,
       author: source.author,
       publishedAt: source.publishedAt,
+      summary: source.summary,
       score: source.score
     }))
   };
