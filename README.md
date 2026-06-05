@@ -66,9 +66,10 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- sync --days 7` | Sync only entries created within the last seven days |
 | `npm run cli -- sync --reset-cursor` | Clear the cursor and safely rescan the complete Feedbin archive |
 | `npm run cli -- enrich --source reddit --limit 20` | Fully enrich the newest 20 eligible Reddit entries |
+| `npm run cli -- enrich --source hackernews --limit 20` | Fully enrich the newest 20 eligible Hacker News entries |
 | `npm run cli -- enrich --source reddit --limit 100 --hours 168` | Fully enrich up to 100 Reddit entries from the last seven days |
 | `npm run cli -- enrich --source reddit --all` | Fully enrich every eligible stored Reddit entry |
-| `npm run cli -- enrich --source article --limit 20` | Retry or fully enrich eligible non-Reddit entries |
+| `npm run cli -- enrich --source article --limit 20` | Retry or fully enrich eligible article entries |
 | `npm run cli -- query "<question>"` | Query the archive from the terminal |
 | `npm run cli -- query "<question>" --format json` | Print machine-readable query JSON |
 | `npm run cli -- query "<question>" --output output/query.md` | Write a query result to Markdown |
@@ -95,7 +96,7 @@ See [`.env.example`](.env.example). Important values:
 - `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: Feedbin HTTP Basic Auth credentials.
 - `OPENAI_API_KEY`: always required because embeddings use OpenAI.
 - `LLM_PROVIDER`: `openai` or `anthropic`.
-- `REDDIT_ENRICHMENT_MODE`: defaults to `embedded_only`; set to `full` to fully enrich Reddit during sync.
+- `LIGHTWEIGHT_SOURCE_TYPES`: comma-separated source types that use embedding-only sync by default; defaults to `reddit,hackernews`.
 - `OPENAI_EMBEDDING_MODEL`: defaults to `text-embedding-3-small`; storage is fixed at 1536 dimensions.
 - `QUERY_LIMIT`: default number of vector matches passed to answer synthesis.
 - `DIGEST_MAX_ENTRIES`: maximum newest completed entries sent to one digest request; defaults to `200`.
@@ -180,9 +181,9 @@ Query progress logs are written to stderr, so Markdown and JSON stdout remain cl
 Use `--no-save` to print query Markdown to stdout instead of writing it to a file.
 PND keeps a hidden `.latest.json` state file for follow-ups; visible JSON sidecars are only written with `--save-json`.
 
-## Reddit Strategy
+## Lightweight Source Strategy
 
-Reddit feeds can produce many entries, and individually summarizing every post adds cost and makes initial syncs slow. By default, Reddit entries use `embedded_only` processing:
+Reddit and Hacker News feeds can produce many entries whose Feedbin records are thin post or discussion wrappers. Individually summarizing every item adds cost and makes initial syncs slow. By default, these lightweight sources use `embedded_only` processing:
 
 - Store the complete Feedbin entry, normalized post text, title, author, URL, and Feedbin summary.
 - Generate and store an OpenAI embedding from the title and full post text.
@@ -190,11 +191,14 @@ Reddit feeds can produce many entries, and individually summarizing every post a
 - Leave generated topic tags and entities empty.
 - Keep the post available to semantic queries and daily digests.
 
-Non-Reddit entries continue to receive full LLM enrichment. Fully enrich selected stored Reddit posts later:
+Article entries continue to receive full LLM enrichment. Fully enrich selected stored lightweight posts later:
 
 ```bash
 # Fully enrich the newest 20 embedded-only Reddit entries
 npm run cli -- enrich --source reddit --limit 20
+
+# Fully enrich the newest 20 embedded-only Hacker News entries
+npm run cli -- enrich --source hackernews --limit 20
 
 # Fully enrich up to 100 Reddit entries collected in the last seven days
 npm run cli -- enrich --source reddit --limit 100 --hours 168
@@ -203,15 +207,17 @@ npm run cli -- enrich --source reddit --limit 100 --hours 168
 npm run cli -- enrich --source reddit --all
 ```
 
-To fully enrich Reddit entries during future syncs, set:
+To change which non-article sources use embedding-only sync, set:
 
 ```env
-REDDIT_ENRICHMENT_MODE=full
+LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews
 ```
+
+Remove a source from this list to fully enrich it during future syncs.
 
 Completed fully enriched entries are never downgraded. The selective `enrich` command upgrades `embedded_only` entries, retries failed or pending entries, and recovers entries stuck in `processing` for more than 15 minutes.
 
-See [`docs/HowItWorks.md`](docs/HowItWorks.md) for the processing and Reddit-policy details.
+See [`docs/HowItWorks.md`](docs/HowItWorks.md) for the processing and lightweight-source policy details.
 
 ## Current MVP Boundaries
 

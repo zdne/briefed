@@ -10,12 +10,26 @@ describe("detectSourceType", () => {
   it("does not treat unrelated URLs as Reddit posts", () => {
     expect(detectSourceType({ canonicalUrl: "https://example.com/r/article" })).toBe("article");
   });
+
+  it("detects Hacker News discussion items", () => {
+    expect(detectSourceType({ canonicalUrl: "https://news.ycombinator.com/item?id=123456" }))
+      .toBe("hackernews");
+  });
+
+  it("does not treat other Hacker News URLs as discussion items", () => {
+    expect(detectSourceType({ canonicalUrl: "https://news.ycombinator.com/news" })).toBe("article");
+  });
 });
 
 describe("desiredEnrichmentMode", () => {
-  it("applies the configured Reddit mode only to Reddit", () => {
-    expect(desiredEnrichmentMode("reddit", "embedded_only")).toBe("embedded_only");
-    expect(desiredEnrichmentMode("reddit", "full")).toBe("full");
-    expect(desiredEnrichmentMode("article", "embedded_only")).toBe("full");
+  it("uses embedded-only mode for configured lightweight sources", () => {
+    expect(desiredEnrichmentMode("reddit", ["reddit", "hackernews"])).toBe("embedded_only");
+    expect(desiredEnrichmentMode("hackernews", ["reddit", "hackernews"])).toBe("embedded_only");
+  });
+
+  it("uses full mode for articles and unconfigured lightweight sources", () => {
+    expect(desiredEnrichmentMode("article", ["reddit", "hackernews"])).toBe("full");
+    expect(desiredEnrichmentMode("reddit", ["hackernews"])).toBe("full");
+    expect(desiredEnrichmentMode("hackernews", ["reddit"])).toBe("full");
   });
 });

@@ -1,5 +1,13 @@
 import "dotenv/config";
 import { z } from "zod";
+import type { LightweightSourceType } from "./enrichment-policy.js";
+
+export function parseCommaSeparatedList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 const schema = z.object({
   DATABASE_URL: z.string().min(1).default("postgres://pnd:pnd@localhost:5432/pnd"),
@@ -14,7 +22,11 @@ const schema = z.object({
   OPENAI_LLM_MODEL: z.string().default("gpt-4.1-mini"),
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_LLM_MODEL: z.string().default("claude-3-5-haiku-latest"),
-  REDDIT_ENRICHMENT_MODE: z.enum(["embedded_only", "full"]).default("embedded_only"),
+  LIGHTWEIGHT_SOURCE_TYPES: z.string().default("reddit,hackernews").transform((value) =>
+    parseCommaSeparatedList(value).map((source) =>
+      z.enum(["reddit", "hackernews"]).parse(source)
+    ) as LightweightSourceType[]
+  ),
   QUERY_LIMIT: z.coerce.number().int().min(1).max(30).default(8),
   DIGEST_HOURS: z.coerce.number().int().min(1).default(24),
   DIGEST_MAX_ENTRIES: z.coerce.number().int().min(1).default(200),

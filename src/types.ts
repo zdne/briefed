@@ -42,7 +42,7 @@ export interface ContentForEnrichment {
   title: string | null;
   sourceSummary: string | null;
   contentText: string;
-  sourceType: "article" | "reddit";
+  sourceType: "article" | "reddit" | "hackernews";
   enrichmentMode: "full" | "embedded_only";
 }
 

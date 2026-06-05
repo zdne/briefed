@@ -117,7 +117,7 @@ export async function syncFeedbin(
       newestCreatedAt = laterTimestamp(newestCreatedAt, raw);
       const entry = normalizeEntry(raw);
       const sourceType = detectSourceType(entry);
-      const mode = desiredEnrichmentMode(sourceType, config.REDDIT_ENRICHMENT_MODE);
+      const mode = desiredEnrichmentMode(sourceType, config.LIGHTWEIGHT_SOURCE_TYPES);
       const stored = await upsertContent(entry, sourceType, mode);
       result.insertedOrUpdated++;
       const label = entry.title ?? entry.canonicalUrl ?? `Feedbin entry ${entry.feedbinEntryId}`;

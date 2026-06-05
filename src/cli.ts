@@ -18,6 +18,7 @@ import {
 } from "./output.js";
 import { enrichStoredContent, lookbackSince, syncFeedbin } from "./pipeline.js";
 import { queryArchive, queryFollowUp } from "./query.js";
+import type { SourceType } from "./enrichment-policy.js";
 import type { QuerySession } from "./types.js";
 
 const program = new Command().name("pnd").description("Feedbin-first synthetic analyst");
@@ -69,13 +70,13 @@ program.command("sync")
 program
   .command("enrich")
   .description("Fully enrich selected stored entries")
-  .option("-s, --source <source>", "source type: reddit or article", "reddit")
+  .option("-s, --source <source>", "source type: reddit, hackernews, or article", "reddit")
   .option("-l, --limit <number>", "maximum entries to enrich", "20")
   .option("--all", "enrich all matching entries")
   .option("-H, --hours <number>", "only entries collected within this lookback")
   .action(async (options: { source: string; limit: string; all?: boolean; hours?: string }) => {
-    if (options.source !== "reddit" && options.source !== "article") {
-      throw new Error("--source must be reddit or article");
+    if (!isSourceType(options.source)) {
+      throw new Error("--source must be reddit, hackernews, or article");
     }
     const limit = options.all ? 2_147_483_647 : positiveInteger(options.limit, "--limit");
     const hours = options.hours === undefined ? undefined : positiveInteger(options.hours, "--hours");
@@ -87,6 +88,10 @@ program
       log
     ), null, 2));
   });
+
+function isSourceType(value: string): value is SourceType {
+  return value === "reddit" || value === "hackernews" || value === "article";
+}
 
 program
   .command("query")

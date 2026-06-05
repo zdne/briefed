@@ -50,10 +50,11 @@ If a recent-only sync is interrupted, the previous stored cursor remains unchang
 
 ## Source Detection
 
-PND currently assigns one of two `source_type` values:
+PND currently assigns one of three `source_type` values:
 
-- `article`: every non-Reddit entry.
+- `article`: entries that are not classified as a known lightweight source.
 - `reddit`: canonical URLs on a Reddit hostname with a path beginning with `/r/`.
+- `hackernews`: canonical URLs on `news.ycombinator.com/item` with an `id` query parameter.
 
 This source type controls the default enrichment policy. It does not prevent an entry from appearing in queries or digests.
 
@@ -78,42 +79,47 @@ PND validates the response, normalizes and deduplicates tags/entities, and caps 
 
 Second, OpenAI creates a 1,536-dimension embedding from the title, generated summary, topics, and full text.
 
-Full enrichment is the default for non-Reddit entries.
+Full enrichment is the default for article entries.
 
-### Reddit Embedding-Only Strategy
+### Lightweight Embedding-Only Strategy
 
-Reddit feeds can be high volume. Individually summarizing every post would increase LLM calls, token usage, and sync duration before the MVP has demonstrated that Reddit-level analysis is valuable.
+Reddit and Hacker News feeds can be high volume, and their Feedbin entries are often post or discussion wrappers rather than complete source articles. Individually summarizing every item would increase LLM calls, token usage, and sync duration before the MVP has demonstrated that item-level analysis is valuable.
 
 By default:
 
 ```env
-REDDIT_ENRICHMENT_MODE=embedded_only
+LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews
 ```
 
-For each Reddit post, PND stores:
+For each lightweight item, PND stores:
 
 - Feedbin entry ID, feed ID, and original JSON.
-- Canonical Reddit URL, title, author, and timestamps.
+- Canonical URL, title, author, and timestamps.
 - Original HTML and normalized full post text.
 - Feedbin-provided summary.
 - An OpenAI embedding generated from the title and full post text.
 - `analyst_summary` copied from Feedbin's summary.
 - Empty generated topic tags and entities.
-- `source_type = 'reddit'`.
+- `source_type = 'reddit'` or `source_type = 'hackernews'`.
 - `enrichment_mode = 'embedded_only'`.
 - `enrichment_status = 'complete'`.
 
-This keeps every Reddit post semantically searchable and eligible for digests while avoiding one LLM analysis call per post.
+This keeps lightweight entries semantically searchable and eligible for digests while avoiding one LLM analysis call per item.
 
 Feedbin's Reddit content generally contains the original post body, but it does not contain comments, discussion summaries, scores, or reliable engagement signals.
 
-## Upgrading Reddit Enrichment
+Feedbin's Hacker News content is normally the HN item or discussion wrapper, not the full linked article.
 
-The Reddit policy is reversible. Stored embedding-only entries can be upgraded to full enrichment without fetching them from Feedbin again.
+## Upgrading Lightweight Enrichment
+
+The lightweight policy is reversible. Stored embedding-only entries can be upgraded to full enrichment without fetching them from Feedbin again.
 
 ```bash
 # Fully enrich the newest 20 eligible Reddit entries
 npm run cli -- enrich --source reddit --limit 20
+
+# Fully enrich the newest 20 eligible Hacker News entries
+npm run cli -- enrich --source hackernews --limit 20
 
 # Fully enrich up to 100 Reddit entries collected in the last seven days
 npm run cli -- enrich --source reddit --limit 100 --hours 168
@@ -124,11 +130,13 @@ npm run cli -- enrich --source reddit --all
 
 The command selects newest entries first. It upgrades `embedded_only` entries, retries pending or failed entries, and retries entries stuck in `processing` for more than 15 minutes.
 
-To fully enrich Reddit entries encountered by future syncs:
+To change which non-article source types use embedding-only sync:
 
 ```env
-REDDIT_ENRICHMENT_MODE=full
+LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews
 ```
+
+Remove a source from this list to fully enrich it during future syncs.
 
 Completed fully enriched entries are not downgraded if the setting later changes back to `embedded_only`.
 
@@ -150,7 +158,7 @@ PND:
 3. Sends the retrieved titles, summaries, URLs, and dates to the configured LLM.
 4. Returns a synthesized answer with `[1]`-style citations and a source list.
 
-Both fully enriched and embedding-only Reddit entries participate in semantic retrieval.
+Both fully enriched and embedding-only lightweight entries participate in semantic retrieval.
 
 The CLI renders queries as Markdown by default, including clickable source links, authors, dates, summaries, and similarity scores. Query answers are prompted into consistent Markdown sections: Short Answer, Details, Caveats, and Suggested Follow-Ups. Query results are saved as Markdown under `QUERY_OUTPUT_DIR` unless `--no-save` is supplied. Saved Markdown is not echoed to stdout. Use `--format json` for machine-readable stdout, or `--save-json` to also write a visible JSON sidecar. CLI query progress logs are written to stderr so stdout remains usable for Markdown or JSON piping.
 
@@ -174,7 +182,7 @@ The digest command:
 4. Stores the digest in the local `digests` table.
 5. Writes the digest Markdown file.
 
-Reddit embedding-only entries remain eligible for the digest. The digest sees their Feedbin-provided summaries rather than individually generated LLM summaries. Embeddings are not used to select digest entries; selection is currently based on collection time.
+Embedding-only lightweight entries remain eligible for the digest. The digest sees their Feedbin-provided summaries rather than individually generated LLM summaries. Embeddings are not used to select digest entries; selection is currently based on collection time.
 
 To prevent unexpectedly large or expensive LLM requests, PND sends at most the newest `DIGEST_MAX_ENTRIES` eligible entries. The default is `200`. Digest logs report the total eligible count and clearly state when older entries were omitted.
 
