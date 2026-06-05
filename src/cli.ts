@@ -16,8 +16,9 @@ import {
   writeJsonFile,
   writeMarkdownFile
 } from "./output.js";
-import { enrichStoredContent, lookbackSince, syncFeedbin } from "./pipeline.js";
+import { enrichStoredContent, lookbackSince, syncFeedbin, syncTwitterLists } from "./pipeline.js";
 import { queryArchive, queryFollowUp } from "./query.js";
+import { TwitterApiClient } from "./twitterapi.js";
 import type { SourceType } from "./enrichment-policy.js";
 import type { QuerySession } from "./types.js";
 
@@ -65,6 +66,31 @@ program.command("sync")
     { since }
   );
   console.log(JSON.stringify(result, null, 2));
+  });
+
+program.command("sync-twitter")
+  .description("Sync configured Twitter/X lists from TwitterAPI.io")
+  .action(async () => {
+    requireConfig(["TWITTERAPI_IO_API_KEY"]);
+    if (config.TWITTERAPI_LIST_IDS.length === 0) {
+      throw new Error("Missing required configuration: TWITTERAPI_LIST_IDS");
+    }
+    const log = timestampLogger;
+    log(`Initializing TwitterAPI and AI clients for ${config.TWITTERAPI_LIST_IDS.length} list(s)`);
+    const result = await syncTwitterLists(
+      new TwitterApiClient({
+        apiKey: config.TWITTERAPI_IO_API_KEY!,
+        baseUrl: config.TWITTERAPI_IO_BASE_URL
+      }),
+      new AnalystAI(),
+      {
+        listIds: config.TWITTERAPI_LIST_IDS,
+        maxPages: config.TWITTERAPI_LIST_MAX_PAGES,
+        maxTweets: config.TWITTERAPI_LIST_MAX_TWEETS
+      },
+      log
+    );
+    console.log(JSON.stringify(result, null, 2));
   });
 
 program

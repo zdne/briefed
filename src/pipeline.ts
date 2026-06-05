@@ -2,11 +2,13 @@ import { AnalystAI } from "./ai.js";
 import {
   enrichmentCandidates,
   getSyncCursor,
+  getSyncCursorForKey,
   markEnrichmentFailed,
   markEnrichmentProcessing,
   saveEmbeddedOnly,
   saveEnrichment,
   setSyncCursor,
+  setSyncCursorForKey,
   upsertSourceContent
 } from "./db.js";
 import { config } from "./config.js";
@@ -17,6 +19,8 @@ import {
 } from "./enrichment-policy.js";
 import { FeedbinClient } from "./feedbin.js";
 import { normalizeEntry } from "./normalize.js";
+import { normalizeTwitterTweet } from "./twitter-normalize.js";
+import { TwitterApiClient } from "./twitterapi.js";
 import type { ContentForEnrichment, FeedbinEntry, SourceEntry } from "./types.js";
 
 export interface SyncResult {
@@ -32,6 +36,12 @@ export type SyncLogger = (message: string) => void;
 
 export interface SyncOptions {
   since?: string;
+}
+
+export interface TwitterSyncOptions {
+  listIds: string[];
+  maxPages: number;
+  maxTweets: number;
 }
 
 export async function enrichContent(id: string, entry: SourceEntry, ai: AnalystAI): Promise<void> {
@@ -118,33 +128,9 @@ export async function syncFeedbin(
       const entry = normalizeEntry(raw);
       const sourceType = detectSourceType(entry);
       const mode = desiredEnrichmentMode(sourceType, config.LIGHTWEIGHT_SOURCE_TYPES);
-      const stored = await upsertSourceContent(entry, sourceType, mode);
-      result.insertedOrUpdated++;
       const label = entry.title ?? entry.canonicalUrl ?? `${entry.sourceKey}:${entry.sourceItemId}`;
       const progress = formatProgress(result.fetched, totalEntries);
-      log(`${progress} Stored: ${label}`);
-
-      if (stored.needsEnrichment && entry.contentText) {
-        log(`${progress} Processing content ${stored.id} (${sourceType}, ${mode})`);
-        try {
-          if (mode === "embedded_only") {
-            await embedOnlyContent(stored.id, entry, ai);
-            result.embeddedOnly++;
-            log(`${progress} Embedding-only processing complete`);
-          } else {
-            await enrichContent(stored.id, entry, ai);
-            result.fullyEnriched++;
-            log(`${progress} Full enrichment complete`);
-          }
-        } catch (error) {
-          result.enrichmentFailed++;
-          log(`${progress} Enrichment failed: ${errorMessage(error)}`);
-        }
-      } else if (!entry.contentText) {
-        log(`${progress} Skipped enrichment: entry has no text content`);
-      } else {
-        log(`${progress} Skipped enrichment: already complete`);
-      }
+      await storeAndProcessEntry(entry, sourceType, mode, ai, result, progress, log, label);
     }
 
     log(
@@ -169,6 +155,85 @@ export async function syncFeedbin(
     log("Feedbin cursor unchanged");
   }
   log("Sync complete");
+  return result;
+}
+
+export async function syncTwitterLists(
+  client: TwitterApiClient,
+  ai: AnalystAI,
+  options: TwitterSyncOptions,
+  log: SyncLogger = () => {}
+): Promise<SyncResult> {
+  const result: SyncResult = {
+    fetched: 0,
+    insertedOrUpdated: 0,
+    fullyEnriched: 0,
+    embeddedOnly: 0,
+    enrichmentFailed: 0
+  };
+
+  for (const listId of options.listIds) {
+    const cursorKey = twitterListCursorKey(listId);
+    const storedLatestId = await getSyncCursorForKey(cursorKey);
+    let newestId: string | undefined;
+    let cursor: string | undefined;
+    let seenStoredLatest = false;
+    let listFetched = 0;
+
+    log(storedLatestId
+      ? `Starting Twitter list ${listId} sync until stored latest tweet ${storedLatestId}`
+      : `Starting initial Twitter list ${listId} sync`);
+
+    for (let pageNumber = 1; pageNumber <= options.maxPages; pageNumber++) {
+      if (listFetched >= options.maxTweets) {
+        log(`Stopped Twitter list ${listId} sync at max tweets ${options.maxTweets}`);
+        break;
+      }
+
+      const page = await client.listTimeline(listId, cursor);
+      const tweets = page.tweets ?? [];
+      log(`Fetched Twitter list ${listId} page ${pageNumber} with ${tweets.length} tweets`);
+
+      for (const tweet of tweets) {
+        if (listFetched >= options.maxTweets) break;
+        if (storedLatestId && tweet.id === storedLatestId) {
+          seenStoredLatest = true;
+          log(`Reached stored latest tweet ${storedLatestId} for Twitter list ${listId}`);
+          break;
+        }
+
+        newestId ??= tweet.id;
+        listFetched++;
+        result.fetched++;
+        const entry = normalizeTwitterTweet(tweet, listId);
+        const mode = desiredEnrichmentMode("twitter", config.LIGHTWEIGHT_SOURCE_TYPES);
+        const label = entry.title ?? entry.canonicalUrl ?? `${entry.sourceKey}:${entry.sourceItemId}`;
+        await storeAndProcessEntry(
+          entry,
+          "twitter",
+          mode,
+          ai,
+          result,
+          formatProgress(result.fetched, null),
+          log,
+          label
+        );
+      }
+
+      if (seenStoredLatest || !page.has_next_page || !page.next_cursor) break;
+      cursor = page.next_cursor;
+    }
+
+    if (newestId && newestId !== storedLatestId) {
+      await setSyncCursorForKey(cursorKey, newestId);
+      result.cursor = newestId;
+      log(`Advanced Twitter list ${listId} cursor to ${newestId}`);
+    } else {
+      log(`Twitter list ${listId} cursor unchanged`);
+    }
+  }
+
+  log("Twitter sync complete");
   return result;
 }
 
@@ -224,4 +289,45 @@ function formatProgress(current: number, total: number | null): string {
   if (total === null || total === 0) return `[${current}]`;
   const percent = Math.min(100, Math.round((current / total) * 100));
   return `[${current}/${total} ${percent}%]`;
+}
+
+async function storeAndProcessEntry(
+  entry: SourceEntry,
+  sourceType: SourceType,
+  mode: "full" | "embedded_only",
+  ai: AnalystAI,
+  result: Pick<SyncResult, "insertedOrUpdated" | "fullyEnriched" | "embeddedOnly" | "enrichmentFailed">,
+  progress: string,
+  log: SyncLogger,
+  label: string
+): Promise<void> {
+  const stored = await upsertSourceContent(entry, sourceType, mode);
+  result.insertedOrUpdated++;
+  log(`${progress} Stored: ${label}`);
+
+  if (stored.needsEnrichment && entry.contentText) {
+    log(`${progress} Processing content ${stored.id} (${sourceType}, ${mode})`);
+    try {
+      if (mode === "embedded_only") {
+        await embedOnlyContent(stored.id, entry, ai);
+        result.embeddedOnly++;
+        log(`${progress} Embedding-only processing complete`);
+      } else {
+        await enrichContent(stored.id, entry, ai);
+        result.fullyEnriched++;
+        log(`${progress} Full enrichment complete`);
+      }
+    } catch (error) {
+      result.enrichmentFailed++;
+      log(`${progress} Enrichment failed: ${errorMessage(error)}`);
+    }
+  } else if (!entry.contentText) {
+    log(`${progress} Skipped enrichment: entry has no text content`);
+  } else {
+    log(`${progress} Skipped enrichment: already complete`);
+  }
+}
+
+function twitterListCursorKey(listId: string): string {
+  return `twitterapi:list:${listId}:latest_id`;
 }

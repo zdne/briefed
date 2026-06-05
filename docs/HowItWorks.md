@@ -48,6 +48,23 @@ These options temporarily override the starting cursor without changing the stor
 
 If a recent-only sync is interrupted, the previous stored cursor remains unchanged. Resume using the same lookback option. If Feedbin returns no matching entries, PND also leaves the existing cursor unchanged.
 
+## Twitter/X List Sync
+
+`npm run sync-twitter` imports the configured Twitter/X lists through TwitterAPI.io.
+
+Configure:
+
+```env
+TWITTERAPI_IO_API_KEY=...
+TWITTERAPI_LIST_IDS=2062878395029983324
+TWITTERAPI_LIST_MAX_PAGES=3
+TWITTERAPI_LIST_MAX_TWEETS=200
+```
+
+For each list, PND stores the newest successfully processed tweet ID in `sync_state` under `twitterapi:list:<list_id>:latest_id`. A normal run fetches newest tweets first and stops when it reaches that stored tweet. If the stored tweet is not reached, sync continues only up to the configured page and tweet limits.
+
+Twitter/X entries use `source_key = 'twitterapi:list:<list_id>'`, `source_item_id = '<tweet_id>'`, and `source_type = 'twitter'`. They are embedding-only by default because `twitter` is included in `LIGHTWEIGHT_SOURCE_TYPES`.
+
 ## Source Detection
 
 PND currently assigns one of four `source_type` values:

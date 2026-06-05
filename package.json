@@ -10,6 +10,7 @@
     "cli": "tsx src/cli.ts",
     "db:migrate": "tsx src/cli.ts migrate",
     "sync": "tsx src/cli.ts sync",
+    "sync-twitter": "tsx src/cli.ts sync-twitter",
     "digest": "tsx src/cli.ts digest",
     "test": "vitest run test",
     "typecheck": "tsc -p tsconfig.json --noEmit"

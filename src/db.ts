@@ -47,19 +47,28 @@ export async function migrate(): Promise<void> {
   }
 }
 
-export async function getSyncCursor(): Promise<string | undefined> {
+export async function getSyncCursorForKey(key: string): Promise<string | undefined> {
   const result = await pool.query<{ value: string }>(
-    "SELECT value FROM sync_state WHERE key = 'feedbin_entries_since'"
+    "SELECT value FROM sync_state WHERE key = $1",
+    [key]
   );
   return result.rows[0]?.value;
 }
 
-export async function setSyncCursor(value: string): Promise<void> {
+export async function setSyncCursorForKey(key: string, value: string): Promise<void> {
   await pool.query(
-    `INSERT INTO sync_state(key, value) VALUES ('feedbin_entries_since', $1)
+    `INSERT INTO sync_state(key, value) VALUES ($1, $2)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-    [value]
+    [key, value]
   );
+}
+
+export async function getSyncCursor(): Promise<string | undefined> {
+  return getSyncCursorForKey("feedbin_entries_since");
+}
+
+export async function setSyncCursor(value: string): Promise<void> {
+  await setSyncCursorForKey("feedbin_entries_since", value);
 }
 
 export async function resetSyncCursor(): Promise<void> {

@@ -65,6 +65,7 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- sync --hours 48` | Sync only entries created within the last 48 hours |
 | `npm run cli -- sync --days 7` | Sync only entries created within the last seven days |
 | `npm run cli -- sync --reset-cursor` | Clear the cursor and safely rescan the complete Feedbin archive |
+| `npm run sync-twitter` | Sync configured Twitter/X lists through TwitterAPI.io |
 | `npm run cli -- enrich --source reddit --limit 20` | Fully enrich the newest 20 eligible Reddit entries |
 | `npm run cli -- enrich --source hackernews --limit 20` | Fully enrich the newest 20 eligible Hacker News entries |
 | `npm run cli -- enrich --source twitter --limit 20` | Fully enrich the newest 20 eligible Twitter/X entries |
@@ -95,6 +96,9 @@ Run sync and digest from cron, a systemd timer, or a scheduler:
 See [`.env.example`](.env.example). Important values:
 
 - `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: Feedbin HTTP Basic Auth credentials.
+- `TWITTERAPI_IO_API_KEY`: TwitterAPI.io key for `sync-twitter`.
+- `TWITTERAPI_LIST_IDS`: comma-separated Twitter/X list IDs to sync.
+- `TWITTERAPI_LIST_MAX_PAGES`, `TWITTERAPI_LIST_MAX_TWEETS`: bounded sync limits; defaults to `3` and `200`.
 - `OPENAI_API_KEY`: always required because embeddings use OpenAI.
 - `LLM_PROVIDER`: `openai` or `anthropic`.
 - `LIGHTWEIGHT_SOURCE_TYPES`: comma-separated source types that use embedding-only sync by default; defaults to `reddit,hackernews,twitter`.
@@ -134,6 +138,14 @@ npm run cli -- sync --days 7
 ```
 
 After a successful lookback sync, the stored cursor advances to the newest Feedbin entry fetched, which is normally close to the present. If interrupted, the existing stored cursor remains unchanged; resume with the same `--hours` or `--days` option. If no matching entries are returned, the existing cursor is left unchanged.
+
+Twitter/X list sync uses TwitterAPI.io:
+
+```bash
+npm run sync-twitter
+```
+
+It reads `TWITTERAPI_LIST_IDS`, fetches newest tweets first, stops when it reaches the stored latest tweet ID for each list, and otherwise stops at `TWITTERAPI_LIST_MAX_PAGES` or `TWITTERAPI_LIST_MAX_TWEETS`. Tweets use `source_key = twitterapi:list:<list_id>` and `source_type = twitter`.
 
 Digest generation prints progress while loading sources, waiting for LLM synthesis, and storing the completed digest.
 It sends at most `DIGEST_MAX_ENTRIES` newest eligible entries to the LLM and logs when older eligible entries are omitted.
