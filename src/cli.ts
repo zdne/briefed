@@ -86,7 +86,9 @@ program
   .option("-o, --output <path>", "write Markdown result to a file")
   .action(async (question: string, options: { limit: string; format: string; output?: string }) => {
     const format = outputFormat(options.format);
-    const result = await queryArchive(question, positiveInteger(options.limit, "--limit"), new AnalystAI());
+    const log = timestampLogger;
+    log("Initializing AI client");
+    const result = await queryArchive(question, positiveInteger(options.limit, "--limit"), new AnalystAI(), log);
     const markdown = renderQueryMarkdown(question, result);
     if (options.output) {
       const path = await writeMarkdownFile(options.output, markdown);

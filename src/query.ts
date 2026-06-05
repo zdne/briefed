@@ -1,10 +1,22 @@
 import { AnalystAI } from "./ai.js";
 import { retrieveRelevant } from "./db.js";
 
-export async function queryArchive(question: string, limit: number, ai: AnalystAI) {
+export type QueryLogger = (message: string) => void;
+
+export async function queryArchive(
+  question: string,
+  limit: number,
+  ai: AnalystAI,
+  log: QueryLogger = () => {}
+) {
+  log("Embedding question");
   const embedding = await ai.embed(question);
+  log(`Retrieving up to ${limit} relevant sources`);
   const matches = await retrieveRelevant(embedding, limit);
+  log(`Retrieved ${matches.length} sources`);
+  log("Synthesizing answer with configured LLM");
   const answer = await ai.answer(question, matches);
+  log("Query synthesis complete");
 
   return {
     answer,

@@ -151,7 +151,7 @@ PND:
 
 Both fully enriched and embedding-only Reddit entries participate in semantic retrieval.
 
-The CLI renders queries as Markdown by default, including clickable source links, authors, dates, summaries, and similarity scores. Queries are only written to disk when `--output` is supplied. Use `--format json` for machine-readable output.
+The CLI renders queries as Markdown by default, including clickable source links, authors, dates, summaries, and similarity scores. Queries are only written to disk when `--output` is supplied. Use `--format json` for machine-readable output. CLI query progress logs are written to stderr so stdout remains usable for Markdown or JSON piping.
 
 ## Daily Digest
 

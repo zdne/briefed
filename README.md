@@ -166,6 +166,8 @@ npm run cli -- query "What changed in AI agent observability?" --output output/q
 npm run cli -- query "What changed in AI agent observability?" --format json
 ```
 
+Query progress logs are written to stderr, so Markdown and JSON stdout remain clean for piping.
+
 ## Reddit Strategy
 
 Reddit feeds can produce many entries, and individually summarizing every post adds cost and makes initial syncs slow. By default, Reddit entries use `embedded_only` processing:
