@@ -2,12 +2,17 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { digestOutputPath, writeMarkdownFile } from "../src/output.js";
+import { digestOutputPath, digestOutputPathForId, writeMarkdownFile } from "../src/output.js";
 
 describe("digestOutputPath", () => {
   it("creates a filesystem-safe timestamped Markdown filename", () => {
     expect(digestOutputPath("output/digests", new Date("2026-06-04T10:30:12.123Z")))
       .toMatch(/output\/digests\/2026-06-04T10-30-12Z-daily-digest\.md$/);
+  });
+
+  it("creates a filesystem-safe digest render filename with id", () => {
+    expect(digestOutputPathForId("output/digests", "42", new Date("2026-06-04T10:30:12.123Z")))
+      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-digest-42\.md$/);
   });
 
   it("creates parent directories and writes Markdown", async () => {

@@ -4,6 +4,7 @@ import pg from "pg";
 import { config } from "./config.js";
 import type {
   ContentForEnrichment,
+  DigestForRendering,
   Enrichment,
   NormalizedEntry,
   RetrievedContent
@@ -255,4 +256,52 @@ export async function saveDigest(
     [start, end, contentIds, body]
   );
   return result.rows[0]!.id;
+}
+
+export async function getDigestForRendering(id?: number): Promise<DigestForRendering | null> {
+  const digestResult = await pool.query<{
+    id: string;
+    periodStart: string;
+    periodEnd: string;
+    body: string;
+    createdAt: string;
+  }>(
+    `SELECT id::text, period_start::text AS "periodStart", period_end::text AS "periodEnd",
+      body, created_at::text AS "createdAt"
+     FROM digests
+     WHERE ($1::bigint IS NULL OR id = $1)
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [id ?? null]
+  );
+  const digest = digestResult.rows[0];
+  if (!digest) return null;
+
+  const sourcesResult = await pool.query<{
+    citation: number;
+    id: string;
+    title: string | null;
+    url: string | null;
+    author: string | null;
+    publishedAt: string | null;
+    summary: string | null;
+  }>(
+    `SELECT u.ordinality::int AS citation, c.id::text, c.title, c.canonical_url AS url,
+      c.author, c.published_at::text AS "publishedAt", c.analyst_summary AS summary
+     FROM digests d
+     CROSS JOIN LATERAL unnest(d.content_ids) WITH ORDINALITY AS u(content_id, ordinality)
+     JOIN content c ON c.id = u.content_id
+     WHERE d.id = $1
+     ORDER BY u.ordinality`,
+    [digest.id]
+  );
+
+  return {
+    id: digest.id,
+    periodStart: new Date(digest.periodStart).toISOString(),
+    periodEnd: new Date(digest.periodEnd).toISOString(),
+    createdAt: new Date(digest.createdAt).toISOString(),
+    body: digest.body,
+    sources: sourcesResult.rows
+  };
 }

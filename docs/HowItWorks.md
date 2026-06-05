@@ -160,6 +160,7 @@ Run:
 ```bash
 npm run digest
 npm run cli -- digest --hours 48
+npm run cli -- digest render
 ```
 
 The digest command:
@@ -177,6 +178,8 @@ To prevent unexpectedly large or expensive LLM requests, PND sends at most the n
 Each digest is stored in Postgres and written as a timestamped Markdown file under `DIGEST_OUTPUT_DIR`. The Markdown contains Obsidian-compatible frontmatter, the digest body, and clickable sources. Inline citations use Obsidian heading links such as `[[#Source 32|32]]`, and source titles link to original URLs. Point `DIGEST_OUTPUT_DIR` at an Obsidian vault folder to make generated digests appear there without an additional integration.
 
 CLI Markdown is the default; `--format json` prints machine-readable output. Progress logs are written to stderr so JSON stdout remains parseable.
+
+`npm run cli -- digest render` re-renders the latest stored digest from Postgres without calling the LLM. Use `--id <digest_id>` to render a specific stored digest.
 
 ## Local And External Data
 

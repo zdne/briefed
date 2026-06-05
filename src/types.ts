@@ -56,3 +56,20 @@ export interface RetrievedContent {
   contentText: string;
   score: number;
 }
+
+export interface DigestForRendering {
+  id: string;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+  body: string;
+  sources: Array<{
+    citation: number;
+    id: string;
+    title: string | null;
+    url: string | null;
+    author: string | null;
+    publishedAt: string | null;
+    summary: string | null;
+  }>;
+}

@@ -12,3 +12,8 @@ export function digestOutputPath(directory: string, createdAt = new Date()): str
   const timestamp = createdAt.toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
   return resolve(directory, `${timestamp}-daily-digest.md`);
 }
+
+export function digestOutputPathForId(directory: string, id: string, createdAt: Date): string {
+  const timestamp = createdAt.toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
+  return resolve(directory, `${timestamp}-digest-${id}.md`);
+}

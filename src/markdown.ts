@@ -91,15 +91,27 @@ function renderSource(source: MarkdownSource): string {
     ? `[${escapeLinkText(title)}](${source.url})`
     : title;
   const metadata = [
-    source.author,
+    sanitizeMarkdownText(source.author),
     formatDate(source.publishedAt),
     source.score === undefined ? null : `Similarity: ${source.score.toFixed(3)}`
   ].filter(Boolean);
   const details = metadata.length > 0 ? `\n   ${metadata.join(" · ")}` : "";
-  const summary = source.summary ? `\n\n   ${source.summary.trim()}` : "";
+  const summary = source.summary ? `\n\n   ${sanitizeMarkdownText(source.summary)}` : "";
   return `### Source ${source.citation}
 
 ${sourceTitle}${details}${summary}`;
+}
+
+export function sanitizeMarkdownText(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value
+    .replace(/```+/g, "`")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 }
 
 function formatDate(value: string | null | undefined): string | null {

@@ -73,6 +73,8 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- query "<question>" --format json` | Return machine-readable query JSON |
 | `npm run cli -- query "<question>" --output output/query.md` | Write a query result to Markdown |
 | `npm run digest` | Generate and store a digest for the last 24 hours |
+| `npm run cli -- digest render` | Re-render the latest stored digest as Markdown without calling the LLM |
+| `npm run cli -- digest render --id 4` | Re-render a specific stored digest |
 | `npm run cli -- digest --hours 48` | Generate a digest with a custom lookback |
 | `npm run cli -- digest --format json` | Print machine-readable digest JSON while still writing Markdown |
 | `npm run dev` | Start the API with reload |
@@ -146,6 +148,14 @@ Override the configured directory for one digest:
 
 ```bash
 npm run cli -- digest --output /path/to/digest.md
+```
+
+Re-render an existing stored digest without running the LLM again:
+
+```bash
+npm run cli -- digest render
+npm run cli -- digest render --id 4
+npm run cli -- digest render --output /path/to/digest.md
 ```
 
 Queries are printed to the terminal and are only saved when `--output` is provided:

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { linkCitations, renderDigestMarkdown, renderQueryMarkdown } from "../src/markdown.js";
+import {
+  linkCitations,
+  renderDigestMarkdown,
+  renderQueryMarkdown,
+  sanitizeMarkdownText
+} from "../src/markdown.js";
 
 describe("linkCitations", () => {
   it("links bracketed and parenthetical citations without modifying existing or unknown links", () => {
@@ -58,5 +63,33 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).toContain("### Source 1");
     expect(markdown).toContain("[Source](https://example.com)");
     expect(markdown).not.toContain("Back to writeup");
+  });
+
+  it("sanitizes source summaries so fenced code cannot consume later sources", () => {
+    const markdown = renderDigestMarkdown({
+      id: "4",
+      periodStart: "2026-06-04T10:00:00.000Z",
+      periodEnd: "2026-06-05T10:00:00.000Z",
+      body: "Digest body [1].",
+      sources: [
+        {
+          citation: 1,
+          title: "Unpopular opinion",
+          url: "https://example.com",
+          summary: "hard-coded ``` _CIRCUIT_BREAKER_THRESHOLD = 3"
+        },
+        { citation: 2, title: "Next source", url: "https://example.com/2" }
+      ]
+    });
+
+    expect(markdown).not.toContain("```");
+    expect(markdown).toContain("hard-coded ` _CIRCUIT_BREAKER_THRESHOLD = 3");
+    expect(markdown).toContain("### Source 2");
+  });
+});
+
+describe("sanitizeMarkdownText", () => {
+  it("removes multiline and fenced-markdown hazards from source text", () => {
+    expect(sanitizeMarkdownText("a\n\n```code\nb")).toBe("a `code b");
   });
 });
