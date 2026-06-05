@@ -50,11 +50,12 @@ If a recent-only sync is interrupted, the previous stored cursor remains unchang
 
 ## Source Detection
 
-PND currently assigns one of three `source_type` values:
+PND currently assigns one of four `source_type` values:
 
 - `article`: entries that are not classified as a known lightweight source.
 - `reddit`: canonical URLs on a Reddit hostname with a path beginning with `/r/`.
 - `hackernews`: canonical URLs on `news.ycombinator.com/item` with an `id` query parameter.
+- `twitter`: posts imported from Twitter/X list APIs.
 
 This source type controls the default enrichment policy. It does not prevent an entry from appearing in queries or digests.
 
@@ -83,24 +84,24 @@ Full enrichment is the default for article entries.
 
 ### Lightweight Embedding-Only Strategy
 
-Reddit and Hacker News feeds can be high volume, and their Feedbin entries are often post or discussion wrappers rather than complete source articles. Individually summarizing every item would increase LLM calls, token usage, and sync duration before the MVP has demonstrated that item-level analysis is valuable.
+Reddit, Hacker News, and Twitter/X feeds can be high volume, and their entries are often post or discussion wrappers rather than complete source articles. Individually summarizing every item would increase LLM calls, token usage, and sync duration before the MVP has demonstrated that item-level analysis is valuable.
 
 By default:
 
 ```env
-LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews
+LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews,twitter
 ```
 
 For each lightweight item, PND stores:
 
-- Feedbin entry ID, feed ID, and original JSON.
+- Source identity and original JSON. Every entry uses `source_key` and `source_item_id`; for example, Feedbin entries use `source_key = 'feedbin:feed:<feed_id>'`, while Twitter/X list entries can use `source_key = 'twitterapi:list:<list_id>'`.
 - Canonical URL, title, author, and timestamps.
 - Original HTML and normalized full post text.
 - Feedbin-provided summary.
 - An OpenAI embedding generated from the title and full post text.
 - `analyst_summary` copied from Feedbin's summary.
 - Empty generated topic tags and entities.
-- `source_type = 'reddit'` or `source_type = 'hackernews'`.
+- `source_type = 'reddit'`, `source_type = 'hackernews'`, or `source_type = 'twitter'`.
 - `enrichment_mode = 'embedded_only'`.
 - `enrichment_status = 'complete'`.
 
@@ -121,6 +122,9 @@ npm run cli -- enrich --source reddit --limit 20
 # Fully enrich the newest 20 eligible Hacker News entries
 npm run cli -- enrich --source hackernews --limit 20
 
+# Fully enrich the newest 20 eligible Twitter/X entries
+npm run cli -- enrich --source twitter --limit 20
+
 # Fully enrich up to 100 Reddit entries collected in the last seven days
 npm run cli -- enrich --source reddit --limit 100 --hours 168
 
@@ -133,7 +137,7 @@ The command selects newest entries first. It upgrades `embedded_only` entries, r
 To change which non-article source types use embedding-only sync:
 
 ```env
-LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews
+LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews,twitter
 ```
 
 Remove a source from this list to fully enrich it during future syncs.

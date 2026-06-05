@@ -25,6 +25,8 @@ describe("normalizeEntry", () => {
 
     expect(normalized.title).toBe("Example");
     expect(normalized.contentText).toBe("Hello world.\n\nNext.");
-    expect(normalized.feedbinEntryId).toBe(10);
+    expect(normalized.sourceKey).toBe("feedbin:feed:20");
+    expect(normalized.sourceItemId).toBe("10");
+    expect(normalized.collectedAt).toBe("2026-06-01T10:01:00.123456Z");
   });
 });

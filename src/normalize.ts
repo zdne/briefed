@@ -1,5 +1,5 @@
 import { convert } from "html-to-text";
-import type { FeedbinEntry, NormalizedEntry } from "./types.js";
+import type { FeedbinEntry, SourceEntry } from "./types.js";
 
 const TRACKING_PARAMS = new Set([
   "fbclid",
@@ -41,21 +41,20 @@ export function htmlToPlainText(html: string): string {
     .trim();
 }
 
-export function normalizeEntry(entry: FeedbinEntry): NormalizedEntry {
+export function normalizeEntry(entry: FeedbinEntry): SourceEntry {
   const contentHtml = entry.content?.trim() || null;
   const fallback = entry.summary?.trim() || entry.title?.trim() || "";
 
   return {
-    feedbinEntryId: entry.id,
-    feedId: entry.feed_id,
+    sourceKey: `feedbin:feed:${entry.feed_id}`,
+    sourceItemId: String(entry.id),
     canonicalUrl: canonicalizeUrl(entry.url),
     title: entry.title?.trim() || null,
     author: entry.author?.trim() || null,
     sourceSummary: entry.summary?.trim() || null,
-    contentHtml,
     contentText: contentHtml ? htmlToPlainText(contentHtml) || fallback : fallback,
     publishedAt: entry.published,
-    feedbinCreatedAt: entry.created_at,
+    collectedAt: entry.created_at,
     rawEntry: entry
   };
 }

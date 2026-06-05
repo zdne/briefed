@@ -12,18 +12,17 @@ export interface FeedbinEntry {
   [key: string]: unknown;
 }
 
-export interface NormalizedEntry {
-  feedbinEntryId: number;
-  feedId: number;
+export interface SourceEntry {
+  sourceKey: string;
+  sourceItemId: string;
   canonicalUrl: string | null;
   title: string | null;
   author: string | null;
   sourceSummary: string | null;
-  contentHtml: string | null;
   contentText: string;
   publishedAt: string | null;
-  feedbinCreatedAt: string;
-  rawEntry: FeedbinEntry;
+  collectedAt: string;
+  rawEntry: unknown;
 }
 
 export interface Entity {
@@ -42,7 +41,7 @@ export interface ContentForEnrichment {
   title: string | null;
   sourceSummary: string | null;
   contentText: string;
-  sourceType: "article" | "reddit" | "hackernews";
+  sourceType: "article" | "reddit" | "hackernews" | "twitter";
   enrichmentMode: "full" | "embedded_only";
 }
 

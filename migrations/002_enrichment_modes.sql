@@ -14,4 +14,4 @@ WHERE canonical_url ~* '^https?://news\.ycombinator\.com/item\?'
   AND canonical_url ~* '[?&]id=';
 
 CREATE INDEX IF NOT EXISTS content_source_enrichment_idx
-  ON content (source_type, enrichment_mode, feedbin_created_at DESC);
+  ON content (source_type, enrichment_mode, collected_at DESC);

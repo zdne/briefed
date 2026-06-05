@@ -22,9 +22,9 @@ const schema = z.object({
   OPENAI_LLM_MODEL: z.string().default("gpt-4.1-mini"),
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_LLM_MODEL: z.string().default("claude-3-5-haiku-latest"),
-  LIGHTWEIGHT_SOURCE_TYPES: z.string().default("reddit,hackernews").transform((value) =>
+  LIGHTWEIGHT_SOURCE_TYPES: z.string().default("reddit,hackernews,twitter").transform((value) =>
     parseCommaSeparatedList(value).map((source) =>
-      z.enum(["reddit", "hackernews"]).parse(source)
+      z.enum(["reddit", "hackernews", "twitter"]).parse(source)
     ) as LightweightSourceType[]
   ),
   QUERY_LIMIT: z.coerce.number().int().min(1).max(30).default(8),

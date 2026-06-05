@@ -7,7 +7,7 @@ import {
   saveEmbeddedOnly,
   saveEnrichment,
   setSyncCursor,
-  upsertContent
+  upsertSourceContent
 } from "./db.js";
 import { config } from "./config.js";
 import {
@@ -17,7 +17,7 @@ import {
 } from "./enrichment-policy.js";
 import { FeedbinClient } from "./feedbin.js";
 import { normalizeEntry } from "./normalize.js";
-import type { ContentForEnrichment, FeedbinEntry, NormalizedEntry } from "./types.js";
+import type { ContentForEnrichment, FeedbinEntry, SourceEntry } from "./types.js";
 
 export interface SyncResult {
   fetched: number;
@@ -34,7 +34,7 @@ export interface SyncOptions {
   since?: string;
 }
 
-export async function enrichContent(id: string, entry: NormalizedEntry, ai: AnalystAI): Promise<void> {
+export async function enrichContent(id: string, entry: SourceEntry, ai: AnalystAI): Promise<void> {
   return fullyEnrichContent(id, entry.title, entry.contentText, ai);
 }
 
@@ -65,7 +65,7 @@ export async function fullyEnrichContent(
 
 export async function embedOnlyContent(
   id: string,
-  entry: Pick<NormalizedEntry, "title" | "sourceSummary" | "contentText">,
+  entry: Pick<SourceEntry, "title" | "sourceSummary" | "contentText">,
   ai: AnalystAI
 ): Promise<void> {
   await markEnrichmentProcessing(id);
@@ -118,9 +118,9 @@ export async function syncFeedbin(
       const entry = normalizeEntry(raw);
       const sourceType = detectSourceType(entry);
       const mode = desiredEnrichmentMode(sourceType, config.LIGHTWEIGHT_SOURCE_TYPES);
-      const stored = await upsertContent(entry, sourceType, mode);
+      const stored = await upsertSourceContent(entry, sourceType, mode);
       result.insertedOrUpdated++;
-      const label = entry.title ?? entry.canonicalUrl ?? `Feedbin entry ${entry.feedbinEntryId}`;
+      const label = entry.title ?? entry.canonicalUrl ?? `${entry.sourceKey}:${entry.sourceItemId}`;
       const progress = formatProgress(result.fetched, totalEntries);
       log(`${progress} Stored: ${label}`);
 

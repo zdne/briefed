@@ -67,6 +67,7 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- sync --reset-cursor` | Clear the cursor and safely rescan the complete Feedbin archive |
 | `npm run cli -- enrich --source reddit --limit 20` | Fully enrich the newest 20 eligible Reddit entries |
 | `npm run cli -- enrich --source hackernews --limit 20` | Fully enrich the newest 20 eligible Hacker News entries |
+| `npm run cli -- enrich --source twitter --limit 20` | Fully enrich the newest 20 eligible Twitter/X entries |
 | `npm run cli -- enrich --source reddit --limit 100 --hours 168` | Fully enrich up to 100 Reddit entries from the last seven days |
 | `npm run cli -- enrich --source reddit --all` | Fully enrich every eligible stored Reddit entry |
 | `npm run cli -- enrich --source article --limit 20` | Retry or fully enrich eligible article entries |
@@ -96,7 +97,7 @@ See [`.env.example`](.env.example). Important values:
 - `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: Feedbin HTTP Basic Auth credentials.
 - `OPENAI_API_KEY`: always required because embeddings use OpenAI.
 - `LLM_PROVIDER`: `openai` or `anthropic`.
-- `LIGHTWEIGHT_SOURCE_TYPES`: comma-separated source types that use embedding-only sync by default; defaults to `reddit,hackernews`.
+- `LIGHTWEIGHT_SOURCE_TYPES`: comma-separated source types that use embedding-only sync by default; defaults to `reddit,hackernews,twitter`.
 - `OPENAI_EMBEDDING_MODEL`: defaults to `text-embedding-3-small`; storage is fixed at 1536 dimensions.
 - `QUERY_LIMIT`: default number of vector matches passed to answer synthesis.
 - `DIGEST_MAX_ENTRIES`: maximum newest completed entries sent to one digest request; defaults to `200`.
@@ -194,9 +195,9 @@ PND keeps a hidden `.latest.json` state file for follow-ups; visible JSON sideca
 
 ## Lightweight Source Strategy
 
-Reddit and Hacker News feeds can produce many entries whose Feedbin records are thin post or discussion wrappers. Individually summarizing every item adds cost and makes initial syncs slow. By default, these lightweight sources use `embedded_only` processing:
+Reddit, Hacker News, and Twitter/X feeds can produce many entries whose records are thin post or discussion wrappers. Individually summarizing every item adds cost and makes initial syncs slow. By default, these lightweight sources use `embedded_only` processing:
 
-- Store the complete Feedbin entry, normalized post text, title, author, URL, and Feedbin summary.
+- Store the original source JSON, normalized post text, title, author, URL, and source summary.
 - Generate and store an OpenAI embedding from the title and full post text.
 - Copy the Feedbin summary into `analyst_summary`.
 - Leave generated topic tags and entities empty.
@@ -211,6 +212,9 @@ npm run cli -- enrich --source reddit --limit 20
 # Fully enrich the newest 20 embedded-only Hacker News entries
 npm run cli -- enrich --source hackernews --limit 20
 
+# Fully enrich the newest 20 embedded-only Twitter/X entries
+npm run cli -- enrich --source twitter --limit 20
+
 # Fully enrich up to 100 Reddit entries collected in the last seven days
 npm run cli -- enrich --source reddit --limit 100 --hours 168
 
@@ -221,7 +225,7 @@ npm run cli -- enrich --source reddit --all
 To change which non-article sources use embedding-only sync, set:
 
 ```env
-LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews
+LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews,twitter
 ```
 
 Remove a source from this list to fully enrich it during future syncs.

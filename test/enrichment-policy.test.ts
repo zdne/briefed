@@ -23,13 +23,15 @@ describe("detectSourceType", () => {
 
 describe("desiredEnrichmentMode", () => {
   it("uses embedded-only mode for configured lightweight sources", () => {
-    expect(desiredEnrichmentMode("reddit", ["reddit", "hackernews"])).toBe("embedded_only");
-    expect(desiredEnrichmentMode("hackernews", ["reddit", "hackernews"])).toBe("embedded_only");
+    expect(desiredEnrichmentMode("reddit", ["reddit", "hackernews", "twitter"])).toBe("embedded_only");
+    expect(desiredEnrichmentMode("hackernews", ["reddit", "hackernews", "twitter"])).toBe("embedded_only");
+    expect(desiredEnrichmentMode("twitter", ["reddit", "hackernews", "twitter"])).toBe("embedded_only");
   });
 
   it("uses full mode for articles and unconfigured lightweight sources", () => {
-    expect(desiredEnrichmentMode("article", ["reddit", "hackernews"])).toBe("full");
+    expect(desiredEnrichmentMode("article", ["reddit", "hackernews", "twitter"])).toBe("full");
     expect(desiredEnrichmentMode("reddit", ["hackernews"])).toBe("full");
     expect(desiredEnrichmentMode("hackernews", ["reddit"])).toBe("full");
+    expect(desiredEnrichmentMode("twitter", ["reddit"])).toBe("full");
   });
 });

@@ -1,10 +1,10 @@
-import type { NormalizedEntry } from "./types.js";
+import type { SourceEntry } from "./types.js";
 
-export type SourceType = "article" | "reddit" | "hackernews";
+export type SourceType = "article" | "reddit" | "hackernews" | "twitter";
 export type EnrichmentMode = "full" | "embedded_only";
 export type LightweightSourceType = Exclude<SourceType, "article">;
 
-export function detectSourceType(entry: Pick<NormalizedEntry, "canonicalUrl">): SourceType {
+export function detectSourceType(entry: Pick<SourceEntry, "canonicalUrl">): SourceType {
   if (!entry.canonicalUrl) return "article";
   try {
     const url = new URL(entry.canonicalUrl);
