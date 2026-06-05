@@ -9,14 +9,16 @@ import {
 describe("linkCitations", () => {
   it("links bracketed and parenthetical citations without modifying existing or unknown links", () => {
     expect(linkCitations(
-      "Known [1], parenthetical (1), group (1, 3), linked [1](https://example.com), unknown (2).",
+      "Known [1], bracket group [1, 3], parenthetical (1), group (1, 3), " +
+      "linked [1](https://example.com), unknown [1, 2], unknown (2).",
       [
         { citation: 1, title: "Source", url: null },
         { citation: 3, title: "Another", url: null }
       ]
     )).toBe(
-      "Known [[#Source 1|1]], parenthetical [[#Source 1|1]], group " +
-      "[[#Source 1|1]], [[#Source 3|3]], linked [1](https://example.com), unknown (2)."
+      "Known [[#Source 1|1]], bracket group [[#Source 1|1]], [[#Source 3|3]], " +
+      "parenthetical [[#Source 1|1]], group [[#Source 1|1]], [[#Source 3|3]], " +
+      "linked [1](https://example.com), unknown [1, 2], unknown (2)."
     );
   });
 

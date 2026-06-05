@@ -79,6 +79,11 @@ ${renderSources(result.sources)}
 export function linkCitations(text: string, sources: MarkdownSource[]): string {
   const citations = new Set(sources.map((source) => source.citation));
   const linked = text
+    .replace(/\[(\d+(?:\s*,\s*\d+)+)\](?!\()/g, (match, values: string) => {
+      const group = values.split(",").map((value) => Number(value.trim()));
+      if (!group.every((citation) => citations.has(citation))) return match;
+      return group.map(citationLink).join(", ");
+    })
     .replace(/\[(\d+)\](?!\()/g, (match, value: string) => {
       const citation = Number(value);
       return citations.has(citation) ? citationLink(citation) : match;

@@ -50,22 +50,22 @@ ${content.slice(0, 40_000)}`;
 
   async answer(question: string, sources: RetrievedContent[]): Promise<string> {
     return this.generateText(`Answer the question using only the supplied archive sources.
-Return Markdown with exactly these sections:
+Return concise Markdown with this shape:
 
-## Short Answer
-One concise paragraph.
+Start with 3-5 bullets maximum. Do not add an answer heading. Each bullet must contain one useful takeaway and citations.
 
-## Details
-Bulleted or short paragraph detail with citations.
+## Best Sources
+Optional. List 2-4 sources worth opening, with one short reason each.
 
-## Caveats
-What the sources do not establish, or "None from the retrieved sources."
-
-## Suggested Follow-Ups
-2-4 concrete follow-up questions.
-
-Use inline citations like [1] or [2]. Every factual claim must have a citation.
-If the sources do not support an answer, say so.
+Rules:
+- Be short and direct.
+- Do not summarize every source.
+- Do not restate the question.
+- Do not include suggested follow-ups.
+- Include caveats only when they materially affect the answer.
+- Use inline citations like [1] or [2].
+- Use at most 5 citations total unless the question asks for broad coverage.
+- If the sources do not support an answer, say so briefly.
 
 Question: ${question}
 
@@ -79,22 +79,22 @@ ${formatSources(sources)}`);
     sources: RetrievedContent[]
   ): Promise<string> {
     return this.generateText(`Answer this follow-up using only the prior query context and sources.
-Return Markdown with exactly these sections:
+Return concise Markdown with this shape:
 
-## Short Answer
-One concise paragraph.
+Start with 3-5 bullets maximum. Do not add an answer heading. Each bullet must contain one useful takeaway and citations.
 
-## Details
-Bulleted or short paragraph detail with citations.
+## Best Sources
+Optional. List 2-4 sources worth opening, with one short reason each.
 
-## Caveats
-What the sources do not establish, or "None from the retrieved sources."
-
-## Suggested Follow-Ups
-2-4 concrete follow-up questions.
-
-Use inline citations like [1] or [2]. Every factual claim must have a citation.
-If the prior sources do not support an answer, say so.
+Rules:
+- Be short and direct.
+- Do not summarize every source.
+- Do not restate the question.
+- Do not include suggested follow-ups.
+- Include caveats only when they materially affect the answer.
+- Use inline citations like [1] or [2].
+- Use at most 5 citations total unless the question asks for broad coverage.
+- If the prior sources do not support an answer, say so briefly.
 
 Previous question: ${previousQuestion}
 
