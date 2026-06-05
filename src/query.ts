@@ -1,5 +1,6 @@
 import { AnalystAI } from "./ai.js";
 import { retrieveRelevant } from "./db.js";
+import type { QuerySession, RetrievedContent } from "./types.js";
 
 export type QueryLogger = (message: string) => void;
 
@@ -30,5 +31,33 @@ export async function queryArchive(
       summary: source.summary,
       score: source.score
     }))
+  };
+}
+
+export async function queryFollowUp(
+  question: string,
+  previous: QuerySession,
+  ai: AnalystAI,
+  log: QueryLogger = () => {}
+) {
+  log("Using latest saved query context");
+  const sources = previous.sources.map((source): RetrievedContent => ({
+    id: source.id,
+    title: source.title,
+    canonicalUrl: source.url,
+    author: source.author,
+    publishedAt: source.publishedAt,
+    summary: source.summary,
+    contentText: source.summary ?? "",
+    score: source.score
+  }));
+  log(`Reusing ${sources.length} prior sources`);
+  log("Synthesizing follow-up answer with configured LLM");
+  const answer = await ai.answerFollowUp(question, previous.question, previous.answer, sources);
+  log("Follow-up synthesis complete");
+
+  return {
+    answer,
+    sources: previous.sources
   };
 }

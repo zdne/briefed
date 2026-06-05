@@ -18,7 +18,8 @@ const schema = z.object({
   QUERY_LIMIT: z.coerce.number().int().min(1).max(30).default(8),
   DIGEST_HOURS: z.coerce.number().int().min(1).default(24),
   DIGEST_MAX_ENTRIES: z.coerce.number().int().min(1).default(200),
-  DIGEST_OUTPUT_DIR: z.string().min(1).default("output/digests")
+  DIGEST_OUTPUT_DIR: z.string().min(1).default("output/digests"),
+  QUERY_OUTPUT_DIR: z.string().min(1).default("output/queries")
 });
 
 export type Config = z.infer<typeof schema>;

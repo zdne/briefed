@@ -70,8 +70,9 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- enrich --source reddit --all` | Fully enrich every eligible stored Reddit entry |
 | `npm run cli -- enrich --source article --limit 20` | Retry or fully enrich eligible non-Reddit entries |
 | `npm run cli -- query "<question>"` | Query the archive from the terminal |
-| `npm run cli -- query "<question>" --format json` | Return machine-readable query JSON |
+| `npm run cli -- query "<question>" --format json` | Print machine-readable query JSON |
 | `npm run cli -- query "<question>" --output output/query.md` | Write a query result to Markdown |
+| `npm run cli -- query-followup "<question>"` | Ask a follow-up using the latest saved query context |
 | `npm run digest` | Generate and store a digest for the last 24 hours |
 | `npm run cli -- digest render` | Re-render the latest stored digest as Markdown without calling the LLM |
 | `npm run cli -- digest render --id 4` | Re-render a specific stored digest |
@@ -99,6 +100,7 @@ See [`.env.example`](.env.example). Important values:
 - `QUERY_LIMIT`: default number of vector matches passed to answer synthesis.
 - `DIGEST_MAX_ENTRIES`: maximum newest completed entries sent to one digest request; defaults to `200`.
 - `DIGEST_OUTPUT_DIR`: directory for generated digest Markdown; defaults to `output/digests`.
+- `QUERY_OUTPUT_DIR`: directory for generated query Markdown and JSON sidecars; defaults to `output/queries`.
 
 ## API
 
@@ -158,15 +160,24 @@ npm run cli -- digest render --id 4
 npm run cli -- digest render --output /path/to/digest.md
 ```
 
-Queries are printed to the terminal and are only saved when `--output` is provided:
+Queries are printed to the terminal and saved as Markdown under `QUERY_OUTPUT_DIR` by default:
 
 ```bash
 npm run cli -- query "What changed in AI agent observability?"
 npm run cli -- query "What changed in AI agent observability?" --output output/queries/observability.md
 npm run cli -- query "What changed in AI agent observability?" --format json
+npm run cli -- query "What changed in AI agent observability?" --no-save
+npm run cli -- query "What changed in AI agent observability?" --save-json
+```
+
+Ask a follow-up using the latest saved query's answer and sources:
+
+```bash
+npm run cli -- query-followup "Which of these seem most important?"
 ```
 
 Query progress logs are written to stderr, so Markdown and JSON stdout remain clean for piping.
+PND keeps a hidden `.latest.json` state file for follow-ups; visible JSON sidecars are only written with `--save-json`.
 
 ## Reddit Strategy
 

@@ -50,10 +50,58 @@ ${content.slice(0, 40_000)}`;
 
   async answer(question: string, sources: RetrievedContent[]): Promise<string> {
     return this.generateText(`Answer the question using only the supplied archive sources.
+Return Markdown with exactly these sections:
+
+## Short Answer
+One concise paragraph.
+
+## Details
+Bulleted or short paragraph detail with citations.
+
+## Caveats
+What the sources do not establish, or "None from the retrieved sources."
+
+## Suggested Follow-Ups
+2-4 concrete follow-up questions.
+
 Use inline citations like [1] or [2]. Every factual claim must have a citation.
 If the sources do not support an answer, say so.
 
 Question: ${question}
+
+${formatSources(sources)}`);
+  }
+
+  async answerFollowUp(
+    question: string,
+    previousQuestion: string,
+    previousAnswer: string,
+    sources: RetrievedContent[]
+  ): Promise<string> {
+    return this.generateText(`Answer this follow-up using only the prior query context and sources.
+Return Markdown with exactly these sections:
+
+## Short Answer
+One concise paragraph.
+
+## Details
+Bulleted or short paragraph detail with citations.
+
+## Caveats
+What the sources do not establish, or "None from the retrieved sources."
+
+## Suggested Follow-Ups
+2-4 concrete follow-up questions.
+
+Use inline citations like [1] or [2]. Every factual claim must have a citation.
+If the prior sources do not support an answer, say so.
+
+Previous question: ${previousQuestion}
+
+Previous answer:
+${previousAnswer}
+
+Follow-up question: ${question}
 
 ${formatSources(sources)}`);
   }

@@ -73,3 +73,19 @@ export interface DigestForRendering {
     summary: string | null;
   }>;
 }
+
+export interface QuerySession {
+  createdAt: string;
+  question: string;
+  answer: string;
+  sources: Array<{
+    citation: number;
+    id: string;
+    title: string | null;
+    url: string | null;
+    author: string | null;
+    publishedAt: string | null;
+    summary: string | null;
+    score: number;
+  }>;
+}

@@ -37,6 +37,8 @@ describe("renderQueryMarkdown", () => {
     });
 
     expect(markdown).toContain("**Question:** What changed?");
+    expect(markdown).toContain("type: pnd-query");
+    expect(markdown).toContain('question: "What changed?"');
     expect(markdown).toContain("A useful answer [[#Source 1|1]].");
     expect(markdown).toContain("### Source 1");
     expect(markdown).toContain("[Source](https://example.com)");

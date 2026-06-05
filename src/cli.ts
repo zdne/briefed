@@ -5,9 +5,20 @@ import { getDigestForRendering, migrate, pool, resetSyncCursor } from "./db.js";
 import { createDigest } from "./digest.js";
 import { FeedbinClient } from "./feedbin.js";
 import { renderDigestMarkdown, renderQueryMarkdown } from "./markdown.js";
-import { digestOutputPath, digestOutputPathForId, writeMarkdownFile } from "./output.js";
+import {
+  digestOutputPath,
+  digestOutputPathForId,
+  jsonSidecarPath,
+  latestQueryStatePath,
+  queryOutputPath,
+  readLatestJsonFile,
+  readJsonFile,
+  writeJsonFile,
+  writeMarkdownFile
+} from "./output.js";
 import { enrichStoredContent, lookbackSince, syncFeedbin } from "./pipeline.js";
-import { queryArchive } from "./query.js";
+import { queryArchive, queryFollowUp } from "./query.js";
+import type { QuerySession } from "./types.js";
 
 const program = new Command().name("pnd").description("Feedbin-first synthetic analyst");
 
@@ -84,17 +95,60 @@ program
   .option("-l, --limit <number>", "number of sources", String(config.QUERY_LIMIT))
   .option("-f, --format <format>", "output format: markdown or json", "markdown")
   .option("-o, --output <path>", "write Markdown result to a file")
-  .action(async (question: string, options: { limit: string; format: string; output?: string }) => {
+  .option("--save-json", "also write a visible JSON sidecar next to the Markdown file")
+  .option("--no-save", "do not save Markdown and JSON sidecar output")
+  .action(async (
+    question: string,
+    options: { limit: string; format: string; output?: string; saveJson?: boolean; save?: boolean }
+  ) => {
     const format = outputFormat(options.format);
     const log = timestampLogger;
     log("Initializing AI client");
     const result = await queryArchive(question, positiveInteger(options.limit, "--limit"), new AnalystAI(), log);
-    const markdown = renderQueryMarkdown(question, result);
-    if (options.output) {
-      const path = await writeMarkdownFile(options.output, markdown);
+    const createdAt = new Date();
+    const session: QuerySession = { createdAt: createdAt.toISOString(), question, ...result };
+    const markdown = renderQueryMarkdown(question, session);
+    if (options.save !== false) {
+      const outputPath = options.output ?? queryOutputPath(config.QUERY_OUTPUT_DIR, question, createdAt);
+      const path = await writeMarkdownFile(outputPath, markdown);
+      await writeJsonFile(latestQueryStatePath(config.QUERY_OUTPUT_DIR), session);
+      if (options.saveJson) await writeJsonFile(jsonSidecarPath(path), session);
       timestampLogger(`Wrote query Markdown to ${path}`);
     }
-    console.log(format === "json" ? JSON.stringify(result, null, 2) : markdown);
+    console.log(format === "json" ? JSON.stringify(session, null, 2) : markdown);
+  });
+
+program
+  .command("query-followup")
+  .description("Ask a follow-up using the latest saved query context")
+  .argument("<question>")
+  .option("-f, --format <format>", "output format: markdown or json", "markdown")
+  .option("-o, --output <path>", "write Markdown result to a file")
+  .option("--save-json", "also write a visible JSON sidecar next to the Markdown file")
+  .option("--no-save", "do not save Markdown and JSON sidecar output")
+  .action(async (
+    question: string,
+    options: { format: string; output?: string; saveJson?: boolean; save?: boolean }
+  ) => {
+    const format = outputFormat(options.format);
+    const previous = await readLatestQuerySession();
+    if (!previous) {
+      throw new Error(`No saved query sessions found in ${config.QUERY_OUTPUT_DIR}`);
+    }
+    const log = timestampLogger;
+    log("Initializing AI client");
+    const result = await queryFollowUp(question, previous, new AnalystAI(), log);
+    const createdAt = new Date();
+    const session: QuerySession = { createdAt: createdAt.toISOString(), question, ...result };
+    const markdown = renderQueryMarkdown(question, session);
+    if (options.save !== false) {
+      const outputPath = options.output ?? queryOutputPath(config.QUERY_OUTPUT_DIR, question, createdAt);
+      const path = await writeMarkdownFile(outputPath, markdown);
+      await writeJsonFile(latestQueryStatePath(config.QUERY_OUTPUT_DIR), session);
+      if (options.saveJson) await writeJsonFile(jsonSidecarPath(path), session);
+      timestampLogger(`Wrote query Markdown to ${path}`);
+    }
+    console.log(format === "json" ? JSON.stringify(session, null, 2) : markdown);
   });
 
 const digestCommand = program
@@ -167,4 +221,8 @@ async function createDigestAction(options: { hours: string; format: string; outp
   const path = await writeMarkdownFile(outputPath, markdown);
   log(`Wrote digest Markdown to ${path}`);
   console.log(format === "json" ? JSON.stringify(result, null, 2) : markdown);
+}
+
+async function readLatestQuerySession(): Promise<QuerySession | null> {
+  return readJsonFile<QuerySession>(latestQueryStatePath(config.QUERY_OUTPUT_DIR));
 }

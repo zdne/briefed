@@ -9,6 +9,7 @@ export interface MarkdownSource {
 }
 
 export interface QueryMarkdownResult {
+  createdAt?: string;
   answer: string;
   sources: MarkdownSource[];
 }
@@ -23,7 +24,22 @@ export interface DigestMarkdownResult {
 
 export function renderQueryMarkdown(question: string, result: QueryMarkdownResult): string {
   const answer = linkCitations(result.answer, result.sources);
-  return `# Query
+  const createdAt = result.createdAt ?? new Date().toISOString();
+  const frontmatter = [
+    "---",
+    "type: pnd-query",
+    `created: ${createdAt}`,
+    `question: ${JSON.stringify(question)}`,
+    `source_count: ${result.sources.length}`,
+    "tags:",
+    "  - pnd",
+    "  - query",
+    "---"
+  ].join("\n");
+
+  return `${frontmatter}
+
+# Query
 
 **Question:** ${question}
 

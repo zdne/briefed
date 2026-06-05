@@ -138,6 +138,7 @@ Run:
 
 ```bash
 npm run cli -- query "What changed in AI agent observability?"
+npm run cli -- query-followup "Which of these seem most important?"
 ```
 
 Or send a request to `POST /query`.
@@ -151,7 +152,9 @@ PND:
 
 Both fully enriched and embedding-only Reddit entries participate in semantic retrieval.
 
-The CLI renders queries as Markdown by default, including clickable source links, authors, dates, summaries, and similarity scores. Queries are only written to disk when `--output` is supplied. Use `--format json` for machine-readable output. CLI query progress logs are written to stderr so stdout remains usable for Markdown or JSON piping.
+The CLI renders queries as Markdown by default, including clickable source links, authors, dates, summaries, and similarity scores. Query answers are prompted into consistent Markdown sections: Short Answer, Details, Caveats, and Suggested Follow-Ups. Query results are saved as Markdown under `QUERY_OUTPUT_DIR` unless `--no-save` is supplied. Use `--format json` for machine-readable stdout, or `--save-json` to also write a visible JSON sidecar. CLI query progress logs are written to stderr so stdout remains usable for Markdown or JSON piping.
+
+`npm run cli -- query-followup "<question>"` uses the latest saved query session as context. PND stores that context in a hidden `.latest.json` state file in `QUERY_OUTPUT_DIR`. It reuses the previous answer and sources, calls the LLM for synthesis, and saves the follow-up as a new query session. It does not run a new embedding search.
 
 ## Daily Digest
 
