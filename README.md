@@ -136,7 +136,7 @@ It sends at most `DIGEST_MAX_ENTRIES` newest eligible entries to the LLM and log
 
 ## Markdown Output
 
-Queries and digests print readable Markdown by default. Use `--format json` for automation.
+Queries and digests save readable Markdown by default. When Markdown is saved to a file, it is not echoed to stdout. Use `--format json` for automation.
 
 Digests are always stored in Postgres and written as timestamped Markdown files under `DIGEST_OUTPUT_DIR`. Files include Obsidian-compatible frontmatter, the generated digest, and clickable source citations. Inline citations emitted as `[32]`, `(32)`, or grouped forms such as `(27, 62)` are normalized into Obsidian heading links such as `[[#Source 32|32]]`; the source title opens the original URL.
 
@@ -160,7 +160,7 @@ npm run cli -- digest render --id 4
 npm run cli -- digest render --output /path/to/digest.md
 ```
 
-Queries are printed to the terminal and saved as Markdown under `QUERY_OUTPUT_DIR` by default:
+Queries are saved as Markdown under `QUERY_OUTPUT_DIR` by default:
 
 ```bash
 npm run cli -- query "What changed in AI agent observability?"
@@ -177,6 +177,7 @@ npm run cli -- query-followup "Which of these seem most important?"
 ```
 
 Query progress logs are written to stderr, so Markdown and JSON stdout remain clean for piping.
+Use `--no-save` to print query Markdown to stdout instead of writing it to a file.
 PND keeps a hidden `.latest.json` state file for follow-ups; visible JSON sidecars are only written with `--save-json`.
 
 ## Reddit Strategy

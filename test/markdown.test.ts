@@ -19,6 +19,16 @@ describe("linkCitations", () => {
       "[[#Source 1|1]], [[#Source 3|3]], linked [1](https://example.com), unknown (2)."
     );
   });
+
+  it("adds spaces between adjacent citation links", () => {
+    expect(linkCitations("Clustered [1][32][148].", [
+      { citation: 1, title: "One", url: null },
+      { citation: 32, title: "Thirty Two", url: null },
+      { citation: 148, title: "One Forty Eight", url: null }
+    ])).toBe(
+      "Clustered [[#Source 1|1]] [[#Source 32|32]] [[#Source 148|148]]."
+    );
+  });
 });
 
 describe("renderQueryMarkdown", () => {

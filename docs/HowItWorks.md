@@ -152,7 +152,7 @@ PND:
 
 Both fully enriched and embedding-only Reddit entries participate in semantic retrieval.
 
-The CLI renders queries as Markdown by default, including clickable source links, authors, dates, summaries, and similarity scores. Query answers are prompted into consistent Markdown sections: Short Answer, Details, Caveats, and Suggested Follow-Ups. Query results are saved as Markdown under `QUERY_OUTPUT_DIR` unless `--no-save` is supplied. Use `--format json` for machine-readable stdout, or `--save-json` to also write a visible JSON sidecar. CLI query progress logs are written to stderr so stdout remains usable for Markdown or JSON piping.
+The CLI renders queries as Markdown by default, including clickable source links, authors, dates, summaries, and similarity scores. Query answers are prompted into consistent Markdown sections: Short Answer, Details, Caveats, and Suggested Follow-Ups. Query results are saved as Markdown under `QUERY_OUTPUT_DIR` unless `--no-save` is supplied. Saved Markdown is not echoed to stdout. Use `--format json` for machine-readable stdout, or `--save-json` to also write a visible JSON sidecar. CLI query progress logs are written to stderr so stdout remains usable for Markdown or JSON piping.
 
 `npm run cli -- query-followup "<question>"` uses the latest saved query session as context. PND stores that context in a hidden `.latest.json` state file in `QUERY_OUTPUT_DIR`. It reuses the previous answer and sources, calls the LLM for synthesis, and saves the follow-up as a new query session. It does not run a new embedding search.
 
@@ -172,7 +172,7 @@ The digest command:
 2. Sends their titles, stored summaries, URLs, and dates to the configured LLM.
 3. Asks the LLM to group related developments, highlight signals, and cite sources.
 4. Stores the digest in the local `digests` table.
-5. Prints the digest and source list.
+5. Writes the digest Markdown file.
 
 Reddit embedding-only entries remain eligible for the digest. The digest sees their Feedbin-provided summaries rather than individually generated LLM summaries. Embeddings are not used to select digest entries; selection is currently based on collection time.
 
@@ -180,7 +180,7 @@ To prevent unexpectedly large or expensive LLM requests, PND sends at most the n
 
 Each digest is stored in Postgres and written as a timestamped Markdown file under `DIGEST_OUTPUT_DIR`. The Markdown contains Obsidian-compatible frontmatter, the digest body, and clickable sources. Inline citations use Obsidian heading links such as `[[#Source 32|32]]`, and source titles link to original URLs. Point `DIGEST_OUTPUT_DIR` at an Obsidian vault folder to make generated digests appear there without an additional integration.
 
-CLI Markdown is the default; `--format json` prints machine-readable output. Progress logs are written to stderr so JSON stdout remains parseable.
+CLI Markdown is the default and is written to a file without echoing the document to stdout. `--format json` prints machine-readable output. Progress logs are written to stderr so JSON stdout remains parseable.
 
 `npm run cli -- digest render` re-renders the latest stored digest from Postgres without calling the LLM. Use `--id <digest_id>` to render a specific stored digest.
 

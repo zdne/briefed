@@ -115,7 +115,7 @@ program
       if (options.saveJson) await writeJsonFile(jsonSidecarPath(path), session);
       timestampLogger(`Wrote query Markdown to ${path}`);
     }
-    console.log(format === "json" ? JSON.stringify(session, null, 2) : markdown);
+    printFormattedOutput(format, session, markdown, options.save !== false);
   });
 
 program
@@ -148,7 +148,7 @@ program
       if (options.saveJson) await writeJsonFile(jsonSidecarPath(path), session);
       timestampLogger(`Wrote query Markdown to ${path}`);
     }
-    console.log(format === "json" ? JSON.stringify(session, null, 2) : markdown);
+    printFormattedOutput(format, session, markdown, options.save !== false);
   });
 
 const digestCommand = program
@@ -181,7 +181,7 @@ digestCommand
     const outputPath = options.output ?? digestOutputPathForId(config.DIGEST_OUTPUT_DIR, result.id, createdAt);
     const path = await writeMarkdownFile(outputPath, markdown);
     timestampLogger(`Wrote digest Markdown to ${path}`);
-    console.log(format === "json" ? JSON.stringify(result, null, 2) : markdown);
+    printFormattedOutput(format, result, markdown, true);
   });
 
 program.parseAsync().catch((error) => {
@@ -210,6 +210,19 @@ function timestampLogger(message: string): void {
   console.error(`[${new Date().toISOString()}] ${message}`);
 }
 
+function printFormattedOutput(
+  format: "markdown" | "json",
+  data: unknown,
+  markdown: string,
+  markdownSaved: boolean
+): void {
+  if (format === "json") {
+    console.log(JSON.stringify(data, null, 2));
+  } else if (!markdownSaved) {
+    console.log(markdown);
+  }
+}
+
 async function createDigestAction(options: { hours: string; format: string; output?: string }): Promise<void> {
   const format = outputFormat(options.format);
   const log = timestampLogger;
@@ -220,7 +233,7 @@ async function createDigestAction(options: { hours: string; format: string; outp
   const outputPath = options.output ?? digestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt);
   const path = await writeMarkdownFile(outputPath, markdown);
   log(`Wrote digest Markdown to ${path}`);
-  console.log(format === "json" ? JSON.stringify(result, null, 2) : markdown);
+  printFormattedOutput(format, result, markdown, true);
 }
 
 async function readLatestQuerySession(): Promise<QuerySession | null> {
