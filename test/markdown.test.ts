@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   appendSectionSourceLinks,
+  cleanDigestBody,
   linkCitations,
   limitDigestCitations,
   renderDigestMarkdown,
@@ -105,6 +106,21 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).toContain("hard-coded ` _CIRCUIT_BREAKER_THRESHOLD = 3");
     expect(markdown).toContain("### Source 2");
   });
+
+  it("drops an empty Other Items section and trims model-emitted trailing spaces", () => {
+    const markdown = renderDigestMarkdown({
+      id: "5",
+      periodStart: "2026-06-04T10:00:00.000Z",
+      periodEnd: "2026-06-05T10:00:00.000Z",
+      body: "## Top Items\n- Reported item [1].  \n\n## Other Items\nNo meaningful new signal found in this window.",
+      sources: [{ citation: 1, title: "Source", url: "https://example.com" }]
+    });
+
+    expect(markdown).toContain("- Reported item [[#Source 1|1]].\n");
+    expect(markdown).not.toContain("  \n");
+    expect(markdown).not.toContain("## Other Items");
+    expect(markdown).not.toContain("No meaningful new signal found in this window");
+  });
 });
 
 describe("appendSectionSourceLinks", () => {
@@ -161,6 +177,14 @@ describe("removeShortUrlReferenceSection", () => {
     expect(removeShortUrlReferenceSection(
       "## Executive Summary\n\nDigest.\n\n# Short URLs for reference\n\n[1] https://example.com"
     )).toBe("## Executive Summary\n\nDigest.");
+  });
+});
+
+describe("cleanDigestBody", () => {
+  it("removes short URL sections, empty optional sections, and trailing line whitespace", () => {
+    expect(cleanDigestBody(
+      "## Top Items  \n\n- Item.  \n\n## Other Items\nNo meaningful new signal found in this window.\n\n# Short URLs for reference\n\n[1] https://example.com"
+    )).toBe("## Top Items\n\n- Item.");
   });
 });
 

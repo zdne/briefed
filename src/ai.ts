@@ -190,27 +190,35 @@ Use this Markdown structure:
 ## Top Items
 Write 3-5 bullets.
 Each bullet must be exactly one simple sentence.
-Each bullet must report one source-grounded fact or source-attributed claim.
+Each bullet must report one source-grounded fact or source-attributed claim using the allowed bullet forms below.
 Do not explain why it matters.
 Do not add uncertainty framing unless the cited source explicitly states the uncertainty.
-Use at most 2 citations per bullet; cite only the strongest representative sources.
+Use at most 2 citations per bullet.
 
 ## Required Watchlist
-One subsection per required watchlist topic.
+Use only the exact required watchlist subsection headings listed below.
 For each topic, write 0-2 bullets with citations if there is meaningful source-backed signal.
 If there is no meaningful signal for a topic, write exactly: No meaningful new signal found in this window.
 
 ## Highlighted Focus Areas
-Include only focus areas with meaningful source-backed signal.
+Use only the exact focus-area subsection headings listed below.
+Include only configured focus areas with meaningful source-backed signal.
 Include at most 5 focus areas and 1-2 bullets per focus area.
 If no focus area has meaningful signal, omit this section.
 
 ## Other Items
 0-3 bullets for source-backed items outside the required watchlist and highlighted focus areas.
-Prioritize selected important-general candidates about standards/protocol moves, major platform launches, security/authentication/fraud infrastructure, regulatory/governance items, or named large-company integrations.
+Include this section only for selected important-general candidates that can be described in one factual sentence.
 ${formatOtherNotableRelevance(options.requiredTopics ?? [], options.focusAreas ?? [])}
 Do not include unrelated general news.
 Omit this section if there are no other source-backed items.
+Do not write "No meaningful new signal found in this window" in this section.
+
+Allowed bullet forms:
+- <Publication> reported <one concrete claim> [n].
+- <Named company, project, or person> launched|published|added|tested|integrated|reported|warned|criticized <one concrete action> [n].
+- A Reddit user asked|reported|claimed <one concrete claim> [n].
+- A source titled "<title>" reported|published|claimed <one concrete claim> [n].
 
 Rules:
 - Do not summarize every source.
@@ -218,13 +226,13 @@ Rules:
 - Attribute claims to the source, publication, named actor, or author.
 - Use reporting language, not opinion, analyst filler, or judgements.
 - Do not write trend adjectives.
-- Avoid: "rapidly", "emerging", "evolving", "increasingly", "seamless", "transformative", "crucial", "pivotal", "significant", "robust", "scalable", "real-world", and "drive forward".
+- Avoid: "rapidly", "emerging", "evolving", "increasingly", "seamless", "transformative", "crucial", "pivotal", "significant", "robust", "scalable", "real-world", "major", "sustainable", "emphasizing", "highlighted", "noted", and "drive forward".
 - Prefer concrete verbs: launched, added, reported, published, proposed, tested, integrated, processed, warned, criticized.
 - Each bullet must start with a named actor, publication, source category, or quoted community group and a concrete verb.
 - Do not start bullets with abstract topics like "Agentic commerce", "Trust", "Discovery", "The ecosystem", or "Technologies".
 - For every section, use at most 2 bullets per subsection.
 - Use at most 2 citations per bullet.
-- If more than 2 sources support the same point, cite only the strongest representative sources.
+- Do not merge sources unless they make the same concrete claim.
 - Forbidden phrases: "rapidly mature", "rapidly maturing", "rapidly moved", "foundational technology", "foundational", "broad ecosystem shift", "ecosystem shift", "commercial transformation", "transformative effect", "key operational challenge", "critical enabler", "underscores", "underscoring", "highlights accelerating convergence", and "notable signal".
 - If a sentence would use one of the forbidden phrases, rewrite it as a concrete observation from the sources.
 - Every factual claim must be grounded in the supplied sources.
@@ -236,6 +244,8 @@ Rules:
 - Cite every bullet that makes a factual claim.
 - Treat social, discussion, and link-wrapper sources as signals, not confirmed primary reporting, unless the source text itself supports the claim.
 - For Reddit, say "A Reddit user reported", "A Reddit user asked", or "A Reddit user claimed" unless citing a named external source in the post.
+- Do not combine multiple Reddit posts into a plural claim such as "Reddit users discussed", "Reddit posts highlighted", or "Reddit contributors compared"; keep separate Reddit posts in separate bullets unless they make the same concrete claim.
+- Do not write that a Reddit post shows adoption, deployment, market preference, or user preference unless the Reddit post gives named deployments, usage data, or quoted customer behavior.
 - Do not include URL reference sections, short URL sections, bibliography sections, or source lists; sources are rendered separately.
 - Do not add facts not present in the sources.
 
@@ -246,6 +256,10 @@ Bad: The report highlights the importance of agentic commerce for financial incl
 Better: The Edge Malaysia reported that agentic commerce could support digital payments access in Southeast Asia.
 Bad: AI voice agents are rapidly being adopted globally.
 Better: A Reddit user claimed LuMay and Voxentis.ai are being tested for real-estate lead qualification in the USA, India, Canada, and France.
+Bad: Reddit contributors compared AI voice agents based on pricing, CRM integration, latency, and workflow automation as key factors in 2026.
+Better: A Reddit user compared LuMay, Voxentis.ai, Vapi, and Retell AI on latency, workflow automation, CRM integration, and conversion performance.
+Bad: AI voice agents LuMay and Voxentis.ai are being deployed and assessed for B2B communication tasks.
+Better: A Reddit user claimed LuMay and Voxentis.ai are being tested for real-estate lead qualification and appointment automation.
 Bad: Browser-agent reliability remains a key operational challenge.
 Better: A Reddit user reported token overruns and crashes during browser-agent tasks involving tabs, login sessions, modals, and dynamic pages.
 Bad: MCP remains pivotal infrastructure.
@@ -324,14 +338,15 @@ function formatOtherNotableRelevance(requiredTopics: string[], focusAreas: strin
 function formatDigestTopicInstructions(requiredTopics: string[], focusAreas: string[]): string {
   const sections: string[] = [];
   if (requiredTopics.length > 0) {
-    sections.push(`Required watchlist topics to cover:
+    sections.push(`Exact required watchlist subsection headings:
 ${requiredTopics.map((topic) => `- ${topic}`).join("\n")}
-For every required watchlist topic, include a subsection even if there is no new signal.`);
+For every required watchlist topic, include exactly one subsection using the exact heading text above.`);
   }
 
   if (focusAreas.length > 0) {
-    sections.push(`Focus areas to highlight when relevant:
+    sections.push(`Exact focus-area subsection headings:
 ${focusAreas.map((area) => `- ${area}`).join("\n")}
+Do not create focus-area subsections with any other heading text.
 Do not create empty focus-area subsections.`);
   }
 

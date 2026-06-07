@@ -103,6 +103,54 @@ describe("selectDigestSources", () => {
     ]);
     expect(result.importantGeneralCount).toBe(1);
   });
+
+  it("limits selected entries by source type", () => {
+    const result = selectDigestSources(
+      [
+        candidate("reddit-1", { sourceType: "reddit" }),
+        candidate("reddit-2", { sourceType: "reddit" }),
+        candidate("reddit-3", { sourceType: "reddit" }),
+        candidate("article-1", { sourceType: "article" }),
+        candidate("article-2", { sourceType: "article" })
+      ],
+      [],
+      [],
+      {
+        ...defaults,
+        maxEntries: 5,
+        sourceTypeMaxEntries: { reddit: 2 }
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual([
+      "reddit-1",
+      "reddit-2",
+      "article-1",
+      "article-2"
+    ]);
+  });
+
+  it("limits selected entries by author and source key", () => {
+    const result = selectDigestSources(
+      [
+        candidate("author-1", { author: "Same Author", sourceKey: "feed:1" }),
+        candidate("author-2", { author: "same author", sourceKey: "feed:2" }),
+        candidate("source-1", { author: "Other 1", sourceKey: "feed:1" }),
+        candidate("source-2", { author: "Other 2", sourceKey: "feed:1" }),
+        candidate("kept", { author: "Other 3", sourceKey: "feed:3" })
+      ],
+      [],
+      [],
+      {
+        ...defaults,
+        maxEntries: 5,
+        maxEntriesPerAuthor: 1,
+        maxEntriesPerSourceKey: 2
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["author-1", "source-1", "kept"]);
+  });
 });
 
 function candidate(id: string, overrides: Partial<DigestCandidate> = {}): DigestCandidate {

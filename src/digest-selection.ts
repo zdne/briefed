@@ -13,6 +13,9 @@ export interface DigestSelectionOptions {
   focusAreaMaxEntries: number;
   importantGeneralMaxEntries: number;
   generalMaxEntries: number;
+  sourceTypeMaxEntries?: Partial<Record<DigestCandidate["sourceType"], number>>;
+  maxEntriesPerSourceKey?: number;
+  maxEntriesPerAuthor?: number;
 }
 
 export interface DigestSelectionResult {
@@ -38,54 +41,63 @@ interface SelectionBucket {
   maxEntries: number;
 }
 
+interface SelectionState {
+  selected: SelectedDigestSource[];
+  seen: Set<string>;
+  sourceTypeCounts: Map<DigestCandidate["sourceType"], number>;
+  sourceKeyCounts: Map<string, number>;
+  authorCounts: Map<string, number>;
+}
+
 export function selectDigestSources(
   recentCandidates: DigestCandidate[],
   requiredTopicMatches: DigestTopicMatches[],
   focusAreaMatches: DigestTopicMatches[],
   options: DigestSelectionOptions
 ): DigestSelectionResult {
-  const selected: SelectedDigestSource[] = [];
-  const seen = new Set<string>();
+  const state: SelectionState = {
+    selected: [],
+    seen: new Set<string>(),
+    sourceTypeCounts: new Map<DigestCandidate["sourceType"], number>(),
+    sourceKeyCounts: new Map<string, number>(),
+    authorCounts: new Map<string, number>()
+  };
 
-  const requiredCount = addTopicBuckets(selected, seen, buildBuckets(
+  const requiredCount = addTopicBuckets(state, buildBuckets(
     recentCandidates,
     requiredTopicMatches,
     "required",
     options.requiredTopicMinEntries,
     options.requiredTopicMaxEntries
-  ), options.maxEntries);
+  ), options);
 
-  const focusCount = addTopicBuckets(selected, seen, buildBuckets(
+  const focusCount = addTopicBuckets(state, buildBuckets(
     recentCandidates,
     focusAreaMatches,
     "focus",
     options.focusAreaMinEntries,
     options.focusAreaMaxEntries
-  ), options.maxEntries);
+  ), options);
 
-  const importantGeneralLimit = Math.min(options.importantGeneralMaxEntries, options.maxEntries - selected.length);
+  const importantGeneralLimit = Math.min(options.importantGeneralMaxEntries, options.maxEntries - state.selected.length);
   let importantGeneralCount = 0;
   for (const candidate of rankedImportantGeneralCandidates(recentCandidates)) {
-    if (importantGeneralCount >= importantGeneralLimit || selected.length >= options.maxEntries) break;
-    if (seen.has(candidate.id)) continue;
-    selected.push({ source: candidate, bucket: "important_general" });
-    seen.add(candidate.id);
+    if (importantGeneralCount >= importantGeneralLimit || state.selected.length >= options.maxEntries) break;
+    if (!addSelected(state, candidate, { bucket: "important_general" }, options)) continue;
     importantGeneralCount += 1;
   }
 
-  const generalLimit = Math.min(options.generalMaxEntries, options.maxEntries - selected.length);
+  const generalLimit = Math.min(options.generalMaxEntries, options.maxEntries - state.selected.length);
   let generalCount = 0;
   for (const candidate of recentCandidates) {
-    if (generalCount >= generalLimit || selected.length >= options.maxEntries) break;
-    if (seen.has(candidate.id)) continue;
-    selected.push({ source: candidate, bucket: "general" });
-    seen.add(candidate.id);
+    if (generalCount >= generalLimit || state.selected.length >= options.maxEntries) break;
+    if (!addSelected(state, candidate, { bucket: "general" }, options)) continue;
     generalCount += 1;
   }
 
   return {
-    sources: selected.map((selection) => selection.source),
-    selectedSources: selected,
+    sources: state.selected.map((selection) => selection.source),
+    selectedSources: state.selected,
     requiredCount,
     focusCount,
     importantGeneralCount,
@@ -125,10 +137,9 @@ function rankedTopicCandidates(
 }
 
 function addTopicBuckets(
-  selected: SelectedDigestSource[],
-  seen: Set<string>,
+  state: SelectionState,
   buckets: SelectionBucket[],
-  maxEntries: number
+  options: DigestSelectionOptions
 ): number {
   let added = 0;
 
@@ -137,16 +148,71 @@ function addTopicBuckets(
     let bucketAdded = 0;
 
     for (const candidate of bucket.candidates) {
-      if (bucketAdded >= target || selected.length >= maxEntries) break;
-      if (seen.has(candidate.id)) continue;
-      selected.push({ source: candidate, bucket: bucket.bucket, topic: bucket.topic });
-      seen.add(candidate.id);
+      if (bucketAdded >= target || state.selected.length >= options.maxEntries) break;
+      if (!addSelected(state, candidate, { bucket: bucket.bucket, topic: bucket.topic }, options)) continue;
       bucketAdded += 1;
       added += 1;
     }
   }
 
   return added;
+}
+
+function addSelected(
+  state: SelectionState,
+  candidate: DigestCandidate,
+  selection: Omit<SelectedDigestSource, "source">,
+  options: DigestSelectionOptions
+): boolean {
+  if (state.seen.has(candidate.id)) return false;
+  if (state.selected.length >= options.maxEntries) return false;
+  if (exceedsCaps(state, candidate, options)) return false;
+
+  state.selected.push({ source: candidate, ...selection });
+  state.seen.add(candidate.id);
+  increment(state.sourceTypeCounts, candidate.sourceType);
+  increment(state.sourceKeyCounts, candidate.sourceKey);
+  const authorKey = normalizedAuthor(candidate.author);
+  if (authorKey) increment(state.authorCounts, authorKey);
+  return true;
+}
+
+function exceedsCaps(
+  state: SelectionState,
+  candidate: DigestCandidate,
+  options: DigestSelectionOptions
+): boolean {
+  const sourceTypeCap = options.sourceTypeMaxEntries?.[candidate.sourceType];
+  if (sourceTypeCap !== undefined && currentCount(state.sourceTypeCounts, candidate.sourceType) >= sourceTypeCap) {
+    return true;
+  }
+
+  if (
+    options.maxEntriesPerSourceKey !== undefined &&
+    currentCount(state.sourceKeyCounts, candidate.sourceKey) >= options.maxEntriesPerSourceKey
+  ) {
+    return true;
+  }
+
+  const authorKey = normalizedAuthor(candidate.author);
+  return Boolean(
+    authorKey &&
+    options.maxEntriesPerAuthor !== undefined &&
+    currentCount(state.authorCounts, authorKey) >= options.maxEntriesPerAuthor
+  );
+}
+
+function currentCount<T>(counts: Map<T, number>, key: T): number {
+  return counts.get(key) ?? 0;
+}
+
+function increment<T>(counts: Map<T, number>, key: T): void {
+  counts.set(key, currentCount(counts, key) + 1);
+}
+
+function normalizedAuthor(author: string | null): string | null {
+  const value = author?.trim().toLowerCase();
+  return value || null;
 }
 
 function candidateMatchesTopic(candidate: DigestCandidate, topic: string): boolean {

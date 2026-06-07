@@ -8,6 +8,7 @@ Tracker of potential features to add to pnd:
 - [x] Steer the digest with topics that i am interested in 
 - [x] Access twitter using [xurl](https://github.com/xdevplatform/xurl)
 - [x] Prioritize sources
+- [x] Basic digest diversity caps
 - [ ] Further improvement to digest pre-qualification (see below)
 
 ## Later / TBD
@@ -41,20 +42,23 @@ Tracker of potential features to add to pnd:
 
   1. Source diversity caps
 
-  There is no limit like:
+  There are source-type and source-key limits:
 
-  DIGEST_MAX_ENTRIES_PER_SOURCE_KEY=50
+  DIGEST_MAX_REDDIT_ENTRIES=25
+  DIGEST_MAX_TWITTER_ENTRIES=20
+  DIGEST_MAX_ARTICLE_ENTRIES=80
+  DIGEST_MAX_HACKERNEWS_ENTRIES=15
+  DIGEST_MAX_ENTRIES_PER_SOURCE_KEY=20
 
-  So one noisy source can still dominate if it has many matching/new entries. Example: one Twitter list or one Feedbin feed could take a lot of the general
-  fill.
+  This prevents one source type or one noisy source key from dominating if it has many matching/new entries.
 
   2. Author diversity caps
 
-  There is no limit like:
+  There is an author limit:
 
-  DIGEST_MAX_ENTRIES_PER_AUTHOR=5
+  DIGEST_MAX_ENTRIES_PER_AUTHOR=4
 
-  So if one author posts 30 relevant tweets/articles, many of them can land in the digest.
+  This limits repeated posts from one author in a single digest.
 
   3. Twitter engagement scoring
 
@@ -75,7 +79,7 @@ Tracker of potential features to add to pnd:
 
   focus/general:
     prefer higher engagement Twitter posts
-    apply source/author caps
+    source/author caps already apply
     still keep newest/relevant articles in the mix
 
   Why it matters: with Twitter added, volume jumps. Without diversity and engagement scoring, digest selection can overrepresent high-volume feeds or prolific

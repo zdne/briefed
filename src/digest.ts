@@ -62,7 +62,15 @@ export async function createDigest(
     focusAreaMinEntries: config.DIGEST_FOCUS_AREA_MIN_ENTRIES,
     focusAreaMaxEntries: config.DIGEST_FOCUS_AREA_MAX_ENTRIES,
     importantGeneralMaxEntries: config.DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES,
-    generalMaxEntries: config.DIGEST_GENERAL_MAX_ENTRIES
+    generalMaxEntries: config.DIGEST_GENERAL_MAX_ENTRIES,
+    sourceTypeMaxEntries: {
+      article: config.DIGEST_MAX_ARTICLE_ENTRIES,
+      reddit: config.DIGEST_MAX_REDDIT_ENTRIES,
+      hackernews: config.DIGEST_MAX_HACKERNEWS_ENTRIES,
+      twitter: config.DIGEST_MAX_TWITTER_ENTRIES
+    },
+    maxEntriesPerSourceKey: config.DIGEST_MAX_ENTRIES_PER_SOURCE_KEY,
+    maxEntriesPerAuthor: config.DIGEST_MAX_ENTRIES_PER_AUTHOR
   });
   const sources = selection.sources;
   log(

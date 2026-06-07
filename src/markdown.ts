@@ -64,7 +64,7 @@ export function renderDigestMarkdown(result: DigestMarkdownResult, createdAt = n
     "  - digest",
     "---"
   ].join("\n");
-  const linkedBody = linkCitations(removeShortUrlReferenceSection(result.body), result.sources);
+  const linkedBody = linkCitations(cleanDigestBody(result.body), result.sources);
   const body = appendSectionSourceLinks(
     limitDigestCitations(linkedBody),
     result.sources
@@ -111,6 +111,14 @@ export function removeShortUrlReferenceSection(text: string): string {
     .trim();
 }
 
+export function cleanDigestBody(text: string): string {
+  return removeEmptyOptionalDigestSections(
+    removeTrailingLineWhitespace(
+      removeShortUrlReferenceSection(text)
+    )
+  );
+}
+
 export function limitDigestCitations(text: string): string {
   const sections = splitTopLevelSections(text);
   return sections.map(limitCitationsForSection).join("");
@@ -126,6 +134,27 @@ function sectionCitationLink(citation: number): string {
 
 function spaceAdjacentCitationLinks(text: string): string {
   return text.replace(/(\]\])(?=\[\[#Source \d+\|)/g, "$1 ");
+}
+
+function removeTrailingLineWhitespace(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trim();
+}
+
+function removeEmptyOptionalDigestSections(text: string): string {
+  return splitTopLevelSections(text)
+    .filter((section) => !isEmptyOptionalDigestSection(section))
+    .join("")
+    .trim();
+}
+
+function isEmptyOptionalDigestSection(section: string): boolean {
+  if (!/^## Other Items\b/.test(section)) return false;
+  const body = section.replace(/^## Other Items\s*/u, "").trim();
+  return body === "" || /^No meaningful new signal found in this window\.?$/iu.test(body);
 }
 
 function splitTopLevelSections(text: string): string[] {
