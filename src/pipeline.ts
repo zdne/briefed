@@ -30,6 +30,7 @@ export interface SyncResult {
   embeddedOnly: number;
   enrichmentFailed: number;
   cursor?: string;
+  twitterLists?: TwitterListSyncSummary[];
 }
 
 export type SyncLogger = (message: string) => void;
@@ -42,6 +43,18 @@ export interface TwitterSyncOptions {
   listIds: string[];
   maxPages: number;
   maxTweets: number;
+}
+
+export interface TwitterListSyncSummary {
+  listId: string;
+  storedLatestId?: string;
+  newestId?: string;
+  pagesFetched: number;
+  tweetsReturned: number;
+  tweetsProcessed: number;
+  stoppedReason: "stored_latest_reached" | "max_pages" | "max_tweets" | "no_next_page" | "empty_page";
+  hasNextPage?: boolean;
+  nextCursorPresent?: boolean;
 }
 
 export async function enrichContent(id: string, entry: SourceEntry, ai: AnalystAI): Promise<void> {
@@ -169,7 +182,8 @@ export async function syncTwitterLists(
     insertedOrUpdated: 0,
     fullyEnriched: 0,
     embeddedOnly: 0,
-    enrichmentFailed: 0
+    enrichmentFailed: 0,
+    twitterLists: []
   };
 
   for (const listId of options.listIds) {
@@ -179,6 +193,14 @@ export async function syncTwitterLists(
     let cursor: string | undefined;
     let seenStoredLatest = false;
     let listFetched = 0;
+    const summary: TwitterListSyncSummary = {
+      listId,
+      storedLatestId,
+      pagesFetched: 0,
+      tweetsReturned: 0,
+      tweetsProcessed: 0,
+      stoppedReason: "max_pages"
+    };
 
     log(storedLatestId
       ? `Starting Twitter list ${listId} sync until stored latest tweet ${storedLatestId}`
@@ -187,23 +209,38 @@ export async function syncTwitterLists(
     for (let pageNumber = 1; pageNumber <= options.maxPages; pageNumber++) {
       if (listFetched >= options.maxTweets) {
         log(`Stopped Twitter list ${listId} sync at max tweets ${options.maxTweets}`);
+        summary.stoppedReason = "max_tweets";
         break;
       }
 
       const page = await client.listTimeline(listId, cursor);
       const tweets = page.tweets ?? [];
-      log(`Fetched Twitter list ${listId} page ${pageNumber} with ${tweets.length} tweets`);
+      summary.pagesFetched++;
+      summary.tweetsReturned += tweets.length;
+      summary.hasNextPage = page.has_next_page;
+      summary.nextCursorPresent = Boolean(page.next_cursor);
+      log(
+        `Fetched Twitter list ${listId} page ${pageNumber} with ${tweets.length} tweets ` +
+        `(has_next_page=${Boolean(page.has_next_page)}, next_cursor=${page.next_cursor ? "present" : "missing"})`
+      );
+      if (tweets.length === 0) {
+        summary.stoppedReason = "empty_page";
+        log(`Stopped Twitter list ${listId} sync because page ${pageNumber} returned no tweets`);
+        break;
+      }
 
       for (const tweet of tweets) {
         if (listFetched >= options.maxTweets) break;
         if (storedLatestId && tweet.id === storedLatestId) {
           seenStoredLatest = true;
+          summary.stoppedReason = "stored_latest_reached";
           log(`Reached stored latest tweet ${storedLatestId} for Twitter list ${listId}`);
           break;
         }
 
         newestId ??= tweet.id;
         listFetched++;
+        summary.tweetsProcessed++;
         result.fetched++;
         const entry = normalizeTwitterTweet(tweet, listId);
         const mode = desiredEnrichmentMode("twitter", config.LIGHTWEIGHT_SOURCE_TYPES);
@@ -220,17 +257,39 @@ export async function syncTwitterLists(
         );
       }
 
-      if (seenStoredLatest || !page.has_next_page || !page.next_cursor) break;
+      if (listFetched >= options.maxTweets) {
+        summary.stoppedReason = "max_tweets";
+        log(`Stopped Twitter list ${listId} sync at max tweets ${options.maxTweets}`);
+        break;
+      }
+      if (seenStoredLatest) break;
+      if (!page.has_next_page) {
+        summary.stoppedReason = "no_next_page";
+        log(`Stopped Twitter list ${listId} sync because API reported no next page`);
+        break;
+      }
+      if (!page.next_cursor) {
+        summary.stoppedReason = "no_next_page";
+        log(`Stopped Twitter list ${listId} sync because API did not return a next cursor`);
+        break;
+      }
       cursor = page.next_cursor;
     }
 
     if (newestId && newestId !== storedLatestId) {
       await setSyncCursorForKey(cursorKey, newestId);
       result.cursor = newestId;
+      summary.newestId = newestId;
       log(`Advanced Twitter list ${listId} cursor to ${newestId}`);
     } else {
       log(`Twitter list ${listId} cursor unchanged`);
     }
+    result.twitterLists!.push(summary);
+    log(
+      `Twitter list ${listId} summary: ${summary.pagesFetched} page(s), ` +
+      `${summary.tweetsReturned} tweet(s) returned, ${summary.tweetsProcessed} processed, ` +
+      `stopped_reason=${summary.stoppedReason}`
+    );
   }
 
   log("Twitter sync complete");

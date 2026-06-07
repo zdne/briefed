@@ -64,6 +64,11 @@ export interface DigestCandidate extends RetrievedContent {
   rawEntry: unknown;
 }
 
+export interface DigestSourceContext {
+  bucket: "required" | "focus" | "important_general" | "general";
+  topic?: string;
+}
+
 export interface DigestForRendering {
   id: string;
   periodStart: string;

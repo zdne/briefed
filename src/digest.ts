@@ -18,7 +18,7 @@ export async function createDigest(
   ai: AnalystAI,
   log: DigestLogger = () => {}
 ) {
-  log(`Loading enriched entries collected during the last ${hours} hours`);
+  log(`Loading enriched entries published during the last ${hours} hours`);
   const eligibleCount = await countRecentContent(hours);
   const candidates = await recentDigestCandidates(hours, config.DIGEST_CANDIDATE_LIMIT);
   if (eligibleCount > candidates.length) {
@@ -36,7 +36,7 @@ export async function createDigest(
       id: null,
       periodStart: null,
       periodEnd: null,
-      body: "No enriched entries were collected during this period.",
+      body: "No enriched entries were published during this period.",
       sources: []
     };
   }
@@ -61,13 +61,14 @@ export async function createDigest(
     requiredTopicMaxEntries: config.DIGEST_REQUIRED_TOPIC_MAX_ENTRIES,
     focusAreaMinEntries: config.DIGEST_FOCUS_AREA_MIN_ENTRIES,
     focusAreaMaxEntries: config.DIGEST_FOCUS_AREA_MAX_ENTRIES,
+    importantGeneralMaxEntries: config.DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES,
     generalMaxEntries: config.DIGEST_GENERAL_MAX_ENTRIES
   });
   const sources = selection.sources;
   log(
     `Selected ${sources.length} digest sources: ` +
     `${selection.requiredCount} required-topic, ${selection.focusCount} focus-area, ` +
-    `${selection.generalCount} general`
+    `${selection.importantGeneralCount} important-general, ${selection.generalCount} general`
   );
 
   const end = new Date();
@@ -75,7 +76,11 @@ export async function createDigest(
   log(`Generating digest with ${sources.length} sources using the configured LLM`);
   const body = await ai.digest(sources, hours, {
     requiredTopics: config.DIGEST_REQUIRED_TOPICS,
-    focusAreas: config.DIGEST_FOCUS_AREAS
+    focusAreas: config.DIGEST_FOCUS_AREAS,
+    sourceContexts: selection.selectedSources.map((selectedSource) => ({
+      bucket: selectedSource.bucket,
+      topic: selectedSource.topic
+    }))
   });
   log("Digest generation complete; storing result");
   const id = await saveDigest(start, end, sources.map((source) => source.id), body);

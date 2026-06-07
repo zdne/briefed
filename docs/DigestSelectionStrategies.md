@@ -6,8 +6,8 @@ As PND adds sources, a 24-hour window can contain far more entries than should b
 
 Current digest generation is simple:
 
-1. Load completed entries collected during the lookback window.
-2. Sort by `collected_at DESC`.
+1. Load completed entries published during the lookback window.
+2. Sort by `published_at DESC`.
 3. Take `DIGEST_MAX_ENTRIES`.
 4. Send those entries to the LLM.
 
@@ -191,7 +191,7 @@ omitted 740 entries by topic/source/author limits
 ## Implementation Notes
 
 - `recentContent()` should return source metadata: `source_type`, `source_key`, raw source JSON, topic tags, and entities.
-- Add a recent vector-search query that filters by `collected_at`, `enrichment_status = 'complete'`, and non-null `embedding`.
+- Add a recent vector-search query that filters by `published_at`, `enrichment_status = 'complete'`, and non-null `embedding`.
 - Twitter/X selection can inspect `raw_entry.likeCount`, `bookmarkCount`, `viewCount`, and `retweetCount`.
 - Required topic buckets should bypass engagement thresholds. A low-engagement tweet can still be useful if it is semantically close to or exactly matches a required topic.
 - Final source ordering should put required-topic selections first, then focus selections, then general selections.

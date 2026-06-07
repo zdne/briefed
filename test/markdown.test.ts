@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendSectionSourceLinks,
   linkCitations,
+  limitDigestCitations,
   renderDigestMarkdown,
   renderQueryMarkdown,
+  removeShortUrlReferenceSection,
   sanitizeMarkdownText
 } from "../src/markdown.js";
 
@@ -66,7 +69,7 @@ describe("renderDigestMarkdown", () => {
       id: "3",
       periodStart: "2026-06-03T10:00:00.000Z",
       periodEnd: "2026-06-04T10:00:00.000Z",
-      body: "Digest body [1].",
+      body: "## Executive Summary\n\nDigest body [1].\n\n# Short URLs for reference\n\n[1] https://example.com",
       sources: [{ citation: 1, title: "Source", url: "https://example.com" }]
     }, new Date("2026-06-04T10:30:00.000Z"));
 
@@ -74,6 +77,8 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).toContain("source_count: 1");
     expect(markdown).toContain("# Daily Digest");
     expect(markdown).toContain("Digest body [[#Source 1|1]].");
+    expect(markdown).not.toContain("Sources:\n- [[#Source 1|[1]]] [Source](https://example.com)");
+    expect(markdown).not.toContain("Short URLs for reference");
     expect(markdown).toContain("### Source 1");
     expect(markdown).toContain("[Source](https://example.com)");
     expect(markdown).not.toContain("Back to writeup");
@@ -99,6 +104,63 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).not.toContain("```");
     expect(markdown).toContain("hard-coded ` _CIRCUIT_BREAKER_THRESHOLD = 3");
     expect(markdown).toContain("### Source 2");
+  });
+});
+
+describe("appendSectionSourceLinks", () => {
+  it("adds compact linked source titles at the end of each cited top-level digest section", () => {
+    expect(appendSectionSourceLinks(
+      "Intro without section.\n\n" +
+      "## Executive Summary\n\nA paragraph [[#Source 2|2]] [[#Source 1|1]].\n\n" +
+      "## Required Watchlist\n\nRequired paragraph [[#Source 1|1]].\n\n" +
+      "## Other Notable Signals\n\nAnother paragraph [[#Source 3|3]].\n\n" +
+      "## Other Items\n\nAnother item [[#Source 2|2]].\n\n" +
+      "## Empty\n\nNo citations.",
+      [
+        { citation: 1, title: "One", url: "https://example.com/1" },
+        { citation: 2, title: "Two", url: "https://example.com/2" },
+        { citation: 3, title: "Three", url: null }
+      ]
+    )).toBe(
+      "Intro without section.\n\n" +
+      "## Executive Summary\n\nA paragraph [[#Source 2|2]] [[#Source 1|1]].\n\n" +
+      "## Required Watchlist\n\nRequired paragraph [[#Source 1|1]].\n\n" +
+      "## Other Notable Signals\n\nAnother paragraph [[#Source 3|3]].\n\n" +
+      "Sources:\n- [[#Source 3|[3]]] Three\n\n" +
+      "## Other Items\n\nAnother item [[#Source 2|2]].\n\n" +
+      "Sources:\n- [[#Source 2|[2]]] [Two](https://example.com/2)\n\n" +
+      "## Empty\n\nNo citations."
+    );
+  });
+});
+
+describe("limitDigestCitations", () => {
+  it("caps executive summary paragraphs at 3 citations and bullets at 2 citations", () => {
+    expect(limitDigestCitations(
+      "## Executive Summary\n\n" +
+      "Paragraph [[#Source 1|1]] [[#Source 2|2]] [[#Source 3|3]] [[#Source 4|4]].\n\n" +
+      "## Top Items\n\n" +
+      "- Item [[#Source 1|1]] [[#Source 2|2]] [[#Source 3|3]].\n\n" +
+      "## Required Watchlist\n\n" +
+      "- Bullet [[#Source 1|1]] [[#Source 2|2]] [[#Source 3|3]].\n" +
+      "Plain paragraph [[#Source 1|1]] [[#Source 2|2]] [[#Source 3|3]]."
+    )).toBe(
+      "## Executive Summary\n\n" +
+      "Paragraph [[#Source 1|1]] [[#Source 2|2]] [[#Source 3|3]].\n\n" +
+      "## Top Items\n\n" +
+      "- Item [[#Source 1|1]] [[#Source 2|2]].\n\n" +
+      "## Required Watchlist\n\n" +
+      "- Bullet [[#Source 1|1]] [[#Source 2|2]].\n" +
+      "Plain paragraph [[#Source 1|1]] [[#Source 2|2]] [[#Source 3|3]]."
+    );
+  });
+});
+
+describe("removeShortUrlReferenceSection", () => {
+  it("removes model-generated short URL reference sections", () => {
+    expect(removeShortUrlReferenceSection(
+      "## Executive Summary\n\nDigest.\n\n# Short URLs for reference\n\n[1] https://example.com"
+    )).toBe("## Executive Summary\n\nDigest.");
   });
 });
 

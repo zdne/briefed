@@ -16,6 +16,7 @@ The MVP uses Feedbin's `GET /v2/entries.json?since=...` endpoint and preserves t
 
 - Node.js 22+
 - Docker with Compose
+- Colima, if using Docker through Colima on macOS
 - Feedbin account
 - OpenAI API key for embeddings
 - OpenAI or Anthropic API key for enrichment and answer synthesis
@@ -26,10 +27,18 @@ The MVP uses Feedbin's `GET /v2/entries.json?since=...` endpoint and preserves t
 cp .env.example .env
 # Fill in Feedbin and model-provider credentials.
 
+colima start # If using Colima on macOS.
 docker compose up -d postgres
 npm install
 npm run db:migrate
 npm run sync
+```
+
+After a system restart, start Colima before bringing Postgres back up:
+
+```bash
+colima start
+docker compose up -d postgres
 ```
 
 If port `5432` is already occupied, start Postgres with another host port and update `DATABASE_URL`:
@@ -152,7 +161,7 @@ npm run sync-twitter
 It reads `TWITTERAPI_LIST_IDS`, fetches newest tweets first, stops when it reaches the stored latest tweet ID for each list, and otherwise stops at `TWITTERAPI_LIST_MAX_PAGES` or `TWITTERAPI_LIST_MAX_TWEETS`. Tweets use `source_key = twitterapi:list:<list_id>` and `source_type = twitter`.
 
 Digest generation prints progress while loading sources, waiting for LLM synthesis, and storing the completed digest.
-It loads up to `DIGEST_CANDIDATE_LIMIT` recent eligible entries, uses vector search to reserve source buckets for configured required topics and focus areas, then fills the remaining prompt budget with newest general entries. `DIGEST_MAX_ENTRIES` remains the final hard cap.
+It loads up to `DIGEST_CANDIDATE_LIMIT` entries published during the digest lookback window, uses vector search to reserve source buckets for configured required topics and focus areas, then fills the remaining prompt budget with newest-published general entries. `DIGEST_MAX_ENTRIES` remains the final hard cap.
 
 Use digest topic config to protect important topics during source selection and shape the writeup:
 

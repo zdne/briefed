@@ -235,7 +235,7 @@ export async function countRecentContent(hours: number): Promise<number> {
   const result = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count
      FROM content
-     WHERE enrichment_status = 'complete' AND collected_at >= now() - ($1 * interval '1 hour')`,
+     WHERE enrichment_status = 'complete' AND published_at >= now() - ($1 * interval '1 hour')`,
     [hours]
   );
   return Number(result.rows[0]?.count ?? 0);
@@ -252,8 +252,8 @@ export async function recentDigestCandidates(hours: number, limit: number): Prom
       0::float AS score, source_type AS "sourceType", source_key AS "sourceKey",
       topic_tags AS "topicTags", entities, raw_entry AS "rawEntry"
      FROM content
-     WHERE enrichment_status = 'complete' AND collected_at >= now() - ($1 * interval '1 hour')
-     ORDER BY collected_at DESC
+     WHERE enrichment_status = 'complete' AND published_at >= now() - ($1 * interval '1 hour')
+     ORDER BY published_at DESC, collected_at DESC
      LIMIT $2`,
     [hours, limit]
   );
@@ -273,7 +273,7 @@ export async function recentVectorMatches(
      FROM content
      WHERE embedding IS NOT NULL
        AND enrichment_status = 'complete'
-       AND collected_at >= now() - ($2 * interval '1 hour')
+       AND published_at >= now() - ($2 * interval '1 hour')
      ORDER BY embedding <=> $1::vector
      LIMIT $3`,
     [vectorLiteral(embedding), hours, limit]

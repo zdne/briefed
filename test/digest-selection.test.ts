@@ -8,6 +8,7 @@ const defaults = {
   requiredTopicMaxEntries: 2,
   focusAreaMinEntries: 1,
   focusAreaMaxEntries: 2,
+  importantGeneralMaxEntries: 2,
   generalMaxEntries: 6
 };
 
@@ -32,6 +33,8 @@ describe("selectDigestSources", () => {
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["required-1", "focus-1", "general-1"]);
+    expect(result.selectedSources.map((selection) => selection.bucket)).toEqual(["required", "focus", "general"]);
+    expect(result.selectedSources.map((selection) => selection.topic)).toEqual(["payments", "observability", undefined]);
     expect(result.focusCount).toBe(1);
   });
 
@@ -75,6 +78,30 @@ describe("selectDigestSources", () => {
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["exact-title", "exact-tag", "vector"]);
+  });
+
+  it("selects important general candidates before newest general fill", () => {
+    const result = selectDigestSources(
+      [
+        candidate("general-1"),
+        candidate("google-fido", {
+          title: "Google donates Agent Payments Protocol to FIDO Alliance",
+          summary: "Google donated a payment protocol to a standards alliance."
+        }),
+        candidate("general-2")
+      ],
+      [],
+      [],
+      defaults
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["google-fido", "general-1", "general-2"]);
+    expect(result.selectedSources.map((selection) => selection.bucket)).toEqual([
+      "important_general",
+      "general",
+      "general"
+    ]);
+    expect(result.importantGeneralCount).toBe(1);
   });
 });
 

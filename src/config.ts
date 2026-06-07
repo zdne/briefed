@@ -40,6 +40,7 @@ const schema = z.object({
   DIGEST_REQUIRED_TOPIC_MAX_ENTRIES: z.coerce.number().int().min(1).default(16),
   DIGEST_FOCUS_AREA_MIN_ENTRIES: z.coerce.number().int().min(0).default(3),
   DIGEST_FOCUS_AREA_MAX_ENTRIES: z.coerce.number().int().min(1).default(10),
+  DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES: z.coerce.number().int().min(0).default(12),
   DIGEST_GENERAL_MAX_ENTRIES: z.coerce.number().int().min(0).default(120),
   DIGEST_REQUIRED_TOPICS: z.string().default("").transform(parseCommaSeparatedList),
   DIGEST_FOCUS_AREAS: z.string().default("").transform(parseCommaSeparatedList),

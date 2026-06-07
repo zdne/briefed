@@ -197,10 +197,10 @@ npm run cli -- digest render
 
 The digest command:
 
-1. Loads completed entries collected during the lookback period.
+1. Loads completed entries published during the lookback period.
 2. Loads a broader recent candidate pool controlled by `DIGEST_CANDIDATE_LIMIT`.
 3. Uses vector search for each configured required topic and focus area.
-4. Selects protected topic buckets, then fills the remaining budget with newest general entries.
+4. Selects protected topic buckets, then fills the remaining budget with newest-published general entries.
 5. Sends selected titles, stored summaries, URLs, and dates to the configured LLM.
 6. Asks the LLM to group related developments, highlight signals, and cite sources.
 7. Stores the digest in the local `digests` table.
