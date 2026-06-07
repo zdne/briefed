@@ -11,6 +11,9 @@ export interface DigestSelectionOptions {
   requiredTopicMaxEntries: number;
   focusAreaMinEntries: number;
   focusAreaMaxEntries: number;
+  requiredTopicMinScore?: number;
+  focusAreaMinScore?: number;
+  importantGeneralMinScore?: number;
   importantGeneralMaxEntries: number;
   generalMaxEntries: number;
   sourceTypeMaxEntries?: Partial<Record<DigestCandidate["sourceType"], number>>;
@@ -39,6 +42,7 @@ interface SelectionBucket {
   candidates: DigestCandidate[];
   minEntries: number;
   maxEntries: number;
+  minScore: number;
 }
 
 interface SelectionState {
@@ -68,7 +72,8 @@ export function selectDigestSources(
     requiredTopicMatches,
     "required",
     options.requiredTopicMinEntries,
-    options.requiredTopicMaxEntries
+    options.requiredTopicMaxEntries,
+    options.requiredTopicMinScore ?? 0
   ), options);
 
   const focusCount = addTopicBuckets(state, buildBuckets(
@@ -76,12 +81,13 @@ export function selectDigestSources(
     focusAreaMatches,
     "focus",
     options.focusAreaMinEntries,
-    options.focusAreaMaxEntries
+    options.focusAreaMaxEntries,
+    options.focusAreaMinScore ?? 0
   ), options);
 
   const importantGeneralLimit = Math.min(options.importantGeneralMaxEntries, options.maxEntries - state.selected.length);
   let importantGeneralCount = 0;
-  for (const candidate of rankedImportantGeneralCandidates(recentCandidates)) {
+  for (const candidate of rankedImportantGeneralCandidates(recentCandidates, options.importantGeneralMinScore ?? 1)) {
     if (importantGeneralCount >= importantGeneralLimit || state.selected.length >= options.maxEntries) break;
     if (!addSelected(state, candidate, { bucket: "important_general" }, options)) continue;
     importantGeneralCount += 1;
@@ -110,23 +116,29 @@ function buildBuckets(
   topicMatches: DigestTopicMatches[],
   bucket: "required" | "focus",
   minEntries: number,
-  maxEntries: number
+  maxEntries: number,
+  minScore: number
 ): SelectionBucket[] {
   return topicMatches.map((topicMatch) => ({
     topic: topicMatch.topic,
     bucket,
-    candidates: rankedTopicCandidates(recentCandidates, topicMatch),
+    candidates: rankedTopicCandidates(recentCandidates, topicMatch, minScore),
     minEntries,
-    maxEntries
+    maxEntries,
+    minScore
   }));
 }
 
 function rankedTopicCandidates(
   recentCandidates: DigestCandidate[],
-  topicMatch: DigestTopicMatches
+  topicMatch: DigestTopicMatches,
+  minScore: number
 ): DigestCandidate[] {
   const exactMatches = recentCandidates.filter((candidate) => candidateMatchesTopic(candidate, topicMatch.topic));
-  const combined = [...exactMatches, ...topicMatch.matches];
+  const vectorMatches = topicMatch.matches.filter((candidate) =>
+    candidate.score >= minScore && candidateHasTopicAnchor(candidate, topicMatch.topic)
+  );
+  const combined = [...exactMatches, ...vectorMatches];
   const seen = new Set<string>();
 
   return combined.filter((candidate) => {
@@ -217,14 +229,42 @@ function normalizedAuthor(author: string | null): string | null {
 
 function candidateMatchesTopic(candidate: DigestCandidate, topic: string): boolean {
   const needle = normalizeText(topic);
-  if (!needle) return false;
-  return searchableText(candidate).includes(needle);
+  if (!needle || !isSpecificTopic(needle)) return false;
+  return exactSearchableText(candidate).includes(needle);
 }
 
-function rankedImportantGeneralCandidates(candidates: DigestCandidate[]): DigestCandidate[] {
+function candidateHasTopicAnchor(candidate: DigestCandidate, topic: string): boolean {
+  const normalizedTopic = normalizeText(topic);
+  const text = exactSearchableText(candidate);
+  if (requiresAgenticAnchor(normalizedTopic)) {
+    const anchors = topicAnchorTerms(normalizedTopic);
+    return text.includes(normalizedTopic) || (hasAgenticConcept(text) && anchors.some((anchor) => text.includes(anchor)));
+  }
+
+  const anchors = topicAnchorTerms(topic);
+  if (anchors.length === 0) return true;
+  return anchors.some((anchor) => text.includes(anchor));
+}
+
+function topicAnchorTerms(topic: string): string[] {
+  return normalizeText(topic)
+    .split(" ")
+    .filter(Boolean)
+    .filter((term) => !["agentic", "ai", "artificial", "intelligence"].includes(term));
+}
+
+function requiresAgenticAnchor(topic: string): boolean {
+  return topic.split(" ").includes("agentic") && topicAnchorTerms(topic).length > 0;
+}
+
+function hasAgenticConcept(text: string): boolean {
+  return /\b(agent|agents|agentic|autonomous|automation|automated|ai|llm|llms|model|models)\b/.test(text);
+}
+
+function rankedImportantGeneralCandidates(candidates: DigestCandidate[], minScore: number): DigestCandidate[] {
   return candidates
     .map((candidate, index) => ({ candidate, score: importantGeneralScore(candidate), index }))
-    .filter((item) => item.score > 0)
+    .filter((item) => item.score >= minScore)
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((item) => item.candidate);
 }
@@ -279,6 +319,21 @@ function searchableText(candidate: DigestCandidate): string {
   ];
 
   return normalizeText(parts.filter((part): part is string => Boolean(part)).join(" "));
+}
+
+function exactSearchableText(candidate: DigestCandidate): string {
+  const parts = [
+    candidate.title,
+    candidate.summary,
+    ...candidate.topicTags,
+    ...entitySearchParts(candidate.entities)
+  ];
+
+  return normalizeText(parts.filter((part): part is string => Boolean(part)).join(" "));
+}
+
+function isSpecificTopic(topic: string): boolean {
+  return topic.split(" ").filter(Boolean).length >= 2 || topic.length >= 4;
 }
 
 function entitySearchParts(entities: unknown): string[] {

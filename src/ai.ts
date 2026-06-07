@@ -187,14 +187,6 @@ export function buildDigestPrompt(
 
 Use this Markdown structure:
 
-## Top Items
-Write 3-5 bullets.
-Each bullet must be exactly one simple sentence.
-Each bullet must report one source-grounded fact or source-attributed claim using the allowed bullet forms below.
-Do not explain why it matters.
-Do not add uncertainty framing unless the cited source explicitly states the uncertainty.
-Use at most 2 citations per bullet.
-
 ## Required Watchlist
 Use only the exact required watchlist subsection headings listed below.
 For each topic, write 0-2 bullets with citations if there is meaningful source-backed signal.
@@ -217,7 +209,9 @@ Do not write "No meaningful new signal found in this window" in this section.
 Allowed bullet forms:
 - <Publication> reported <one concrete claim> [n].
 - <Named company, project, or person> launched|published|added|tested|integrated|reported|warned|criticized <one concrete action> [n].
-- A Reddit user asked|reported|claimed <one concrete claim> [n].
+- Reddit: <one concrete claim> [n].
+- Twitter: <one concrete claim> [n].
+- Hacker News: <one concrete claim> [n].
 - A source titled "<title>" reported|published|claimed <one concrete claim> [n].
 
 Rules:
@@ -226,16 +220,24 @@ Rules:
 - Attribute claims to the source, publication, named actor, or author.
 - Use reporting language, not opinion, analyst filler, or judgements.
 - Do not write trend adjectives.
-- Avoid: "rapidly", "emerging", "evolving", "increasingly", "seamless", "transformative", "crucial", "pivotal", "significant", "robust", "scalable", "real-world", "major", "sustainable", "emphasizing", "highlighted", "noted", and "drive forward".
+- Avoid: "rapidly", "emerging", "evolving", "increasingly", "seamless", "transformative", "crucial", "pivotal", "significant", "robust", "scalable", "real-world", "major", "sustainable", "emphasizing", "highlighted", "highlighting", "noted", "indicating", "indicates", "underscores", "could transform", "poised to", "reshape", "enhance accessibility", "improve accessibility", "drive adoption", and "drive forward".
 - Prefer concrete verbs: launched, added, reported, published, proposed, tested, integrated, processed, warned, criticized.
 - Each bullet must start with a named actor, publication, source category, or quoted community group and a concrete verb.
 - Do not start bullets with abstract topics like "Agentic commerce", "Trust", "Discovery", "The ecosystem", or "Technologies".
 - For every section, use at most 2 bullets per subsection.
-- Use at most 2 citations per bullet.
-- Do not merge sources unless they make the same concrete claim.
-- Forbidden phrases: "rapidly mature", "rapidly maturing", "rapidly moved", "foundational technology", "foundational", "broad ecosystem shift", "ecosystem shift", "commercial transformation", "transformative effect", "key operational challenge", "critical enabler", "underscores", "underscoring", "highlights accelerating convergence", and "notable signal".
+- Each bullet must cite exactly one source.
+- Do not put multiple citation numbers in one bullet.
+- Do not merge sources into a single bullet.
+- If multiple sources cover related but distinct facts, write separate bullets or choose the strongest source.
+- Do not repeat the same source and same claim across sections.
+- Do not repeat the same source in multiple required watchlist or focus-area subsections.
+- If one source matches multiple configured topics, place it under the most specific matching topic and leave the other topic empty unless there is a separate source for that other topic.
+- Forbidden phrases: "rapidly mature", "rapidly maturing", "rapidly moved", "foundational technology", "foundational", "broad ecosystem shift", "ecosystem shift", "commercial transformation", "transformative effect", "key operational challenge", "critical enabler", "underscores", "underscoring", "highlights accelerating convergence", "could transform", "drive adoption", "indicating", "indicates", and "notable signal".
 - If a sentence would use one of the forbidden phrases, rewrite it as a concrete observation from the sources.
 - Every factual claim must be grounded in the supplied sources.
+- Treat supplied summaries as input notes, not wording to copy.
+- Do not repeat source-summary interpretation such as what an item may transform, improve, enhance, signal, or drive.
+- Prefer the smallest concrete claim: who reported/published/asked what.
 - Do not infer adoption, trust, market maturity, or ecosystem momentum unless a source explicitly states it.
 - Do not claim momentum, growth, adoption, or market impact unless the cited sources explicitly report adoption metrics, named deployments, transaction volume, or customer usage.
 - Do not infer importance, sustainability, risk, business impact, or technical maturity unless the cited source explicitly states it.
@@ -243,7 +245,11 @@ Rules:
 - Use inline citations like [1] or [2].
 - Cite every bullet that makes a factual claim.
 - Treat social, discussion, and link-wrapper sources as signals, not confirmed primary reporting, unless the source text itself supports the claim.
-- For Reddit, say "A Reddit user reported", "A Reddit user asked", or "A Reddit user claimed" unless citing a named external source in the post.
+- For Reddit sources, start the bullet exactly with "Reddit:" unless citing a named external source in the post.
+- For Twitter sources, start the bullet exactly with "Twitter:" unless citing a named external source in the post.
+- For Hacker News sources, start the bullet exactly with "Hacker News:" unless citing a named external source in the post.
+- Do not write "A Reddit post", "Reddit queried", "Reddit users", "Reddit contributors", "a Twitter post", or "a Hacker News post" as the subject.
+- Do not include usernames or handles in the digest body.
 - Do not combine multiple Reddit posts into a plural claim such as "Reddit users discussed", "Reddit posts highlighted", or "Reddit contributors compared"; keep separate Reddit posts in separate bullets unless they make the same concrete claim.
 - Do not write that a Reddit post shows adoption, deployment, market preference, or user preference unless the Reddit post gives named deployments, usage data, or quoted customer behavior.
 - Do not include URL reference sections, short URL sections, bibliography sections, or source lists; sources are rendered separately.
@@ -253,15 +259,15 @@ Style examples:
 Bad: Agentic commerce is identified as a key trend in Southeast Asia.
 Better: The Edge Malaysia reported agentic commerce as a payments trend in Southeast Asia.
 Bad: The report highlights the importance of agentic commerce for financial inclusion.
-Better: The Edge Malaysia reported that agentic commerce could support digital payments access in Southeast Asia.
+Better: The Edge Malaysia reported agentic commerce as a digital-payments model involving human agents in Southeast Asia.
 Bad: AI voice agents are rapidly being adopted globally.
-Better: A Reddit user claimed LuMay and Voxentis.ai are being tested for real-estate lead qualification in the USA, India, Canada, and France.
+Better: Reddit: LuMay and Voxentis.ai are being tested for real-estate lead qualification in the USA, India, Canada, and France.
 Bad: Reddit contributors compared AI voice agents based on pricing, CRM integration, latency, and workflow automation as key factors in 2026.
-Better: A Reddit user compared LuMay, Voxentis.ai, Vapi, and Retell AI on latency, workflow automation, CRM integration, and conversion performance.
+Better: Reddit: A comparison of LuMay, Voxentis.ai, Vapi, and Retell AI covered latency, workflow automation, CRM integration, and conversion performance.
 Bad: AI voice agents LuMay and Voxentis.ai are being deployed and assessed for B2B communication tasks.
-Better: A Reddit user claimed LuMay and Voxentis.ai are being tested for real-estate lead qualification and appointment automation.
+Better: Reddit: LuMay and Voxentis.ai are being tested for real-estate lead qualification and appointment automation.
 Bad: Browser-agent reliability remains a key operational challenge.
-Better: A Reddit user reported token overruns and crashes during browser-agent tasks involving tabs, login sessions, modals, and dynamic pages.
+Better: Reddit: Browser-agent tasks involving tabs, login sessions, modals, and dynamic pages caused token overruns and crashes.
 Bad: MCP remains pivotal infrastructure.
 Better: Worldpay published an MCP server for agent-enabled payments.
 ${formatDigestTopicInstructions(options.requiredTopics ?? [], options.focusAreas ?? [])}

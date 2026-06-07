@@ -61,6 +61,9 @@ export async function createDigest(
     requiredTopicMaxEntries: config.DIGEST_REQUIRED_TOPIC_MAX_ENTRIES,
     focusAreaMinEntries: config.DIGEST_FOCUS_AREA_MIN_ENTRIES,
     focusAreaMaxEntries: config.DIGEST_FOCUS_AREA_MAX_ENTRIES,
+    requiredTopicMinScore: config.DIGEST_REQUIRED_TOPIC_MIN_SCORE,
+    focusAreaMinScore: config.DIGEST_FOCUS_AREA_MIN_SCORE,
+    importantGeneralMinScore: config.DIGEST_IMPORTANT_GENERAL_MIN_SCORE,
     importantGeneralMaxEntries: config.DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES,
     generalMaxEntries: config.DIGEST_GENERAL_MAX_ENTRIES,
     sourceTypeMaxEntries: {

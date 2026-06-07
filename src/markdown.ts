@@ -52,23 +52,24 @@ ${renderSources(result.sources)}
 }
 
 export function renderDigestMarkdown(result: DigestMarkdownResult, createdAt = new Date()): string {
+  const linkedBody = linkCitations(cleanDigestBody(result.body), result.sources);
+  const body = appendSectionSourceLinks(
+    limitDigestCitations(linkedBody),
+    result.sources
+  );
+  const citedSources = filterCitedSources(result.sources, body);
   const frontmatter = [
     "---",
     "type: pnd-digest",
     `created: ${createdAt.toISOString()}`,
     `period_start: ${result.periodStart ?? ""}`,
     `period_end: ${result.periodEnd ?? ""}`,
-    `source_count: ${result.sources.length}`,
+    `source_count: ${citedSources.length}`,
     "tags:",
     "  - pnd",
     "  - digest",
     "---"
   ].join("\n");
-  const linkedBody = linkCitations(cleanDigestBody(result.body), result.sources);
-  const body = appendSectionSourceLinks(
-    limitDigestCitations(linkedBody),
-    result.sources
-  );
 
   return `${frontmatter}
 
@@ -76,7 +77,7 @@ export function renderDigestMarkdown(result: DigestMarkdownResult, createdAt = n
 
 ${body}
 
-${renderSources(result.sources)}
+${renderSources(citedSources)}
 `;
 }
 
@@ -101,8 +102,8 @@ export function linkCitations(text: string, sources: MarkdownSource[]): string {
 }
 
 export function appendSectionSourceLinks(text: string, sources: MarkdownSource[]): string {
-  const sections = splitTopLevelSections(text);
-  return sections.map((section) => appendSourcesForSection(section, sources)).join("");
+  void sources;
+  return text;
 }
 
 export function removeShortUrlReferenceSection(text: string): string {
@@ -128,10 +129,6 @@ function citationLink(citation: number): string {
   return `[[#Source ${citation}|${citation}]]`;
 }
 
-function sectionCitationLink(citation: number): string {
-  return `[[#Source ${citation}|[${citation}]]]`;
-}
-
 function spaceAdjacentCitationLinks(text: string): string {
   return text.replace(/(\]\])(?=\[\[#Source \d+\|)/g, "$1 ");
 }
@@ -146,15 +143,50 @@ function removeTrailingLineWhitespace(text: string): string {
 
 function removeEmptyOptionalDigestSections(text: string): string {
   return splitTopLevelSections(text)
+    .map(cleanOptionalDigestSection)
     .filter((section) => !isEmptyOptionalDigestSection(section))
     .join("")
     .trim();
 }
 
+function cleanOptionalDigestSection(section: string): string {
+  if (!/^## Highlighted Focus Areas\b/.test(section)) return section;
+  const introEnd = section.search(/^### .+$/m);
+  if (introEnd === -1) return section;
+  const intro = section.slice(0, introEnd);
+  const subsections = splitSecondLevelSections(section)
+    .filter((subsection) => !secondLevelSectionIsEmpty(subsection));
+  return subsections.length === 0 ? "" : `${intro}${subsections.join("")}`;
+}
+
 function isEmptyOptionalDigestSection(section: string): boolean {
-  if (!/^## Other Items\b/.test(section)) return false;
+  if (!/^## (?:Highlighted Focus Areas|Other Items)\b/.test(section)) return false;
   const body = section.replace(/^## Other Items\s*/u, "").trim();
+  if (/^## Other Items\b/.test(section)) {
+    return body === "" || /^No meaningful new signal found in this window\.?$/iu.test(body);
+  }
+  return highlightedFocusAreaIsEmpty(section);
+}
+
+function highlightedFocusAreaIsEmpty(section: string): boolean {
+  const subsections = splitSecondLevelSections(section);
+  if (subsections.length === 0) return false;
+  return subsections.every(secondLevelSectionIsEmpty);
+}
+
+function secondLevelSectionIsEmpty(section: string): boolean {
+  const body = section.replace(/^### .+\n?/u, "").trim();
   return body === "" || /^No meaningful new signal found in this window\.?$/iu.test(body);
+}
+
+function splitSecondLevelSections(section: string): string[] {
+  const starts = [...section.matchAll(/^### .+$/gm)].map((match) => match.index);
+  if (starts.length === 0) return [];
+
+  return starts.map((start, index) => {
+    const end = starts[index + 1] ?? section.length;
+    return section.slice(start!, end);
+  });
 }
 
 function splitTopLevelSections(text: string): string[] {
@@ -169,23 +201,6 @@ function splitTopLevelSections(text: string): string[] {
   }
 
   return sections;
-}
-
-function appendSourcesForSection(section: string, sources: MarkdownSource[]): string {
-  if (!section.startsWith("## ")) return section;
-  if (!/^## Other (?:Notable Signals|Items)\b/.test(section)) return section;
-  const citations = citationsInSection(section);
-  if (citations.length === 0) return section;
-
-  const sourceLines = citations
-    .map((citation) => sources.find((source) => source.citation === citation))
-    .filter((source): source is MarkdownSource => Boolean(source))
-    .map(formatSectionSource)
-    .map((source) => `- ${source}`)
-    .join("\n");
-  if (!sourceLines) return section;
-
-  return `${section.trimEnd()}\n\nSources:\n${sourceLines}\n\n`;
 }
 
 function limitCitationsForSection(section: string): string {
@@ -217,34 +232,11 @@ function keepFirstCitationLinks(text: string, limit: number): string {
   })).replace(/\s+([.,;:])/g, "$1");
 }
 
-function citationsInSection(section: string): number[] {
-  const citations = new Set<number>();
-  const patterns = [
-    /\[\[#Source (\d+)\|\d+\]\]/g,
-    /\[(\d+)\](?!\()/g,
-    /\((\d+(?:\s*,\s*\d+)*)\)/g
-  ];
-
-  for (const pattern of patterns) {
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(section)) !== null) {
-      if (!match[1]) continue;
-      for (const value of match[1].split(",")) {
-        const citation = Number(value.trim());
-        if (Number.isInteger(citation)) citations.add(citation);
-      }
-    }
-  }
-
-  return [...citations].sort((a, b) => a - b);
-}
-
-function formatSectionSource(source: MarkdownSource): string {
-  const title = sanitizeMarkdownText(source.title) ?? "Untitled";
-  const linkedTitle = source.url
-    ? `[${escapeLinkText(title)}](${source.url})`
-    : title;
-  return `${sectionCitationLink(source.citation)} ${linkedTitle}`;
+function filterCitedSources(sources: MarkdownSource[], text: string): MarkdownSource[] {
+  const cited = new Set(
+    [...text.matchAll(/\[\[#Source (\d+)\|\d+\]\]/g)].map((match) => Number(match[1]))
+  );
+  return sources.filter((source) => cited.has(source.citation));
 }
 
 function renderSources(sources: MarkdownSource[]): string {

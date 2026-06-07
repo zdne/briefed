@@ -15,7 +15,9 @@ const defaults = {
 describe("selectDigestSources", () => {
   it("selects required topic matches before general recent candidates", () => {
     const recent = [candidate("general-1"), candidate("general-2")];
-    const required = [{ topic: "agentic payments", matches: [candidate("required-1")] }];
+    const required = [{ topic: "agentic payments", matches: [candidate("required-1", {
+      title: "Agentic payments update"
+    })] }];
 
     const result = selectDigestSources(recent, required, [], defaults);
 
@@ -27,8 +29,8 @@ describe("selectDigestSources", () => {
   it("selects focus area matches after required topic matches", () => {
     const result = selectDigestSources(
       [candidate("general-1")],
-      [{ topic: "payments", matches: [candidate("required-1")] }],
-      [{ topic: "observability", matches: [candidate("focus-1")] }],
+      [{ topic: "payments", matches: [candidate("required-1", { title: "Payments update" })] }],
+      [{ topic: "observability", matches: [candidate("focus-1", { title: "Observability update" })] }],
       defaults
     );
 
@@ -38,12 +40,90 @@ describe("selectDigestSources", () => {
     expect(result.focusCount).toBe(1);
   });
 
+  it("filters topic vector matches below configured score thresholds", () => {
+    const result = selectDigestSources(
+      [],
+      [{ topic: "agentic payments", matches: [
+        candidate("weak-required", { score: 0.24 }),
+        candidate("strong-required", { score: 0.25, title: "Agentic payments update" })
+      ] }],
+      [{ topic: "observability", matches: [
+        candidate("weak-focus", { score: 0.34 }),
+        candidate("strong-focus", { score: 0.35, title: "Observability update" })
+      ] }],
+      {
+        ...defaults,
+        requiredTopicMaxEntries: 3,
+        focusAreaMaxEntries: 3,
+        requiredTopicMinScore: 0.25,
+        focusAreaMinScore: 0.35
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["strong-required", "strong-focus"]);
+  });
+
+  it("filters topic vector matches without a lexical topic anchor", () => {
+    const result = selectDigestSources(
+      [],
+      [{ topic: "agentic payments", matches: [
+        candidate("browser-agent", {
+          score: 0.9,
+          title: "Browser agent token costs"
+        }),
+        candidate("payments", {
+          score: 0.4,
+          title: "AI agency stablecoin payments tooling"
+        })
+      ] }],
+      [],
+      {
+        ...defaults,
+        requiredTopicMaxEntries: 3,
+        requiredTopicMinScore: 0.25
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["payments"]);
+  });
+
+  it("requires agentic topic matches to include an agentic concept and topic anchor", () => {
+    const result = selectDigestSources(
+      [],
+      [{ topic: "agentic commerce", matches: [
+        candidate("generic-commerce", {
+          score: 0.9,
+          title: "Q-commerce retail sales update"
+        }),
+        candidate("agentic-commerce", {
+          score: 0.4,
+          title: "AI agents for commerce checkout"
+        }),
+        candidate("exact-agentic-commerce", {
+          score: 0.3,
+          title: "Agentic commerce payments rollout"
+        })
+      ] }],
+      [],
+      {
+        ...defaults,
+        requiredTopicMaxEntries: 3,
+        requiredTopicMinScore: 0.25
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["agentic-commerce", "exact-agentic-commerce"]);
+  });
+
   it("deduplicates candidates that match more than one bucket", () => {
     const shared = candidate("shared");
     const result = selectDigestSources(
       [shared, candidate("general-1")],
-      [{ topic: "payments", matches: [shared] }],
-      [{ topic: "commerce", matches: [shared, candidate("focus-1")] }],
+      [{ topic: "payments", matches: [{ ...shared, title: "Payments update" }] }],
+      [{ topic: "commerce", matches: [
+        { ...shared, title: "Commerce update" },
+        candidate("focus-1", { title: "Commerce update" })
+      ] }],
       defaults
     );
 
@@ -53,8 +133,14 @@ describe("selectDigestSources", () => {
   it("respects the digest max entry cap", () => {
     const result = selectDigestSources(
       [candidate("general-1"), candidate("general-2"), candidate("general-3")],
-      [{ topic: "payments", matches: [candidate("required-1"), candidate("required-2")] }],
-      [{ topic: "commerce", matches: [candidate("focus-1"), candidate("focus-2")] }],
+      [{ topic: "payments", matches: [
+        candidate("required-1", { title: "Payments update" }),
+        candidate("required-2", { title: "Payments launch" })
+      ] }],
+      [{ topic: "commerce", matches: [
+        candidate("focus-1", { title: "Commerce update" }),
+        candidate("focus-2", { title: "Commerce launch" })
+      ] }],
       { ...defaults, maxEntries: 3 }
     );
 
@@ -68,7 +154,9 @@ describe("selectDigestSources", () => {
     const exactTag = candidate("exact-tag", {
       topicTags: ["agentic payments"]
     });
-    const vector = candidate("vector");
+    const vector = candidate("vector", {
+      title: "AI payments infrastructure"
+    });
 
     const result = selectDigestSources(
       [exactTitle, exactTag],
@@ -78,6 +166,25 @@ describe("selectDigestSources", () => {
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["exact-title", "exact-tag", "vector"]);
+  });
+
+  it("does not treat content body substring matches as exact topic matches", () => {
+    const result = selectDigestSources(
+      [
+        candidate("body-only", {
+          contentText: "This body mentions agentic payments, but the source summary is unrelated."
+        }),
+        candidate("title-match", {
+          title: "Agentic payments rollout"
+        })
+      ],
+      [{ topic: "agentic payments", matches: [] }],
+      [],
+      defaults
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["title-match", "body-only"]);
+    expect(result.selectedSources.map((selection) => selection.bucket)).toEqual(["required", "general"]);
   });
 
   it("selects important general candidates before newest general fill", () => {
@@ -102,6 +209,33 @@ describe("selectDigestSources", () => {
       "general"
     ]);
     expect(result.importantGeneralCount).toBe(1);
+  });
+
+  it("requires important general candidates to meet the configured score threshold", () => {
+    const result = selectDigestSources(
+      [
+        candidate("weak-important", {
+          title: "Google update"
+        }),
+        candidate("strong-important", {
+          title: "Google published security protocol"
+        }),
+        candidate("general")
+      ],
+      [],
+      [],
+      {
+        ...defaults,
+        importantGeneralMinScore: 3
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["strong-important", "weak-important", "general"]);
+    expect(result.selectedSources.map((selection) => selection.bucket)).toEqual([
+      "important_general",
+      "general",
+      "general"
+    ]);
   });
 
   it("limits selected entries by source type", () => {

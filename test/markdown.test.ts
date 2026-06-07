@@ -90,7 +90,7 @@ describe("renderDigestMarkdown", () => {
       id: "4",
       periodStart: "2026-06-04T10:00:00.000Z",
       periodEnd: "2026-06-05T10:00:00.000Z",
-      body: "Digest body [1].",
+      body: "Digest body [1] [2].",
       sources: [
         {
           citation: 1,
@@ -107,6 +107,27 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).toContain("### Source 2");
   });
 
+  it("renders only sources cited in the final digest body", () => {
+    const markdown = renderDigestMarkdown({
+      id: "5",
+      periodStart: "2026-06-04T10:00:00.000Z",
+      periodEnd: "2026-06-05T10:00:00.000Z",
+      body: "## Top Items\n\n- Reported item [2].",
+      sources: [
+        { citation: 1, title: "Uncited", url: "https://example.com/1" },
+        { citation: 2, title: "Cited", url: "https://example.com/2" },
+        { citation: 3, title: "Also uncited", url: "https://example.com/3" }
+      ]
+    });
+
+    expect(markdown).toContain("source_count: 1");
+    expect(markdown).toContain("- Reported item [[#Source 2|2]].");
+    expect(markdown).toContain("### Source 2");
+    expect(markdown).toContain("[Cited](https://example.com/2)");
+    expect(markdown).not.toContain("### Source 1");
+    expect(markdown).not.toContain("### Source 3");
+  });
+
   it("drops an empty Other Items section and trims model-emitted trailing spaces", () => {
     const markdown = renderDigestMarkdown({
       id: "5",
@@ -121,10 +142,37 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).not.toContain("## Other Items");
     expect(markdown).not.toContain("No meaningful new signal found in this window");
   });
+
+  it("drops empty focus-area subsections while preserving non-empty focus areas", () => {
+    const markdown = renderDigestMarkdown({
+      id: "6",
+      periodStart: "2026-06-04T10:00:00.000Z",
+      periodEnd: "2026-06-05T10:00:00.000Z",
+      body: [
+        "## Highlighted Focus Areas",
+        "",
+        "### MCP",
+        "- MCP item [1].",
+        "",
+        "### agentic marketplace",
+        "No meaningful new signal found in this window.",
+        "",
+        "### agentic contracting",
+        ""
+      ].join("\n"),
+      sources: [{ citation: 1, title: "Source", url: "https://example.com" }]
+    });
+
+    expect(markdown).toContain("## Highlighted Focus Areas");
+    expect(markdown).toContain("### MCP");
+    expect(markdown).toContain("- MCP item [[#Source 1|1]].");
+    expect(markdown).not.toContain("### agentic marketplace");
+    expect(markdown).not.toContain("### agentic contracting");
+  });
 });
 
 describe("appendSectionSourceLinks", () => {
-  it("adds compact linked source titles at the end of each cited top-level digest section", () => {
+  it("leaves digest sections unchanged", () => {
     expect(appendSectionSourceLinks(
       "Intro without section.\n\n" +
       "## Executive Summary\n\nA paragraph [[#Source 2|2]] [[#Source 1|1]].\n\n" +
@@ -142,9 +190,7 @@ describe("appendSectionSourceLinks", () => {
       "## Executive Summary\n\nA paragraph [[#Source 2|2]] [[#Source 1|1]].\n\n" +
       "## Required Watchlist\n\nRequired paragraph [[#Source 1|1]].\n\n" +
       "## Other Notable Signals\n\nAnother paragraph [[#Source 3|3]].\n\n" +
-      "Sources:\n- [[#Source 3|[3]]] Three\n\n" +
       "## Other Items\n\nAnother item [[#Source 2|2]].\n\n" +
-      "Sources:\n- [[#Source 2|[2]]] [Two](https://example.com/2)\n\n" +
       "## Empty\n\nNo citations."
     );
   });
@@ -184,6 +230,12 @@ describe("cleanDigestBody", () => {
   it("removes short URL sections, empty optional sections, and trailing line whitespace", () => {
     expect(cleanDigestBody(
       "## Top Items  \n\n- Item.  \n\n## Other Items\nNo meaningful new signal found in this window.\n\n# Short URLs for reference\n\n[1] https://example.com"
+    )).toBe("## Top Items\n\n- Item.");
+  });
+
+  it("removes a highlighted focus section when every focus area is empty", () => {
+    expect(cleanDigestBody(
+      "## Top Items\n\n- Item.\n\n## Highlighted Focus Areas\n\n### MCP\nNo meaningful new signal found in this window.\n\n### API\n"
     )).toBe("## Top Items\n\n- Item.");
   });
 });

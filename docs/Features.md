@@ -9,6 +9,7 @@ Tracker of potential features to add to pnd:
 - [x] Access twitter using [xurl](https://github.com/xdevplatform/xurl)
 - [x] Prioritize sources
 - [x] Basic digest diversity caps
+- [x] Basic digest relevance thresholds
 - [ ] Further improvement to digest pre-qualification (see below)
 
 ## Later / TBD
@@ -34,11 +35,17 @@ Tracker of potential features to add to pnd:
   Within each bucket:
 
   - exact text/topic/entity matches come first,
-  - then vector matches,
+  - then vector matches above configured score thresholds,
   - duplicates are removed,
   - per-topic max caps are applied.
 
-  What it does not do yet:
+  Current controls:
+
+  DIGEST_REQUIRED_TOPIC_MIN_SCORE=0.25
+  DIGEST_FOCUS_AREA_MIN_SCORE=0.35
+  DIGEST_IMPORTANT_GENERAL_MIN_SCORE=3
+
+  Implemented controls:
 
   1. Source diversity caps
 
@@ -60,7 +67,9 @@ Tracker of potential features to add to pnd:
 
   This limits repeated posts from one author in a single digest.
 
-  3. Twitter engagement scoring
+  Remaining work:
+
+  1. Twitter engagement scoring
 
   For Twitter/X entries, we currently treat them mostly like any other embedded item. We do not yet inspect fields like:
 
