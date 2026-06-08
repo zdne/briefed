@@ -187,12 +187,12 @@ export function buildDigestPrompt(
 
 Use this Markdown structure:
 
-## Required Watchlist
+## Watchlist
 Use only the exact required watchlist subsection headings listed below.
 For each topic, write 0-2 bullets with citations if there is meaningful source-backed signal.
 If there is no meaningful signal for a topic, write exactly: No meaningful new signal found in this window.
 
-## Highlighted Focus Areas
+## Focus Areas
 Use only the exact focus-area subsection headings listed below.
 Include only configured focus areas with meaningful source-backed signal.
 Include at most 5 focus areas and 1-2 bullets per focus area.

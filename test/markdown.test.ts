@@ -168,6 +168,37 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).not.toContain("was released");
   });
 
+  it("renames required watchlist and capitalizes watchlist subheadings", () => {
+    const markdown = renderDigestMarkdown({
+      id: "7",
+      periodStart: "2026-06-04T10:00:00.000Z",
+      periodEnd: "2026-06-05T10:00:00.000Z",
+      body: [
+        "## Required Watchlist",
+        "",
+        "### agentic payments",
+        "- Item [1].",
+        "",
+        "### agentic B2B",
+        "No meaningful new signal found in this window.",
+        "",
+        "## Highlighted Focus Areas",
+        "",
+        "### agentic marketplace",
+        "- Focus item [1]."
+      ].join("\n"),
+      sources: [{ citation: 1, title: "Source", url: "https://example.com" }]
+    });
+
+    expect(markdown).toContain("## Watchlist");
+    expect(markdown).not.toContain("## Required Watchlist");
+    expect(markdown).toContain("## Focus Areas");
+    expect(markdown).not.toContain("## Highlighted Focus Areas");
+    expect(markdown).toContain("### Agentic Payments");
+    expect(markdown).toContain("### Agentic B2B");
+    expect(markdown).toContain("### agentic marketplace");
+  });
+
   it("drops an empty Other Items section and trims model-emitted trailing spaces", () => {
     const markdown = renderDigestMarkdown({
       id: "5",
@@ -189,7 +220,7 @@ describe("renderDigestMarkdown", () => {
       periodStart: "2026-06-04T10:00:00.000Z",
       periodEnd: "2026-06-05T10:00:00.000Z",
       body: [
-        "## Highlighted Focus Areas",
+        "## Focus Areas",
         "",
         "### MCP",
         "- MCP item [1].",
@@ -203,7 +234,7 @@ describe("renderDigestMarkdown", () => {
       sources: [{ citation: 1, title: "Source", url: "https://example.com" }]
     });
 
-    expect(markdown).toContain("## Highlighted Focus Areas");
+    expect(markdown).toContain("## Focus Areas");
     expect(markdown).toContain("### MCP");
     expect(markdown).toContain("- MCP item [[#Source 1|1]].");
     expect(markdown).not.toContain("### agentic marketplace");

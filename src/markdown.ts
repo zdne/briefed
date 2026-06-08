@@ -114,8 +114,10 @@ export function removeShortUrlReferenceSection(text: string): string {
 
 export function cleanDigestBody(text: string): string {
   return removeEmptyOptionalDigestSections(
-    removeTrailingLineWhitespace(
-      removeShortUrlReferenceSection(text)
+    normalizeDigestHeadings(
+      removeTrailingLineWhitespace(
+        removeShortUrlReferenceSection(text)
+      )
     )
   );
 }
@@ -184,6 +186,42 @@ function removeTrailingLineWhitespace(text: string): string {
     .trim();
 }
 
+function normalizeDigestHeadings(text: string): string {
+  return splitTopLevelSections(text)
+    .map(normalizeDigestSectionHeading)
+    .join("")
+    .trim();
+}
+
+function normalizeDigestSectionHeading(section: string): string {
+  if (/^## Required Watchlist\b/.test(section)) {
+    return normalizeWatchlistSubheadings(section.replace(/^## Required Watchlist\b/u, "## Watchlist"));
+  }
+  if (/^## Watchlist\b/.test(section)) {
+    return normalizeWatchlistSubheadings(section);
+  }
+  if (/^## Highlighted Focus Areas\b/.test(section)) {
+    return section.replace(/^## Highlighted Focus Areas\b/u, "## Focus Areas");
+  }
+  return section;
+}
+
+function normalizeWatchlistSubheadings(section: string): string {
+  return section.replace(/^### (.+)$/gmu, (_match, heading: string) => `### ${capitalizeHeading(heading)}`);
+}
+
+function capitalizeHeading(heading: string): string {
+  return heading
+    .split(/(\s+)/u)
+    .map((part) => /\s+/u.test(part) ? part : capitalizeWord(part))
+    .join("");
+}
+
+function capitalizeWord(word: string): string {
+  if (word.length === 0) return word;
+  return word[0]!.toLocaleUpperCase("en-US") + word.slice(1);
+}
+
 function removeEmptyOptionalDigestSections(text: string): string {
   return splitTopLevelSections(text)
     .map(cleanOptionalDigestSection)
@@ -193,7 +231,7 @@ function removeEmptyOptionalDigestSections(text: string): string {
 }
 
 function cleanOptionalDigestSection(section: string): string {
-  if (!/^## Highlighted Focus Areas\b/.test(section)) return section;
+  if (!/^## Focus Areas\b/.test(section)) return section;
   const introEnd = section.search(/^### .+$/m);
   if (introEnd === -1) return section;
   const intro = section.slice(0, introEnd);
@@ -203,7 +241,7 @@ function cleanOptionalDigestSection(section: string): string {
 }
 
 function isEmptyOptionalDigestSection(section: string): boolean {
-  if (!/^## (?:Highlighted Focus Areas|Other Items)\b/.test(section)) return false;
+  if (!/^## (?:Focus Areas|Other Items)\b/.test(section)) return false;
   const body = section.replace(/^## Other Items\s*/u, "").trim();
   if (/^## Other Items\b/.test(section)) {
     return body === "" || /^No meaningful new signal found in this window\.?$/iu.test(body);

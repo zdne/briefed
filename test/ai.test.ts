@@ -71,7 +71,7 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("source-grounded report");
     expect(prompt).not.toContain("analyst digest");
     expect(prompt).not.toContain("## Top Items");
-    expect(prompt).toContain("## Required Watchlist");
+    expect(prompt).toContain("## Watchlist");
     expect(prompt).toContain("Allowed bullet forms:");
     expect(prompt).toContain("Report only what the cited source says");
     expect(prompt).toContain("Attribute claims to the source");
@@ -162,8 +162,9 @@ describe("buildDigestPrompt", () => {
     expect(prompt).not.toContain("Prefer synthesis over listing");
     expect(prompt).not.toContain("Sentence 2 states why it matters");
     expect(prompt).not.toContain("## Top Items");
-    expect(prompt).toContain("## Required Watchlist");
-    expect(prompt).toContain("## Highlighted Focus Areas");
+    expect(prompt).not.toContain("## Required Watchlist");
+    expect(prompt).toContain("## Watchlist");
+    expect(prompt).toContain("## Focus Areas");
     expect(prompt).toContain("## Other Items");
     expect(prompt).toContain("Do not write \"No meaningful new signal found in this window\" in this section.");
     expect(prompt).toContain("Use only the exact required watchlist subsection headings listed below.");
