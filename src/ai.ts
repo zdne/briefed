@@ -209,9 +209,9 @@ Do not write "No meaningful new signal found in this window" in this section.
 Allowed bullet forms:
 - <Publication> reported <one concrete claim> [n].
 - <Named company, project, or person> launched|published|added|tested|integrated|reported|warned|criticized <one concrete action> [n].
-- Reddit: <artifact, project, company, product, or topic> <one concrete claim> [n].
-- Twitter: <artifact, project, company, product, or topic> <one concrete claim> [n].
-- Hacker News: <artifact, project, company, product, or topic> <one concrete claim> [n].
+- Reddit: <short artifact, project, company, product, or topic label> [n].
+- Twitter: <short artifact, project, company, product, or topic label> [n].
+- Hacker News: <short artifact, project, company, product, or topic label> [n].
 - A source titled "<title>" reported|published|claimed <one concrete claim> [n].
 
 Rules:
@@ -222,7 +222,10 @@ Rules:
 - Do not write trend adjectives.
 - Avoid: "rapidly", "emerging", "evolving", "increasingly", "seamless", "transformative", "crucial", "pivotal", "significant", "robust", "scalable", "real-world", "major", "sustainable", "emphasizing", "highlighted", "highlighting", "noted", "indicating", "indicates", "underscores", "could transform", "poised to", "reshape", "enhance accessibility", "improve accessibility", "drive adoption", and "drive forward".
 - Prefer concrete verbs: launched, added, reported, published, proposed, tested, integrated, processed, warned, criticized.
-- Each bullet must start with a named actor, publication, source category, or quoted community group and a concrete verb.
+- Each non-social bullet must start with a named actor or publication and a concrete verb.
+- Social-source bullets must start with "Reddit:", "Twitter:", or "Hacker News:" followed by a short noun-phrase label for the artifact, project, company, product, or topic; the platform must not be the grammatical actor.
+- Social-source bullets do not need to be full sentences.
+- For social-source bullets, prefer labels over verbs: "MCP for managing skills", "OSS MCP for the OpenAI ChatGPT Ads API", "agent-first API design patterns".
 - Do not start bullets with abstract topics like "Agentic commerce", "Trust", "Discovery", "The ecosystem", or "Technologies".
 - For every section, use at most 2 bullets per subsection.
 - Each bullet must cite exactly one source.
@@ -249,7 +252,8 @@ Rules:
 - For Twitter sources, start the bullet exactly with "Twitter:" unless citing a named external source in the post.
 - For Hacker News sources, start the bullet exactly with "Hacker News:" unless citing a named external source in the post.
 - Never place a username, handle, or "user" after "Reddit:", "Twitter:", or "Hacker News:".
-- Do not write "Reddit reported", "Reddit published", "Twitter reported", "Twitter published", "Hacker News reported", or "Hacker News published".
+- Do not write social-source bullets in passive voice, including "is being developed", "was released", "was created", "was demonstrated", or "was published".
+- Do not write "Reddit questioned", "Reddit reported", "Reddit published", "Reddit launched", "Reddit demonstrated", "Reddit released", "Twitter reported", "Twitter published", "Hacker News reported", or "Hacker News published".
 - Do not write "A Reddit post", "Reddit queried", "Reddit users", "Reddit contributors", "a Twitter post", or "a Hacker News post" as the subject.
 - Do not include usernames or handles in the digest body.
 - Do not write "User launched a ...", "User published a ...", " User developed a...", " User built an...", "User released an..."
@@ -264,25 +268,33 @@ Better: The Edge Malaysia reported agentic commerce as a payments trend in South
 Bad: The report highlights the importance of agentic commerce for financial inclusion.
 Better: The Edge Malaysia reported agentic commerce as a digital-payments model involving human agents in Southeast Asia.
 Bad: AI voice agents are rapidly being adopted globally.
-Better: Reddit: LuMay and Voxentis.ai are being tested for real-estate lead qualification in the USA, India, Canada, and France.
+Better: Reddit: LuMay and Voxentis.ai for real-estate lead qualification in the USA, India, Canada, and France.
 Bad: Reddit contributors compared AI voice agents based on pricing, CRM integration, latency, and workflow automation as key factors in 2026.
-Better: Reddit: A comparison of LuMay, Voxentis.ai, Vapi, and Retell AI covered latency, workflow automation, CRM integration, and conversion performance.
+Better: Reddit: LuMay, Voxentis.ai, Vapi, and Retell AI comparison on latency, workflow automation, CRM integration, and conversion performance.
 Bad: Reddit reported a calculator MCP server providing arithmetic operations.
-Better: Reddit: Calculator MCP server provided arithmetic operations.
+Better: Reddit: Calculator MCP server for arithmetic operations.
 Bad: Reddit published a WAHA MCP Server enabling AI assistants to interact with WhatsApp.
-Better: Reddit: WAHA MCP Server enabled AI assistants to interact with WhatsApp.
+Better: Reddit: WAHA MCP Server for WhatsApp API access.
+Bad: Reddit questioned actual consumer use of agentic commerce protocols.
+Better: Reddit: agentic commerce protocol usage.
+Bad: Reddit launched a tool to simplify MCP server management.
+Better: Reddit: mcp-inator for MCP server management across AI tools.
+Bad: Reddit demonstrated a security issue involving trusted MCP tool outputs.
+Better: Reddit: trusted MCP tool-output security issue.
+Bad: Reddit released an OSS MCP for the OpenAI ChatGPT Ads API.
+Better: Reddit: OSS MCP for the OpenAI ChatGPT Ads API.
 Bad: Reddit: <handle> launched a directory-MCP linked to Claude instances to speed up communication within a company workflow
-Better: Reddit: Directory-MCP linked to Claude instances to speed up communication within a company workflow
+Better: Reddit: Directory-MCP linked to Claude instances.
 Bad: Reddit: User released an MCP integration to run and manage Claude Code sessions directly from Claude.ai chat interface for brainstorming and coding workflow
-Better: Reddit: MCP integration to run and manage Claude Code sessions directly from Claude.ai chat interface for brainstorming and coding workflow
+Better: Reddit: MCP integration for Claude Code sessions from Claude.ai chat.
 Bad: Reddit: <handle> built an MCP server for PostgreSQL to enable LLMs to safely abstract SQL requests without risk of database modification.
-Better: Reddit: MCP server for PostgreSQL to enable LLMs to safely abstract SQL requests without risk of database modification.
+Better: Reddit: MCP server for PostgreSQL query abstraction.
 Bad: AI voice agents LuMay and Voxentis.ai are being deployed and assessed for B2B communication tasks.
-Better: Reddit: LuMay and Voxentis.ai are being tested for real-estate lead qualification and appointment automation.
+Better: Reddit: LuMay and Voxentis.ai for real-estate lead qualification and appointment automation.
 Bad: Browser-agent reliability remains a key operational challenge.
-Better: Reddit: Browser-agent tasks involving tabs, login sessions, modals, and dynamic pages caused token overruns and crashes.
+Better: Reddit: browser-agent tasks involving tabs, login sessions, modals, and dynamic pages.
 Bad: MCP remains pivotal infrastructure.
-Better: Worldpay published an MCP server for agent-enabled payments.
+Better: Worldpay published an MCP server for agentic payments.
 ${formatDigestTopicInstructions(options.requiredTopics ?? [], options.focusAreas ?? [])}
 
 ${formatDigestSources(sources, options.sourceContexts ?? [])}`;

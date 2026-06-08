@@ -128,6 +128,46 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).not.toContain("### Source 3");
   });
 
+  it("collapses social digest bullets to source-title labels", () => {
+    const markdown = renderDigestMarkdown({
+      id: "6",
+      periodStart: "2026-06-04T10:00:00.000Z",
+      periodEnd: "2026-06-05T10:00:00.000Z",
+      body: [
+        "## Highlighted Focus Areas",
+        "",
+        "### MCP",
+        "- Reddit: An MCP was created to manage and read skills efficiently [1].",
+        "- Reddit: A tool named mcp-inator was published to simplify managing MCP servers [2].",
+        "- Reddit: An OSS MCP for the OpenAI ChatGPT Ads API was released [3]."
+      ].join("\n"),
+      sources: [
+        {
+          citation: 1,
+          title: "a small MCP to manage and read skills efficiently",
+          url: "https://www.reddit.com/r/mcp/comments/1"
+        },
+        {
+          citation: 2,
+          title: "Tool to manage mcp servers across AI tools",
+          url: "https://www.reddit.com/r/mcp/comments/2"
+        },
+        {
+          citation: 3,
+          title: "OSS MCP for the OpenAI (ChatGPT) Ads API",
+          url: "https://www.reddit.com/r/mcp/comments/3"
+        }
+      ]
+    });
+
+    expect(markdown).toContain("- Reddit: small MCP to manage and read skills efficiently [[#Source 1|1]].");
+    expect(markdown).toContain("- Reddit: Tool to manage mcp servers across AI tools [[#Source 2|2]].");
+    expect(markdown).toContain("- Reddit: OSS MCP for the OpenAI (ChatGPT) Ads API [[#Source 3|3]].");
+    expect(markdown).not.toContain("An MCP was created");
+    expect(markdown).not.toContain("was published");
+    expect(markdown).not.toContain("was released");
+  });
+
   it("drops an empty Other Items section and trims model-emitted trailing spaces", () => {
     const markdown = renderDigestMarkdown({
       id: "5",

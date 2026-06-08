@@ -54,7 +54,7 @@ ${renderSources(result.sources)}
 export function renderDigestMarkdown(result: DigestMarkdownResult, createdAt = new Date()): string {
   const linkedBody = linkCitations(cleanDigestBody(result.body), result.sources);
   const body = appendSectionSourceLinks(
-    limitDigestCitations(linkedBody),
+    simplifySocialDigestBullets(limitDigestCitations(linkedBody), result.sources),
     result.sources
   );
   const citedSources = filterCitedSources(result.sources, body);
@@ -131,6 +131,49 @@ function citationLink(citation: number): string {
 
 function spaceAdjacentCitationLinks(text: string): string {
   return text.replace(/(\]\])(?=\[\[#Source \d+\|)/g, "$1 ");
+}
+
+function simplifySocialDigestBullets(text: string, sources: MarkdownSource[]): string {
+  const sourcesByCitation = new Map(sources.map((source) => [source.citation, source]));
+  return text
+    .split("\n")
+    .map((line) => simplifySocialDigestBullet(line, sourcesByCitation))
+    .join("\n");
+}
+
+function simplifySocialDigestBullet(line: string, sourcesByCitation: Map<number, MarkdownSource>): string {
+  const match = line.match(/^(\s*-\s+)(Reddit|Twitter|Hacker News):\s+.+?\s+(\[\[#Source (\d+)\|\d+\]\])\.?\s*$/u);
+  if (!match) return line;
+
+  const citation = Number(match[4]);
+  const source = sourcesByCitation.get(citation);
+  if (!source || socialPlatform(source) !== match[2]) return line;
+
+  return `${match[1]}${match[2]}: ${socialDigestLabel(source)} ${match[3]}.`;
+}
+
+function socialPlatform(source: MarkdownSource): "Reddit" | "Twitter" | "Hacker News" | null {
+  const url = source.url ?? "";
+  if (url.includes("reddit.com/")) return "Reddit";
+  if (url.includes("x.com/") || url.includes("twitter.com/")) return "Twitter";
+  if (url.includes("news.ycombinator.com/")) return "Hacker News";
+  return null;
+}
+
+function socialDigestLabel(source: MarkdownSource): string {
+  const title = sanitizeSocialTitle(source.title ?? "Untitled");
+  return title.endsWith(".") ? title.slice(0, -1) : title;
+}
+
+function sanitizeSocialTitle(title: string): string {
+  return title
+    .replace(/^show hn:\s*/iu, "")
+    .replace(/^i\s+(?:built|made|created|published|released)\s+/iu, "")
+    .replace(/^i've\s+(?:built|made|created|published|released)\s+/iu, "")
+    .replace(/^why i built\s+/iu, "")
+    .replace(/^a\s+/iu, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function removeTrailingLineWhitespace(text: string): string {
