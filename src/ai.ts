@@ -125,7 +125,7 @@ ${formatSources(sources)}`);
     if (config.LLM_PROVIDER === "anthropic") {
       const response = await this.anthropic!.messages.create({
         model: config.ANTHROPIC_LLM_MODEL,
-        max_tokens: 1600,
+        max_tokens: 4096,
         messages: [{ role: "user", content: prompt }]
       });
       return response.content
@@ -185,7 +185,20 @@ export function buildDigestPrompt(
 ): string {
   return `Create a concise source-grounded report of the entries published in the last ${hours} hours using only the supplied sources.
 
-Use this Markdown structure:
+Use this Markdown structure (follow the heading hierarchy exactly):
+
+## Watchlist
+### <topic heading>
+- bullet [n]
+
+## Focus Areas
+### <focus area heading>
+- bullet [n]
+
+## Other Items
+- bullet [n]
+
+Rules for each section:
 
 ## Watchlist
 Use only the exact required watchlist subsection headings listed below.
@@ -199,11 +212,9 @@ Include at most 5 focus areas and 1-2 bullets per focus area.
 If no focus area has meaningful signal, omit this section.
 
 ## Other Items
-0-3 bullets for source-backed items outside the required watchlist and highlighted focus areas.
-Include this section only for selected important-general candidates that can be described in one factual sentence.
+0-3 bullets drawn only from important-general candidates, for items not already covered in the Watchlist or Focus Areas above.
 ${formatOtherNotableRelevance(options.requiredTopics ?? [], options.focusAreas ?? [])}
-Do not include unrelated general news.
-Omit this section if there are no other source-backed items.
+Omit this section if there are no qualifying items.
 Do not write "No meaningful new signal found in this window" in this section.
 
 Allowed bullet forms:
@@ -223,8 +234,7 @@ Rules:
 - Avoid: "rapidly", "emerging", "evolving", "increasingly", "seamless", "transformative", "crucial", "pivotal", "significant", "robust", "scalable", "real-world", "major", "sustainable", "emphasizing", "highlighted", "highlighting", "noted", "indicating", "indicates", "underscores", "could transform", "poised to", "reshape", "enhance accessibility", "improve accessibility", "drive adoption", and "drive forward".
 - Prefer concrete verbs: launched, added, reported, published, proposed, tested, integrated, processed, warned, criticized.
 - Each non-social bullet must start with a named actor or publication and a concrete verb.
-- Social-source bullets must start with "Reddit:", "Twitter:", or "Hacker News:" followed by a short noun-phrase label for the artifact, project, company, product, or topic; the platform must not be the grammatical actor.
-- Social-source bullets do not need to be full sentences.
+- Social-source bullets are noun phrases only — no verb, no platform as actor. The platform name ("Reddit:", "Twitter:", "Hacker News:") is a prefix, not a subject. Use a short label for the artifact, project, company, product, or topic.
 - For social-source bullets, prefer labels over verbs: "MCP for managing skills", "OSS MCP for the OpenAI ChatGPT Ads API", "agent-first API design patterns".
 - Do not start bullets with abstract topics like "Agentic commerce", "Trust", "Discovery", "The ecosystem", or "Technologies".
 - For every section, use at most 2 bullets per subsection.
@@ -295,6 +305,8 @@ Bad: Browser-agent reliability remains a key operational challenge.
 Better: Reddit: browser-agent tasks involving tabs, login sessions, modals, and dynamic pages.
 Bad: MCP remains pivotal infrastructure.
 Better: Worldpay published an MCP server for agentic payments.
+The selection label on each source is a hint, not a binding assignment. If a source's content does not match its labeled topic, use it where it fits best or omit it.
+
 ${formatDigestTopicInstructions(options.requiredTopics ?? [], options.focusAreas ?? [])}
 
 ${formatDigestSources(sources, options.sourceContexts ?? [])}`;
