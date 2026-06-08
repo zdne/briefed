@@ -13,7 +13,7 @@
   - Database:
       - Create a Neon Free Postgres project.
       - Run existing migrations; CREATE EXTENSION IF NOT EXISTS vector enables pgvector.
-      - Point local .env DATABASE_URL at Neon.
+      - Point local .env DATABASE_URL at Neon's pooled connection string (PgBouncer endpoint), not the direct URL; the pooled URL is better for the long-running MCP server.
       - Add explicit pool sizing, default PG_POOL_MAX=3, because MCP is long-running.
       - Document Neon Free limits: 0.5 GB storage/project, monthly compute quota, scale-to-zero latency, limited restore window.
       - Treat Neon Free as prototype shared state, not final production infrastructure.
@@ -40,7 +40,7 @@
           - npm run cli -- digest render --id <id>
 
   - MCP server:
-      - Add npm run mcp.
+      - Add npm run mcp entrypoint (tsx src/mcp.ts) using @modelcontextprotocol/sdk.
       - Initial tools:
           - health: check DB connectivity.
           - query_archive: ask a question over the archive with citations.
@@ -52,9 +52,9 @@
       - Defer search_sources, get_source, auth, job IDs, remote MCP, and hosted API.
 
   - Future:
-      - Add hosted scheduling later via Render Cron or GitHub Actions.
-      - Add hosted agent access later via Render Web Service or remote MCP.
-      - Upgrade Neon or move to paid Render/DigitalOcean Postgres when storage, restore, or compute limits matter.
+      - Add hosted scheduling later via GitHub Actions scheduled workflows (lowest friction) or Fly.io (if all-in-one hosting is preferred).
+      - Add hosted agent access later via remote MCP; requires OAuth and HTTPS — meaningfully different from local stdio MCP.
+      - Upgrade Neon or move to Fly.io Postgres (all-in-one: DB + cron + MCP hosting) or DigitalOcean Managed Postgres when storage, restore, or compute limits matter. Keep Render on the list.
       - Add auth before exposing any remote MCP/API.
 
   ## Test Plan
@@ -69,7 +69,7 @@
       - CLI query against Neon
       - CLI digest render against Neon
 
-  - Verify MCP against Neon DATABASE_URL:
+  - Verify MCP against Neon DATABASE_URL using mcp-inspector or Claude Desktop config:
       - health
       - query_archive
       - create_digest
