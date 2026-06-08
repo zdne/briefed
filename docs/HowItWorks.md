@@ -192,6 +192,7 @@ Run:
 ```bash
 npm run digest
 npm run cli -- digest --hours 48
+npm run cli -- digest --hours 24 --days-ago 3
 npm run cli -- digest render
 ```
 

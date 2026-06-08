@@ -89,6 +89,7 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- digest render` | Re-render the latest stored digest as Markdown without calling the LLM |
 | `npm run cli -- digest render --id 4` | Re-render a specific stored digest |
 | `npm run cli -- digest --hours 48` | Generate a digest with a custom lookback |
+| `npm run cli -- digest --hours 24 --days-ago 3` | Generate a 24-hour digest window ending three days ago |
 | `npm run cli -- digest --format json` | Print machine-readable digest JSON while still writing Markdown |
 | `npm run dev` | Start the API with reload |
 | `npm test` | Run unit tests |

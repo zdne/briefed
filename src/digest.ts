@@ -16,11 +16,12 @@ export type DigestLogger = (message: string) => void;
 export async function createDigest(
   hours: number,
   ai: AnalystAI,
-  log: DigestLogger = () => {}
+  log: DigestLogger = () => {},
+  referenceTime = new Date()
 ) {
   log(`Loading enriched entries published during the last ${hours} hours`);
-  const eligibleCount = await countRecentContent(hours);
-  const candidates = await recentDigestCandidates(hours, config.DIGEST_CANDIDATE_LIMIT);
+  const eligibleCount = await countRecentContent(hours, referenceTime);
+  const candidates = await recentDigestCandidates(hours, config.DIGEST_CANDIDATE_LIMIT, referenceTime);
   if (eligibleCount > candidates.length) {
     log(
       `${eligibleCount} enriched entries are eligible; loaded the newest ${candidates.length} ` +
@@ -45,6 +46,7 @@ export async function createDigest(
     config.DIGEST_REQUIRED_TOPICS,
     config.DIGEST_REQUIRED_TOPIC_MAX_ENTRIES,
     hours,
+    referenceTime,
     ai,
     log
   );
@@ -52,6 +54,7 @@ export async function createDigest(
     config.DIGEST_FOCUS_AREAS,
     config.DIGEST_FOCUS_AREA_MAX_ENTRIES,
     hours,
+    referenceTime,
     ai,
     log
   );
@@ -82,7 +85,7 @@ export async function createDigest(
     `${selection.importantGeneralCount} important-general, ${selection.generalCount} general`
   );
 
-  const end = new Date();
+  const end = referenceTime;
   const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
   log(`Generating digest with ${sources.length} sources using the configured LLM`);
   const body = await ai.digest(sources, hours, {
@@ -119,6 +122,7 @@ async function vectorMatchesForTopics(
   topics: string[],
   maxEntries: number,
   hours: number,
+  referenceTime: Date,
   ai: AnalystAI,
   log: DigestLogger
 ): Promise<DigestTopicMatches[]> {
@@ -130,7 +134,7 @@ async function vectorMatchesForTopics(
     const embedding = await ai.embed(topic);
     matches.push({
       topic,
-      matches: await recentVectorMatches(embedding, hours, limit)
+      matches: await recentVectorMatches(embedding, hours, limit, referenceTime)
     });
   }
 

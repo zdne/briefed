@@ -190,6 +190,7 @@ digestCommand
   .command("create", { isDefault: true })
   .description("Create and store a new digest with the configured LLM")
   .option("-H, --hours <number>", "lookback hours", String(config.DIGEST_HOURS))
+  .option("--days-ago <number>", "end the digest window N days before now")
   .option("-f, --format <format>", "output format: markdown or json", "markdown")
   .option("-o, --output <path>", "write Markdown to this path instead of DIGEST_OUTPUT_DIR")
   .action(createDigestAction);
@@ -254,17 +255,36 @@ function printFormattedOutput(
   }
 }
 
-async function createDigestAction(options: { hours: string; format: string; output?: string }): Promise<void> {
+async function createDigestAction(options: {
+  hours: string;
+  daysAgo?: string;
+  format: string;
+  output?: string;
+}): Promise<void> {
   const format = outputFormat(options.format);
+  const hours = positiveInteger(options.hours, "--hours");
+  const daysAgo = options.daysAgo === undefined ? 0 : nonNegativeInteger(options.daysAgo, "--days-ago");
+  const referenceTime = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
   const log = timestampLogger;
   log("Initializing AI client");
-  const result = await createDigest(positiveInteger(options.hours, "--hours"), new AnalystAI(), log);
+  if (daysAgo > 0) {
+    log(`Creating digest for ${hours} hours ending ${referenceTime.toISOString()} (--days-ago ${daysAgo})`);
+  }
+  const result = await createDigest(hours, new AnalystAI(), log, referenceTime);
   const createdAt = new Date();
   const markdown = renderDigestMarkdown(result, createdAt);
   const outputPath = options.output ?? digestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt);
   const path = await writeMarkdownFile(outputPath, markdown);
   log(`Wrote digest Markdown to ${path}`);
   printFormattedOutput(format, result, markdown, true);
+}
+
+function nonNegativeInteger(value: string, option: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${option} must be a non-negative integer`);
+  }
+  return parsed;
 }
 
 async function readLatestQuerySession(): Promise<QuerySession | null> {

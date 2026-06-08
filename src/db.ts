@@ -231,12 +231,14 @@ export async function retrieveRelevant(embedding: number[], limit: number): Prom
   return result.rows;
 }
 
-export async function countRecentContent(hours: number): Promise<number> {
+export async function countRecentContent(hours: number, referenceTime = new Date()): Promise<number> {
   const result = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count
      FROM content
-     WHERE enrichment_status = 'complete' AND published_at >= now() - ($1 * interval '1 hour')`,
-    [hours]
+     WHERE enrichment_status = 'complete'
+       AND published_at >= $2::timestamptz - ($1 * interval '1 hour')
+       AND published_at < $2::timestamptz`,
+    [hours, referenceTime.toISOString()]
   );
   return Number(result.rows[0]?.count ?? 0);
 }
@@ -245,17 +247,23 @@ export async function recentContent(hours: number, limit: number): Promise<Retri
   return recentDigestCandidates(hours, limit);
 }
 
-export async function recentDigestCandidates(hours: number, limit: number): Promise<DigestCandidate[]> {
+export async function recentDigestCandidates(
+  hours: number,
+  limit: number,
+  referenceTime = new Date()
+): Promise<DigestCandidate[]> {
   const result = await pool.query<DigestCandidate>(
     `SELECT id::text, title, canonical_url AS "canonicalUrl", author,
       published_at::text AS "publishedAt", analyst_summary AS summary, content_text AS "contentText",
       0::float AS score, source_type AS "sourceType", source_key AS "sourceKey",
       topic_tags AS "topicTags", entities, raw_entry AS "rawEntry"
      FROM content
-     WHERE enrichment_status = 'complete' AND published_at >= now() - ($1 * interval '1 hour')
+     WHERE enrichment_status = 'complete'
+       AND published_at >= $3::timestamptz - ($1 * interval '1 hour')
+       AND published_at < $3::timestamptz
      ORDER BY published_at DESC, collected_at DESC
      LIMIT $2`,
-    [hours, limit]
+    [hours, limit, referenceTime.toISOString()]
   );
   return result.rows;
 }
@@ -263,7 +271,8 @@ export async function recentDigestCandidates(hours: number, limit: number): Prom
 export async function recentVectorMatches(
   embedding: number[],
   hours: number,
-  limit: number
+  limit: number,
+  referenceTime = new Date()
 ): Promise<DigestCandidate[]> {
   const result = await pool.query<DigestCandidate>(
     `SELECT id::text, title, canonical_url AS "canonicalUrl", author,
@@ -273,10 +282,11 @@ export async function recentVectorMatches(
      FROM content
      WHERE embedding IS NOT NULL
        AND enrichment_status = 'complete'
-       AND published_at >= now() - ($2 * interval '1 hour')
+       AND published_at >= $4::timestamptz - ($2 * interval '1 hour')
+       AND published_at < $4::timestamptz
      ORDER BY embedding <=> $1::vector
      LIMIT $3`,
-    [vectorLiteral(embedding), hours, limit]
+    [vectorLiteral(embedding), hours, limit, referenceTime.toISOString()]
   );
   return result.rows;
 }
