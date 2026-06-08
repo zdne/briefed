@@ -231,7 +231,7 @@ Rules:
 - Attribute claims to the source, publication, named actor, or author. For social sources, attribute only to Reddit, Twitter, or Hacker News; never to usernames or handles.
 - Use reporting language, not opinion, analyst filler, or judgements.
 - Do not write trend adjectives.
-- Avoid: "rapidly", "emerging", "evolving", "increasingly", "seamless", "transformative", "crucial", "pivotal", "significant", "robust", "scalable", "real-world", "major", "sustainable", "emphasizing", "highlighted", "highlighting", "noted", "indicating", "indicates", "underscores", "could transform", "poised to", "reshape", "enhance accessibility", "improve accessibility", "drive adoption", and "drive forward".
+- Avoid: "rapidly", "emerging", "evolving", "increasingly", "seamless", "transformative", "crucial", "pivotal", "significant", "robust", "scalable", "real-world", "major", "sustainable", "emphasizing", "highlighted", "highlighting", "noted", "indicating", "indicates", "underscores", "underscoring", "could transform", "poised to", "reshape", "enhance accessibility", "improve accessibility", "drive adoption", and "drive forward".
 - Prefer concrete verbs: launched, added, reported, published, proposed, tested, integrated, processed, warned, criticized.
 - Each non-social bullet must start with a named actor or publication and a concrete verb.
 - Social-source bullets are noun phrases only — no verb, no platform as actor. The platform name ("Reddit:", "Twitter:", "Hacker News:") is a prefix, not a subject. Use a short label for the artifact, project, company, product, or topic.
@@ -245,7 +245,7 @@ Rules:
 - Do not repeat the same source and same claim across sections.
 - Do not repeat the same source in multiple required watchlist or focus-area subsections.
 - If one source matches multiple configured topics, place it under the most specific matching topic and leave the other topic empty unless there is a separate source for that other topic.
-- Forbidden phrases: "rapidly mature", "rapidly maturing", "rapidly moved", "foundational technology", "foundational", "broad ecosystem shift", "ecosystem shift", "commercial transformation", "transformative effect", "key operational challenge", "critical enabler", "underscores", "underscoring", "highlights accelerating convergence", "could transform", "drive adoption", "indicating", "indicates", and "notable signal".
+- Forbidden phrases: "rapidly mature", "rapidly maturing", "rapidly moved", "foundational technology", "foundational", "broad ecosystem shift", "ecosystem shift", "commercial transformation", "transformative effect", "key operational challenge", "critical enabler", "highlights accelerating convergence", and "notable signal".
 - If a sentence would use one of the forbidden phrases, rewrite it as a concrete observation from the sources.
 - Every factual claim must be grounded in the supplied sources.
 - Treat supplied summaries as input notes, not wording to copy.
