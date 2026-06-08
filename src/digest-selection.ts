@@ -48,6 +48,7 @@ interface SelectionBucket {
 interface SelectionState {
   selected: SelectedDigestSource[];
   seen: Set<string>;
+  seenContentKeys: Set<string>;
   sourceTypeCounts: Map<DigestCandidate["sourceType"], number>;
   sourceKeyCounts: Map<string, number>;
   authorCounts: Map<string, number>;
@@ -62,6 +63,7 @@ export function selectDigestSources(
   const state: SelectionState = {
     selected: [],
     seen: new Set<string>(),
+    seenContentKeys: new Set<string>(),
     sourceTypeCounts: new Map<DigestCandidate["sourceType"], number>(),
     sourceKeyCounts: new Map<string, number>(),
     authorCounts: new Map<string, number>()
@@ -177,11 +179,14 @@ function addSelected(
   options: DigestSelectionOptions
 ): boolean {
   if (state.seen.has(candidate.id)) return false;
+  const contentKey = candidateContentKey(candidate);
+  if (contentKey && state.seenContentKeys.has(contentKey)) return false;
   if (state.selected.length >= options.maxEntries) return false;
   if (exceedsCaps(state, candidate, options)) return false;
 
   state.selected.push({ source: candidate, ...selection });
   state.seen.add(candidate.id);
+  if (contentKey) state.seenContentKeys.add(contentKey);
   increment(state.sourceTypeCounts, candidate.sourceType);
   increment(state.sourceKeyCounts, candidate.sourceKey);
   const authorKey = normalizedAuthor(candidate.author);
@@ -225,6 +230,15 @@ function increment<T>(counts: Map<T, number>, key: T): void {
 function normalizedAuthor(author: string | null): string | null {
   const value = author?.trim().toLowerCase();
   return value || null;
+}
+
+function candidateContentKey(candidate: DigestCandidate): string | null {
+  const title = normalizeText(stripPublisherSuffix(candidate.title ?? ""));
+  return title || null;
+}
+
+function stripPublisherSuffix(title: string): string {
+  return title.replace(/\s+-\s+[^-]+$/u, "").trim();
 }
 
 function candidateMatchesTopic(candidate: DigestCandidate, topic: string): boolean {

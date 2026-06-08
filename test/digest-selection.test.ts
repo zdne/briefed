@@ -130,6 +130,54 @@ describe("selectDigestSources", () => {
     expect(result.sources.map((source) => source.id)).toEqual(["shared", "focus-1", "general-1"]);
   });
 
+  it("deduplicates different candidates with the same normalized title", () => {
+    const result = selectDigestSources(
+      [
+        candidate("first", {
+          title: "Trends: Agentic commerce next inflection point in digital payments - The Edge Malaysia",
+          canonicalUrl: "https://news.google.com/rss/articles/one"
+        }),
+        candidate("duplicate", {
+          title: "Trends: Agentic commerce next inflection point in digital payments - KLSE Screener",
+          canonicalUrl: "https://news.google.com/rss/articles/two"
+        }),
+        candidate("kept", {
+          title: "Other item"
+        })
+      ],
+      [],
+      [],
+      defaults
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["first", "kept"]);
+  });
+
+  it("does not select duplicate-title topic matches under multiple required topics", () => {
+    const payments = candidate("payments-copy", {
+      title: "Trends: Agentic commerce next inflection point in digital payments - The Edge Malaysia"
+    });
+    const commerce = candidate("commerce-copy", {
+      title: "Trends: Agentic commerce next inflection point in digital payments - KLSE Screener"
+    });
+
+    const result = selectDigestSources(
+      [],
+      [
+        { topic: "agentic payments", matches: [payments] },
+        { topic: "agentic commerce", matches: [commerce] }
+      ],
+      [],
+      {
+        ...defaults,
+        requiredTopicMaxEntries: 2
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["payments-copy"]);
+    expect(result.selectedSources.map((selection) => selection.topic)).toEqual(["agentic payments"]);
+  });
+
   it("respects the digest max entry cap", () => {
     const result = selectDigestSources(
       [candidate("general-1"), candidate("general-2"), candidate("general-3")],

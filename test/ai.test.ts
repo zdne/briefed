@@ -98,21 +98,25 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Allowed bullet forms:");
     expect(prompt).toContain("<Publication> reported <one concrete claim> [n].");
     expect(prompt).toContain("<Named company, project, or person> launched|published|added|tested|integrated|reported|warned|criticized");
-    expect(prompt).toContain("Reddit: <one concrete claim> [n].");
-    expect(prompt).toContain("Twitter: <one concrete claim> [n].");
-    expect(prompt).toContain("Hacker News: <one concrete claim> [n].");
+    expect(prompt).toContain("Reddit: <artifact, project, company, product, or topic> <one concrete claim> [n].");
+    expect(prompt).toContain("Twitter: <artifact, project, company, product, or topic> <one concrete claim> [n].");
+    expect(prompt).toContain("Hacker News: <artifact, project, company, product, or topic> <one concrete claim> [n].");
     expect(prompt).toContain("A source titled \"<title>\" reported|published|claimed <one concrete claim> [n].");
     expect(prompt).toContain("For Reddit sources, start the bullet exactly with \"Reddit:\"");
     expect(prompt).toContain("For Twitter sources, start the bullet exactly with \"Twitter:\"");
     expect(prompt).toContain("For Hacker News sources, start the bullet exactly with \"Hacker News:\"");
+    expect(prompt).toContain("attribute only to Reddit, Twitter, or Hacker News; never to usernames or handles");
+    expect(prompt).toContain("Never place a username, handle, or \"user\" after \"Reddit:\"");
+    expect(prompt).toContain("Do not write \"Reddit reported\", \"Reddit published\"");
     expect(prompt).toContain("Do not write \"A Reddit post\", \"Reddit queried\", \"Reddit users\"");
     expect(prompt).toContain("Do not include usernames or handles in the digest body.");
     expect(prompt).toContain("Do not combine multiple Reddit posts into a plural claim");
     expect(prompt).toContain("Do not write that a Reddit post shows adoption, deployment, market preference, or user preference");
-    expect(prompt).toContain("Only include items connected to these configured interests");
+    expect(prompt).toContain("Include selected important-general items when they report named AI companies");
+    expect(prompt).toContain("Also prefer items connected to these configured interests");
+    expect(prompt).toContain("Do not require an important-general item to match a required watchlist or focus area.");
     expect(prompt).toContain("Required watchlist: agentic payments");
     expect(prompt).toContain("Focus areas: MCP");
-    expect(prompt).toContain("strong recurring theme across multiple supplied sources");
     expect(prompt).toContain("Do not include unrelated general news");
     expect(prompt).toContain("0-3 bullets for source-backed items");
     expect(prompt).toContain("selected important-general candidates that can be described in one factual sentence");
@@ -124,6 +128,10 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Better: Reddit: LuMay and Voxentis.ai are being tested");
     expect(prompt).toContain("Bad: Reddit contributors compared AI voice agents based on pricing");
     expect(prompt).toContain("Better: Reddit: A comparison of LuMay, Voxentis.ai, Vapi, and Retell AI");
+    expect(prompt).toContain("Bad: Reddit reported a calculator MCP server providing arithmetic operations.");
+    expect(prompt).toContain("Better: Reddit: Calculator MCP server provided arithmetic operations.");
+    expect(prompt).toContain("Bad: Reddit published a WAHA MCP Server enabling AI assistants to interact with WhatsApp.");
+    expect(prompt).toContain("Better: Reddit: WAHA MCP Server enabled AI assistants to interact with WhatsApp.");
     expect(prompt).toContain("Bad: AI voice agents LuMay and Voxentis.ai are being deployed and assessed");
     expect(prompt).toContain("Bad: Browser-agent reliability remains a key operational challenge.");
     expect(prompt).toContain("Better: Reddit: Browser-agent tasks involving tabs");
@@ -156,5 +164,56 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Selection: important general");
     expect(prompt).toContain("Treat social, discussion, and link-wrapper sources as signals");
     expect(prompt).toContain("Do not include URL reference sections");
+  });
+
+  it("omits social authors from digest source metadata", () => {
+    const sources = [
+      {
+        id: "1",
+        title: "I built a directory-mcp",
+        canonicalUrl: "https://reddit.com/r/mcp/comments/example",
+        author: "/u/ePaint",
+        publishedAt: "2026-06-05T10:00:00Z",
+        summary: "Directory-MCP linked to Claude instances.",
+        contentText: "",
+        score: 0,
+        sourceType: "reddit",
+        sourceKey: "reddit:r/mcp",
+        topicTags: [],
+        entities: [],
+        rawEntry: {}
+      },
+      {
+        id: "2",
+        title: "Article",
+        canonicalUrl: "https://example.com/article",
+        author: "Reporter",
+        publishedAt: "2026-06-05T11:00:00Z",
+        summary: "Article summary.",
+        contentText: "",
+        score: 0,
+        sourceType: "article",
+        sourceKey: "feedbin:feed:1",
+        topicTags: [],
+        entities: [],
+        rawEntry: {}
+      }
+    ] as unknown as Parameters<typeof buildDigestPrompt>[0];
+    const prompt = buildDigestPrompt(sources, 24);
+
+    expect(prompt).toContain("Source type: reddit");
+    expect(prompt).not.toContain("Author: /u/ePaint");
+    expect(prompt).not.toContain("/u/ePaint");
+    expect(prompt).toContain("Source type: article");
+    expect(prompt).toContain("Author: Reporter");
+  });
+
+  it("allows important-general AI company items outside configured topics", () => {
+    const prompt = buildDigestPrompt([], 24);
+
+    expect(prompt).toContain(
+      "Include selected important-general items when they report named AI companies, AI governance, financing, security, major releases, or widely used technical infrastructure."
+    );
+    expect(prompt).not.toContain("Only include items connected to these configured interests");
   });
 });
