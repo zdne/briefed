@@ -36,8 +36,8 @@
 
       - These write to Neon when DATABASE_URL points there.
       - Continue local Obsidian export:
-          - npm run cli -- digest render
-          - npm run cli -- digest render --id <id>
+          - npm run cli -- digest canonical
+          - npm run cli -- digest canonical --id <id>
 
   - MCP server:
       - Add npm run mcp entrypoint (tsx src/mcp.ts) using @modelcontextprotocol/sdk.
@@ -67,7 +67,7 @@
       - migrations
       - migrated data count sanity check
       - CLI query against Neon
-      - CLI digest render against Neon
+      - CLI digest canonical against Neon
 
   - Verify MCP against Neon DATABASE_URL using mcp-inspector or Claude Desktop config:
       - health

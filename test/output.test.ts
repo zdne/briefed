@@ -21,7 +21,7 @@ describe("digestOutputPath", () => {
       .toMatch(/output\/digests\/2026-06-04T10-30-12Z-canonical-digest\.md$/);
   });
 
-  it("creates a filesystem-safe canonical digest render filename with id", () => {
+  it("creates a filesystem-safe canonical digest filename with id", () => {
     expect(digestOutputPathForId("output/digests", "42", new Date("2026-06-04T10:30:12.123Z")))
       .toMatch(/output\/digests\/2026-06-04T10-30-12Z-canonical-digest-42\.md$/);
   });

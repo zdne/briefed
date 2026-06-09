@@ -192,10 +192,11 @@ Run:
 ```bash
 npm run digest
 npm run digest -- --style warm
+npm run digest -- --emit-canonical
 npm run digest -- --hours 48
 npm run digest -- --hours 24 --days-ago 3
 npm run digest -- --canonical-only
-npm run cli -- digest render
+npm run cli -- digest canonical
 ```
 
 The digest command:
@@ -208,7 +209,7 @@ The digest command:
 6. Asks the LLM to create a canonical source-grounded digest.
 7. Stores the canonical digest in the local `digests` table.
 8. Unless `--canonical-only` is set, asks the LLM for a friendly Markdown rewrite.
-9. Writes the digest Markdown file.
+9. Writes the digest Markdown file. With `--emit-canonical`, it also writes the canonical Markdown; when `--output` is supplied, the canonical file is written beside that output path.
 
 Embedding-only lightweight entries remain eligible for the digest. The digest sees their source-provided summaries rather than individually generated LLM summaries. Their embeddings are still used for required-topic and focus-area source selection.
 
@@ -223,11 +224,11 @@ DIGEST_FOCUS_AREAS=MCP, AI observability, agent frameworks
 
 Required topics always appear under a required watchlist section. If the selected sources have no meaningful update for one of those topics, the digest explicitly says there was no signal in the window. Focus areas are softer interests; the digest highlights them only when there is meaningful source-backed signal.
 
-Each digest is stored in Postgres in canonical form and written as a timestamped Markdown file under `DIGEST_OUTPUT_DIR`. The default CLI output is a friendly digest; `--canonical-only` and `digest render` write the canonical Markdown with Obsidian-compatible frontmatter, digest body, and clickable sources. Inline canonical citations use Obsidian heading links such as `[[#Source 32|32]]`, and source titles link to original URLs. Point `DIGEST_OUTPUT_DIR` at an Obsidian vault folder to make generated digests appear there without an additional integration.
+Each digest is stored in Postgres in canonical form and written as a timestamped Markdown file under `DIGEST_OUTPUT_DIR`. The default CLI output is a friendly digest; `--emit-canonical` writes the canonical Markdown alongside the friendly output, while `--canonical-only` and `digest canonical` write only the canonical Markdown with Obsidian-compatible frontmatter, digest body, and clickable sources. Inline canonical citations use Obsidian heading links such as `[[#Source 32|32]]`, and source titles link to original URLs. Point `DIGEST_OUTPUT_DIR` at an Obsidian vault folder to make generated digests appear there without an additional integration.
 
 CLI Markdown is the default and is written to a file without echoing the document to stdout. `--format json` prints machine-readable output. Progress logs are written to stderr so JSON stdout remains parseable.
 
-`npm run cli -- digest render` re-renders the latest stored canonical digest from Postgres without calling the LLM. Use `--id <digest_id>` to render a specific stored digest. MCP digest tools continue to create and return canonical digest Markdown, not the CLI-only friendly rewrite.
+`npm run cli -- digest canonical` re-renders the latest stored canonical digest from Postgres without calling the LLM. Use `--id <digest_id>` to render a specific stored digest. MCP digest tools continue to create and return canonical digest Markdown, not the CLI-only friendly rewrite.
 
 ## Local And External Data
 

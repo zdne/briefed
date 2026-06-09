@@ -87,9 +87,10 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- query-followup "<question>"` | Ask a follow-up using the latest saved query context |
 | `npm run digest` | Generate, store, and write a friendly digest for the last 24 hours |
 | `npm run digest -- --style warm` | Generate a warmer friendly digest |
+| `npm run digest -- --emit-canonical` | Generate a friendly digest and also write the canonical digest |
 | `npm run digest -- --canonical-only` | Generate and write only the canonical digest |
-| `npm run cli -- digest render` | Re-render the latest stored canonical digest as Markdown without calling the LLM |
-| `npm run cli -- digest render --id 4` | Re-render a specific stored canonical digest |
+| `npm run cli -- digest canonical` | Re-render the latest stored canonical digest as Markdown without calling the LLM |
+| `npm run cli -- digest canonical --id 4` | Re-render a specific stored canonical digest |
 | `npm run cli -- digest friendly` | Re-render the latest stored digest as friendly Markdown |
 | `npm run cli -- digest friendly --id 4 --style warm` | Re-render a specific stored digest as warm friendly Markdown |
 | `npm run digest -- --hours 48` | Generate a digest with a custom lookback |
@@ -206,7 +207,7 @@ Required topics always get a watchlist subsection. If there is no source-backed 
 
 Queries and digests save readable Markdown by default. When Markdown is saved to a file, it is not echoed to stdout. Use `--format json` for automation.
 
-Digests are always stored in Postgres in canonical form. By default, the CLI writes a friendly Markdown digest under `DIGEST_OUTPUT_DIR`; use `--canonical-only` or `digest render` to write the canonical Markdown with Obsidian-compatible frontmatter and source citations.
+Digests are always stored in Postgres in canonical form. By default, the CLI writes a friendly Markdown digest under `DIGEST_OUTPUT_DIR`; use `--canonical-only` or `digest canonical` to write the canonical Markdown with Obsidian-compatible frontmatter and source citations.
 
 To write digests directly into an Obsidian vault, set an absolute folder path:
 
@@ -220,13 +221,21 @@ Override the configured directory for one digest:
 npm run digest -- --output /path/to/digest.md
 ```
 
+Write the friendly digest and canonical digest together:
+
+```bash
+npm run digest -- --emit-canonical
+```
+
+If `--output` is supplied, the friendly digest is written to that exact path and the canonical digest is written beside it with the standard canonical filename.
+
 Write only the canonical digest, or re-render an existing stored canonical digest without running the LLM again:
 
 ```bash
 npm run digest -- --canonical-only
-npm run cli -- digest render
-npm run cli -- digest render --id 4
-npm run cli -- digest render --output /path/to/digest.md
+npm run cli -- digest canonical
+npm run cli -- digest canonical --id 4
+npm run cli -- digest canonical --output /path/to/digest.md
 ```
 
 Re-render an existing stored digest as friendly Markdown:
