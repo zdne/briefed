@@ -144,14 +144,15 @@ function simplifySocialDigestBullets(text: string, sources: MarkdownSource[]): s
 }
 
 function simplifySocialDigestBullet(line: string, sourcesByCitation: Map<number, MarkdownSource>): string {
-  const match = line.match(/^(\s*-\s+)(Reddit|Twitter|Hacker News):\s+.+?\s+(\[\[#Source (\d+)\|\d+\]\])\.?\s*$/u);
+  const match = line.match(/^(\s*-\s+)(?:(Reddit|Twitter|Hacker News):\s+)?.+?\s+(\[\[#Source (\d+)\|\d+\]\])\.?\s*$/u);
   if (!match) return line;
 
   const citation = Number(match[4]);
   const source = sourcesByCitation.get(citation);
-  if (!source || socialPlatform(source) !== match[2]) return line;
+  const platform = source ? socialPlatform(source) : null;
+  if (!platform || (match[2] && platform !== match[2])) return line;
 
-  return `${match[1]}${match[2]}: ${socialDigestLabel(source)} ${match[3]}.`;
+  return `${match[1]}${platform}: ${socialDigestLabel(source)} ${match[3]}.`;
 }
 
 function socialPlatform(source: MarkdownSource): "Reddit" | "Twitter" | "Hacker News" | null {
@@ -301,7 +302,7 @@ function limitExecutiveSummaryCitations(section: string): string {
 function limitBulletCitations(section: string): string {
   return section
     .split("\n")
-    .map((line) => line.trimStart().startsWith("- ") ? keepFirstCitationLinks(line, 2) : line)
+    .map((line) => line.trimStart().startsWith("- ") ? keepFirstCitationLinks(line, 1) : line)
     .join("\n");
 }
 

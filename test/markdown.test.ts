@@ -139,7 +139,8 @@ describe("renderDigestMarkdown", () => {
         "### MCP",
         "- Reddit: An MCP was created to manage and read skills efficiently [1].",
         "- Reddit: A tool named mcp-inator was published to simplify managing MCP servers [2].",
-        "- Reddit: An OSS MCP for the OpenAI ChatGPT Ads API was released [3]."
+        "- Reddit: An OSS MCP for the OpenAI ChatGPT Ads API was released [3].",
+        "- Reddit contributors shared multiple MCP server implementations [4]."
       ].join("\n"),
       sources: [
         {
@@ -156,6 +157,11 @@ describe("renderDigestMarkdown", () => {
           citation: 3,
           title: "OSS MCP for the OpenAI (ChatGPT) Ads API",
           url: "https://www.reddit.com/r/mcp/comments/3"
+        },
+        {
+          citation: 4,
+          title: "How I made a Hetzner MCP that is cost-safe, SSRF-safe, and token-efficient",
+          url: "https://www.reddit.com/r/mcp/comments/4"
         }
       ]
     });
@@ -163,9 +169,11 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).toContain("- Reddit: small MCP to manage and read skills efficiently [[#Source 1|1]].");
     expect(markdown).toContain("- Reddit: Tool to manage mcp servers across AI tools [[#Source 2|2]].");
     expect(markdown).toContain("- Reddit: OSS MCP for the OpenAI (ChatGPT) Ads API [[#Source 3|3]].");
+    expect(markdown).toContain("- Reddit: How I made a Hetzner MCP that is cost-safe, SSRF-safe, and token-efficient [[#Source 4|4]].");
     expect(markdown).not.toContain("An MCP was created");
     expect(markdown).not.toContain("was published");
     expect(markdown).not.toContain("was released");
+    expect(markdown).not.toContain("Reddit contributors shared");
   });
 
   it("renames required watchlist and capitalizes watchlist subheadings", () => {
@@ -268,7 +276,7 @@ describe("appendSectionSourceLinks", () => {
 });
 
 describe("limitDigestCitations", () => {
-  it("caps executive summary paragraphs at 3 citations and bullets at 2 citations", () => {
+  it("caps executive summary paragraphs at 3 citations and bullets at 1 citation", () => {
     expect(limitDigestCitations(
       "## Executive Summary\n\n" +
       "Paragraph [[#Source 1|1]] [[#Source 2|2]] [[#Source 3|3]] [[#Source 4|4]].\n\n" +
@@ -281,9 +289,9 @@ describe("limitDigestCitations", () => {
       "## Executive Summary\n\n" +
       "Paragraph [[#Source 1|1]] [[#Source 2|2]] [[#Source 3|3]].\n\n" +
       "## Top Items\n\n" +
-      "- Item [[#Source 1|1]] [[#Source 2|2]].\n\n" +
+      "- Item [[#Source 1|1]].\n\n" +
       "## Required Watchlist\n\n" +
-      "- Bullet [[#Source 1|1]] [[#Source 2|2]].\n" +
+      "- Bullet [[#Source 1|1]].\n" +
       "Plain paragraph [[#Source 1|1]] [[#Source 2|2]] [[#Source 3|3]]."
     );
   });
