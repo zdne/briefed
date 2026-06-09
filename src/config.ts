@@ -11,6 +11,7 @@ export function parseCommaSeparatedList(value: string): string[] {
 
 const schema = z.object({
   DATABASE_URL: z.string().min(1).default("postgres://pnd:pnd@localhost:5432/pnd"),
+  PG_POOL_MAX: z.coerce.number().int().min(1).default(3),
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.string().default("info"),
   FEEDBIN_EMAIL: z.string().optional(),

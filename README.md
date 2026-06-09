@@ -92,6 +92,7 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- digest --hours 24 --days-ago 3` | Generate a 24-hour digest window ending three days ago |
 | `npm run cli -- digest --format json` | Print machine-readable digest JSON while still writing Markdown |
 | `npm run dev` | Start the API with reload |
+| `npm run mcp` | Start the local stdio MCP server for agents |
 | `npm test` | Run unit tests |
 
 Run sync and digest from cron, a systemd timer, or a scheduler:
@@ -106,6 +107,8 @@ Run sync and digest from cron, a systemd timer, or a scheduler:
 See [`.env.example`](.env.example). Important values:
 
 - `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: Feedbin HTTP Basic Auth credentials.
+- `DATABASE_URL`: Postgres connection string. For shared prototype storage, use a Neon Postgres pooled connection string; local Docker Postgres remains the dev/offline default.
+- `PG_POOL_MAX`: maximum Postgres pool connections per process; defaults to `3` for long-running MCP sessions.
 - `TWITTERAPI_IO_API_KEY`: TwitterAPI.io key for `sync-twitter`.
 - `TWITTERAPI_LIST_IDS`: comma-separated Twitter/X list IDs to sync.
 - `TWITTERAPI_LIST_MAX_PAGES`, `TWITTERAPI_LIST_MAX_TWEETS`: bounded sync limits; defaults to `3` and `200`.
@@ -133,6 +136,23 @@ See [`.env.example`](.env.example). Important values:
 
 - `GET /health`: checks database connectivity.
 - `POST /query`: accepts `{"question":"...","limit":8}`.
+
+## Local MCP
+
+Run the local stdio MCP server:
+
+```bash
+npm run mcp
+```
+
+The MCP server is local-only and unauthenticated. Do not expose it over the public internet.
+
+Available tools:
+
+- `health`: checks database connectivity.
+- `query_archive`: asks a question over the archive with citations.
+- `create_digest`: creates and stores a digest with optional `hours` and `daysAgo`; this calls the LLM and may take 30-60 seconds.
+- `latest_digest`: renders the latest stored digest, or a specific digest by `id`.
 
 ## Data Model
 

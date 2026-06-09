@@ -13,7 +13,10 @@ import type {
 import type { EnrichmentMode, SourceType } from "./enrichment-policy.js";
 
 const { Pool } = pg;
-export const pool = new Pool({ connectionString: config.DATABASE_URL });
+export const pool = new Pool({
+  connectionString: config.DATABASE_URL,
+  max: config.PG_POOL_MAX
+});
 
 function vectorLiteral(vector: number[]): string {
   return `[${vector.join(",")}]`;

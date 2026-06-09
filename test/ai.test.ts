@@ -79,10 +79,9 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Do not write trend adjectives");
     expect(prompt).toContain("Prefer concrete verbs: launched, added, reported");
     expect(prompt).toContain("Each non-social bullet must start with a named actor or publication");
-    expect(prompt).toContain("Social-source bullets must start with \"Reddit:\", \"Twitter:\", or \"Hacker News:\"");
-    expect(prompt).toContain("followed by a short noun-phrase label");
-    expect(prompt).toContain("the platform must not be the grammatical actor");
-    expect(prompt).toContain("Social-source bullets do not need to be full sentences.");
+    expect(prompt).toContain("Social-source bullets are noun phrases only");
+    expect(prompt).toContain("The platform name (\"Reddit:\", \"Twitter:\", \"Hacker News:\") is a prefix");
+    expect(prompt).toContain("not a subject");
     expect(prompt).toContain("For social-source bullets, prefer labels over verbs");
     expect(prompt).toContain("Do not start bullets with abstract topics");
     expect(prompt).toContain("Do not infer adoption, trust, market maturity, or ecosystem momentum");
@@ -123,9 +122,8 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Do not require an important-general item to match a required watchlist or focus area.");
     expect(prompt).toContain("Required watchlist: agentic payments");
     expect(prompt).toContain("Focus areas: MCP");
-    expect(prompt).toContain("Do not include unrelated general news");
-    expect(prompt).toContain("0-3 bullets for source-backed items");
-    expect(prompt).toContain("selected important-general candidates that can be described in one factual sentence");
+    expect(prompt).toContain("0-3 bullets drawn only from important-general candidates");
+    expect(prompt).toContain("AI governance, financing, security, major releases, or widely used technical infrastructure");
     expect(prompt).toContain("Bad: Agentic commerce is identified as a key trend in Southeast Asia.");
     expect(prompt).toContain("Better: The Edge Malaysia reported agentic commerce as a payments trend in Southeast Asia.");
     expect(prompt).toContain("Bad: The report highlights the importance of agentic commerce for financial inclusion.");
