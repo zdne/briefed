@@ -10,14 +10,14 @@ Tracker of potential features to add to pnd:
 - [x] Prioritize sources
 - [x] Basic digest diversity caps
 - [x] Basic digest relevance thresholds
-- [ ] Further improvement to digest pre-qualification (see below)
+- [x] Local MCP
 
 ## Later / TBD
 
-- [ ] Turn this into a service
+- [ ] Twitter engagement scoring: Further improvement to digest pre-qualification (see below) 
 - [ ] Run sync / digest periodically
-- [ ] Web UI
-- [ ] MCP
+- [ ] TBD: Remote MCP
+- [ ] TBD: Turn this into a service
 
 ---
 
