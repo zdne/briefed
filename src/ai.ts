@@ -227,7 +227,8 @@ Include at most 5 focus areas and 1-2 bullets per focus area.
 If no focus area has meaningful signal, omit this section.
 
 ## Other Items
-0-3 bullets drawn only from important-general candidates, for items not already covered in the Watchlist or Focus Areas above.
+3-5 bullets drawn from important-general, strategic-analysis, and high-signal general candidates, for items not already covered in the Watchlist or Focus Areas above.
+When at least one selected source is labeled strategic analysis and reports a high-signal analysis, newsletter, or market-structure article, include at least one such item.
 ${formatOtherNotableRelevance(options.requiredTopics ?? [], options.focusAreas ?? [])}
 Omit this section if there are no qualifying items.
 Do not write "No meaningful new signal found in this window" in this section.
@@ -435,7 +436,8 @@ function shouldIncludeDigestAuthor(sourceType: DigestCandidate["sourceType"] | u
 function selectionLabel(context: DigestSourceContext): string {
   if (context.bucket === "required") return `required watchlist${context.topic ? ` / ${context.topic}` : ""}`;
   if (context.bucket === "focus") return `focus area${context.topic ? ` / ${context.topic}` : ""}`;
-  if (context.bucket === "important_general") return "important general";
+  if (context.signalLabel === "strategic_analysis") return "strategic analysis";
+  if (context.bucket === "important_general" || context.signalLabel === "important_general") return "important general";
   return "general";
 }
 

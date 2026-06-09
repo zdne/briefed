@@ -67,6 +67,7 @@ export interface DigestCandidate extends RetrievedContent {
 export interface DigestSourceContext {
   bucket: "required" | "focus" | "important_general" | "general";
   topic?: string;
+  signalLabel?: "important_general" | "strategic_analysis" | "general";
 }
 
 export interface DigestForRendering {

@@ -34,6 +34,7 @@ export interface SelectedDigestSource {
   source: DigestCandidate;
   bucket: "required" | "focus" | "important_general" | "general";
   topic?: string;
+  signalLabel?: "important_general" | "strategic_analysis" | "general";
 }
 
 interface SelectionBucket {
@@ -91,15 +92,22 @@ export function selectDigestSources(
   let importantGeneralCount = 0;
   for (const candidate of rankedImportantGeneralCandidates(recentCandidates, options.importantGeneralMinScore ?? 1)) {
     if (importantGeneralCount >= importantGeneralLimit || state.selected.length >= options.maxEntries) break;
-    if (!addSelected(state, candidate, { bucket: "important_general" }, options)) continue;
+    if (!addSelected(state, candidate, {
+      bucket: "important_general",
+      signalLabel: importantGeneralLabel(candidate)
+    }, options)) continue;
     importantGeneralCount += 1;
   }
 
   const generalLimit = Math.min(options.generalMaxEntries, options.maxEntries - state.selected.length);
   let generalCount = 0;
-  for (const candidate of recentCandidates) {
+  for (const candidate of rankedGeneralCandidates(recentCandidates)) {
     if (generalCount >= generalLimit || state.selected.length >= options.maxEntries) break;
-    if (!addSelected(state, candidate, { bucket: "general" }, options)) continue;
+    if (generalQualityScore(candidate) <= -4) continue;
+    if (!addSelected(state, candidate, {
+      bucket: "general",
+      signalLabel: generalSelectionLabel(candidate)
+    }, options)) continue;
     generalCount += 1;
   }
 
@@ -296,6 +304,8 @@ function importantGeneralScore(candidate: DigestCandidate): number {
     /\b(integration|integrated|partnered|partnership|collaboration|collaborates)\b/g
   ]);
 
+  score += scoreMatches(text, strategicAnalysisPatterns());
+
   score += scoreMatches(text, [
     /\b(google|apple|amazon|aws|microsoft|openai|anthropic|meta|visa|mastercard|paypal|stripe|american express|amex|alipay|worldpay)\b/g
   ]) * 2;
@@ -307,6 +317,75 @@ function importantGeneralScore(candidate: DigestCandidate): number {
   if (candidate.sourceType === "twitter" && twitterEngagement(candidate.rawEntry) >= 100) score += 2;
 
   return score;
+}
+
+function rankedGeneralCandidates(candidates: DigestCandidate[]): DigestCandidate[] {
+  return candidates
+    .map((candidate, index) => ({ candidate, score: generalQualityScore(candidate), index }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((item) => item.candidate);
+}
+
+function generalQualityScore(candidate: DigestCandidate): number {
+  const text = searchableText(candidate);
+  const summaryLength = normalizeText(candidate.summary ?? "").length;
+  let score = 0;
+
+  if (candidate.sourceType === "article" && summaryLength >= 80) score += 1;
+  if (normalizedAuthor(candidate.author)) score += 2;
+  if (summaryLength >= 80) score += 1;
+  if (summaryLength >= 160) score += 1;
+  if (candidate.topicTags.length > 0) score += 1;
+  if (entitySearchParts(candidate.entities).length > 0) score += 1;
+
+  score += scoreMatches(text, strategicAnalysisPatterns()) * 2;
+  score += scoreMatches(text, [
+    /\b(strategy|strategic|market structure|newsletter|analysis|economics|business model|buyer|buyers)\b/g
+  ]);
+
+  score -= scoreMatches(text, [
+    /\b(is hiring|hiring|job|jobs)\b/g
+  ]) * 4;
+  score -= scoreMatches(text, [
+    /\bcomments?\b/g,
+    /\blacks detailed content\b/g,
+    /\bno further analysis\b/g,
+    /\blikely discusses\b/g
+  ]) * 3;
+
+  return score;
+}
+
+function importantGeneralLabel(candidate: DigestCandidate): SelectedDigestSource["signalLabel"] {
+  return isStrategicAnalysis(candidate) ? "strategic_analysis" : "important_general";
+}
+
+function generalSelectionLabel(candidate: DigestCandidate): SelectedDigestSource["signalLabel"] {
+  return isStrategicAnalysis(candidate) ? "strategic_analysis" : "general";
+}
+
+function isStrategicAnalysis(candidate: DigestCandidate): boolean {
+  const text = searchableText(candidate);
+  return scoreMatches(text, strategicAnalysisPatterns()) >= 2 || (
+    normalizedAuthor(candidate.author) !== null &&
+    normalizeText(candidate.summary ?? "").length >= 120 &&
+    scoreMatches(text, strategicAnalysisPatterns()) >= 1
+  );
+}
+
+function strategicAnalysisPatterns(): RegExp[] {
+  return [
+    /\bpricing\b/g,
+    /\bcosts?\b/g,
+    /\bunit economics\b/g,
+    /\bsubstitution\b/g,
+    /\bfrontier models?\b/g,
+    /\bopen-source models?\b/g,
+    /\bmodel routing\b/g,
+    /\btoken usage\b/g,
+    /\befficiency\b/g,
+    /\bai buyers\b/g
+  ];
 }
 
 function scoreMatches(text: string, patterns: RegExp[]): number {

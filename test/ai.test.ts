@@ -122,7 +122,8 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Do not require an important-general item to match a required watchlist or focus area.");
     expect(prompt).toContain("Required watchlist: agentic payments");
     expect(prompt).toContain("Focus areas: MCP");
-    expect(prompt).toContain("0-3 bullets drawn only from important-general candidates");
+    expect(prompt).toContain("3-5 bullets drawn from important-general, strategic-analysis, and high-signal general candidates");
+    expect(prompt).toContain("include at least one such item");
     expect(prompt).toContain("AI governance, financing, security, major releases, or widely used technical infrastructure");
     expect(prompt).toContain("Bad: Agentic commerce is identified as a key trend in Southeast Asia.");
     expect(prompt).toContain("Better: The Edge Malaysia reported agentic commerce as a payments trend in Southeast Asia.");
@@ -228,6 +229,28 @@ describe("buildDigestPrompt", () => {
       "Include selected important-general items when they report named AI companies, AI governance, financing, security, major releases, or widely used technical infrastructure."
     );
     expect(prompt).not.toContain("Only include items connected to these configured interests");
+  });
+
+  it("labels selected strategic-analysis general sources in the canonical prompt", () => {
+    const prompt = buildDigestPrompt([
+      {
+        id: "1",
+        title: "The Substitution Wave in AI",
+        canonicalUrl: "https://tomtunguz.com/substitution-wave-ai/",
+        author: "Tomasz Tunguz",
+        publishedAt: "2026-06-08T10:00:00Z",
+        summary: "Analysis of AI pricing, cost, frontier model substitution, and model routing.",
+        contentText: "",
+        score: 0
+      }
+    ], 24, {
+      sourceContexts: [{ bucket: "important_general", signalLabel: "strategic_analysis" }]
+    });
+
+    expect(prompt).toContain("Selection: strategic analysis");
+    expect(prompt).toContain("The Substitution Wave in AI");
+    expect(prompt).toContain("3-5 bullets drawn from important-general, strategic-analysis, and high-signal general candidates");
+    expect(prompt).toContain("high-signal analysis, newsletter, or market-structure article");
   });
 });
 

@@ -286,6 +286,41 @@ describe("selectDigestSources", () => {
     ]);
   });
 
+  it("promotes high-signal strategic general analysis over low-value recent entries", () => {
+    const result = selectDigestSources(
+      [
+        candidate("recent-hiring", {
+          title: "AI startup is hiring",
+          summary: "The post is hiring for several jobs and includes no further analysis."
+        }),
+        candidate("recent-comments", {
+          title: "Comments on model providers",
+          summary: "This comments-only item likely discusses model providers but lacks detailed content."
+        }),
+        candidate("substitution-wave", {
+          title: "The Substitution Wave in AI",
+          author: "Tomasz Tunguz",
+          summary: "The article analyzes substitution in AI buying, pricing pressure, frontier model costs, token usage, and model routing as buyers shift between providers.",
+          topicTags: ["ai strategy", "unit economics"],
+          entities: [{ name: "Tomasz Tunguz", type: "person" }]
+        })
+      ],
+      [],
+      [],
+      {
+        ...defaults,
+        importantGeneralMaxEntries: 0,
+        generalMaxEntries: 2
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["substitution-wave"]);
+    expect(result.selectedSources[0]).toMatchObject({
+      bucket: "general",
+      signalLabel: "strategic_analysis"
+    });
+  });
+
   it("limits selected entries by source type", () => {
     const result = selectDigestSources(
       [

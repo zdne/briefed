@@ -93,7 +93,8 @@ export async function createDigest(
     focusAreas: config.DIGEST_FOCUS_AREAS,
     sourceContexts: selection.selectedSources.map((selectedSource) => ({
       bucket: selectedSource.bucket,
-      topic: selectedSource.topic
+      topic: selectedSource.topic,
+      signalLabel: selectedSource.signalLabel
     }))
   });
   log("Digest generation complete; storing result");
