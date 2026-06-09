@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDigestPrompt, normalizeEnrichment } from "../src/ai.js";
+import { buildDigestPrompt, buildFriendlyDigestPrompt, normalizeEnrichment } from "../src/ai.js";
 import { parseCommaSeparatedList } from "../src/config.js";
 
 describe("normalizeEnrichment", () => {
@@ -228,5 +228,59 @@ describe("buildDigestPrompt", () => {
       "Include selected important-general items when they report named AI companies, AI governance, financing, security, major releases, or widely used technical infrastructure."
     );
     expect(prompt).not.toContain("Only include items connected to these configured interests");
+  });
+});
+
+describe("buildFriendlyDigestPrompt", () => {
+  const digest = {
+    id: "7",
+    periodStart: "2026-06-04T00:00:00.000Z",
+    periodEnd: "2026-06-05T00:00:00.000Z",
+    createdAt: "2026-06-05T00:10:00.000Z",
+    body: "## Watchlist\n- Example Corp reported a model update [1].",
+    sources: [
+      {
+        citation: 1,
+        id: "101",
+        title: "Example model update",
+        url: "https://example.com/model-update",
+        author: "Reporter",
+        publishedAt: "2026-06-04T10:00:00.000Z",
+        summary: "Example Corp reported a model update."
+      }
+    ]
+  };
+
+  it("includes canonical body, source metadata, and direct-link requirements", () => {
+    const prompt = buildFriendlyDigestPrompt(
+      digest,
+      "# Daily Digest\n\n## Watchlist\n- Example Corp reported a model update [[#Source 1|1]].",
+      "plain"
+    );
+
+    expect(prompt).toContain("Canonical digest Markdown:");
+    expect(prompt).toContain("Example Corp reported a model update");
+    expect(prompt).toContain("Source metadata:");
+    expect(prompt).toContain("Title: Example model update");
+    expect(prompt).toContain("URL: https://example.com/model-update");
+    expect(prompt).toContain("Published: 2026-06-04T10:00:00.000Z");
+    expect(prompt).toContain("Summary: Example Corp reported a model update.");
+    expect(prompt).toContain("exactly one direct Markdown source link");
+    expect(prompt).toContain("[Source title](https://example.com)");
+    expect(prompt).toContain("Do not include a source appendix");
+    expect(prompt).toContain("Preserve this date range exactly: 2026-06-04T00:00:00.000Z to 2026-06-05T00:00:00.000Z");
+    expect(prompt).toContain("Preserve this source count exactly: 1");
+    expect(prompt).toContain("Do not preserve Watchlist / Focus Areas / Other Items exactly");
+    expect(prompt).toContain("Include a short closing theme summary.");
+  });
+
+  it("distinguishes plain and warm style instructions", () => {
+    const plain = buildFriendlyDigestPrompt(digest, "# Daily Digest", "plain");
+    const warm = buildFriendlyDigestPrompt(digest, "# Daily Digest", "warm");
+
+    expect(plain).toContain("Use a concise plain-newsletter tone.");
+    expect(plain).toContain("Do not use emoji headings.");
+    expect(warm).toContain("Use a slightly warmer newsletter tone.");
+    expect(warm).toContain("Emoji headings are allowed");
   });
 });

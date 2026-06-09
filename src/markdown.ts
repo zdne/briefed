@@ -149,7 +149,8 @@ function simplifySocialDigestBullet(line: string, sourcesByCitation: Map<number,
 
   const citation = Number(match[4]);
   const source = sourcesByCitation.get(citation);
-  const platform = source ? socialPlatform(source) : null;
+  if (!source) return line;
+  const platform = socialPlatform(source);
   if (!platform || (match[2] && platform !== match[2])) return line;
 
   return `${match[1]}${platform}: ${socialDigestLabel(source)} ${match[3]}.`;

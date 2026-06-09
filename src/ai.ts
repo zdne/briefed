@@ -2,7 +2,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { z } from "zod";
 import { config, requireConfig } from "./config.js";
-import type { DigestCandidate, DigestSourceContext, Enrichment, RetrievedContent } from "./types.js";
+import type { DigestMarkdownResult } from "./markdown.js";
+import type {
+  DigestCandidate,
+  DigestSourceContext,
+  Enrichment,
+  FriendlyDigestStyle,
+  RetrievedContent
+} from "./types.js";
 
 const enrichmentSchema = z.object({
   summary: z.string().min(1),
@@ -112,6 +119,14 @@ ${formatSources(sources)}`);
     options: { requiredTopics?: string[]; focusAreas?: string[]; sourceContexts?: DigestSourceContext[] } = {}
   ): Promise<string> {
     return this.generateText(buildDigestPrompt(sources, hours, options));
+  }
+
+  async friendlyDigest(
+    digest: DigestMarkdownResult,
+    canonicalMarkdown: string,
+    style: FriendlyDigestStyle = "plain"
+  ): Promise<string> {
+    return this.generateText(buildFriendlyDigestPrompt(digest, canonicalMarkdown, style));
   }
 
   private async generateJson(prompt: string): Promise<unknown> {
@@ -310,6 +325,63 @@ The selection label on each source is a hint, not a binding assignment. If a sou
 ${formatDigestTopicInstructions(options.requiredTopics ?? [], options.focusAreas ?? [])}
 
 ${formatDigestSources(sources, options.sourceContexts ?? [])}`;
+}
+
+export function buildFriendlyDigestPrompt(
+  digest: DigestMarkdownResult,
+  canonicalMarkdown: string,
+  style: FriendlyDigestStyle = "plain"
+): string {
+  return `Rewrite the supplied canonical digest into a reader-friendly daily digest in Markdown.
+
+Use only the supplied canonical digest body and source metadata. Do not use outside knowledge.
+
+Required output:
+- Return only Markdown.
+- Preserve this date range exactly: ${digest.periodStart} to ${digest.periodEnd}.
+- Preserve this source count exactly: ${digest.sources.length}.
+- Produce readable editorial sections based on the content. Do not preserve Watchlist / Focus Areas / Other Items exactly unless those are the best section names.
+- Each bullet must contain exactly one factual item and exactly one direct Markdown source link to the supporting source, such as [Source title](https://example.com).
+- Do not use citation-only links like [1], wiki links, footnotes, reference-style links, or source numbers as the only link text.
+- Do not include a source appendix, source list, bibliography, "Sources" section, "Source Appendix" section, or short URL section.
+- Include the date range and source count near the top.
+- Include a short closing theme summary.
+- Do not add facts, claims, interpretations, or links that are not supported by the supplied canonical digest body and source metadata.
+
+Style:
+${friendlyDigestStyleInstructions(style)}
+
+Canonical digest Markdown:
+${canonicalMarkdown}
+
+Source metadata:
+${formatFriendlyDigestSources(digest)}`;
+}
+
+function friendlyDigestStyleInstructions(style: FriendlyDigestStyle): string {
+  if (style === "warm") {
+    return `- Use a slightly warmer newsletter tone.
+- Emoji headings are allowed when they improve scanning.
+- Keep the phrasing polished but concise.`;
+  }
+
+  return `- Use a concise plain-newsletter tone.
+- Do not use emoji headings.
+- Keep headings direct and unadorned.`;
+}
+
+function formatFriendlyDigestSources(digest: DigestMarkdownResult): string {
+  return digest.sources.map((source) => {
+    const metadata = [
+      `Citation: ${source.citation}`,
+      `Title: ${source.title ?? "Untitled"}`,
+      `URL: ${source.url ?? "unavailable"}`,
+      `Published: ${source.publishedAt ?? "unknown"}`,
+      `Author: ${source.author ?? "unknown"}`,
+      `Summary: ${source.summary ?? "unavailable"}`
+    ];
+    return metadata.join("\n");
+  }).join("\n\n");
 }
 
 function formatDigestSources(sources: RetrievedContent[], contexts: DigestSourceContext[]): string {

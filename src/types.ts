@@ -86,6 +86,8 @@ export interface DigestForRendering {
   }>;
 }
 
+export type FriendlyDigestStyle = "plain" | "warm";
+
 export interface QuerySession {
   createdAt: string;
   question: string;

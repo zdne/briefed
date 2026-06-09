@@ -1,6 +1,8 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
+import type { FriendlyDigestStyle } from "./types.js";
+
 export async function writeMarkdownFile(path: string, markdown: string): Promise<string> {
   return writeTextFile(path, markdown, "Markdown");
 }
@@ -25,12 +27,26 @@ async function writeTextFile(path: string, content: string, label: string): Prom
 
 export function digestOutputPath(directory: string, createdAt = new Date()): string {
   const timestamp = createdAt.toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
-  return resolve(directory, `${timestamp}-daily-digest.md`);
+  return resolve(directory, `${timestamp}-canonical-digest.md`);
 }
 
 export function digestOutputPathForId(directory: string, id: string, createdAt: Date): string {
   const timestamp = createdAt.toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
-  return resolve(directory, `${timestamp}-digest-${id}.md`);
+  return resolve(directory, `${timestamp}-canonical-digest-${id}.md`);
+}
+
+export function friendlyDigestOutputPath(
+  directory: string,
+  createdAt: Date,
+  options: { id?: string; style?: FriendlyDigestStyle } = {}
+): string {
+  const timestamp = createdAt.toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
+  const style = options.style ?? "plain";
+  const idSuffix = options.id ? `-${options.id}` : "";
+  const filename = style === "warm"
+    ? `${timestamp}-daily-digest${idSuffix}.md`
+    : `${timestamp}-digest${idSuffix}.md`;
+  return resolve(directory, filename);
 }
 
 export function queryOutputPath(directory: string, question: string, createdAt = new Date()): string {

@@ -85,12 +85,16 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- query "<question>" --format json` | Print machine-readable query JSON |
 | `npm run cli -- query "<question>" --output output/query.md` | Write a query result to Markdown |
 | `npm run cli -- query-followup "<question>"` | Ask a follow-up using the latest saved query context |
-| `npm run digest` | Generate and store a digest for the last 24 hours |
-| `npm run cli -- digest render` | Re-render the latest stored digest as Markdown without calling the LLM |
-| `npm run cli -- digest render --id 4` | Re-render a specific stored digest |
-| `npm run cli -- digest --hours 48` | Generate a digest with a custom lookback |
-| `npm run cli -- digest --hours 24 --days-ago 3` | Generate a 24-hour digest window ending three days ago |
-| `npm run cli -- digest --format json` | Print machine-readable digest JSON while still writing Markdown |
+| `npm run digest` | Generate, store, and write a friendly digest for the last 24 hours |
+| `npm run digest -- --style warm` | Generate a warmer friendly digest |
+| `npm run digest -- --canonical-only` | Generate and write only the canonical digest |
+| `npm run cli -- digest render` | Re-render the latest stored canonical digest as Markdown without calling the LLM |
+| `npm run cli -- digest render --id 4` | Re-render a specific stored canonical digest |
+| `npm run cli -- digest friendly` | Re-render the latest stored digest as friendly Markdown |
+| `npm run cli -- digest friendly --id 4 --style warm` | Re-render a specific stored digest as warm friendly Markdown |
+| `npm run digest -- --hours 48` | Generate a digest with a custom lookback |
+| `npm run digest -- --hours 24 --days-ago 3` | Generate a 24-hour digest window ending three days ago |
+| `npm run digest -- --format json` | Print machine-readable friendly digest JSON while still writing Markdown |
 | `npm run dev` | Start the API with reload |
 | `npm run mcp` | Start the local stdio MCP server for agents |
 | `npm test` | Run unit tests |
@@ -202,7 +206,7 @@ Required topics always get a watchlist subsection. If there is no source-backed 
 
 Queries and digests save readable Markdown by default. When Markdown is saved to a file, it is not echoed to stdout. Use `--format json` for automation.
 
-Digests are always stored in Postgres and written as timestamped Markdown files under `DIGEST_OUTPUT_DIR`. Files include Obsidian-compatible frontmatter, the generated digest, and clickable source citations. Inline citations emitted as `[32]`, `(32)`, or grouped forms such as `(27, 62)` are normalized into Obsidian heading links such as `[[#Source 32|32]]`; the source title opens the original URL.
+Digests are always stored in Postgres in canonical form. By default, the CLI writes a friendly Markdown digest under `DIGEST_OUTPUT_DIR`; use `--canonical-only` or `digest render` to write the canonical Markdown with Obsidian-compatible frontmatter and source citations.
 
 To write digests directly into an Obsidian vault, set an absolute folder path:
 
@@ -213,15 +217,24 @@ DIGEST_OUTPUT_DIR=/Users/you/Documents/MyVault/PND/Digests
 Override the configured directory for one digest:
 
 ```bash
-npm run cli -- digest --output /path/to/digest.md
+npm run digest -- --output /path/to/digest.md
 ```
 
-Re-render an existing stored digest without running the LLM again:
+Write only the canonical digest, or re-render an existing stored canonical digest without running the LLM again:
 
 ```bash
+npm run digest -- --canonical-only
 npm run cli -- digest render
 npm run cli -- digest render --id 4
 npm run cli -- digest render --output /path/to/digest.md
+```
+
+Re-render an existing stored digest as friendly Markdown:
+
+```bash
+npm run cli -- digest friendly
+npm run cli -- digest friendly --id 4
+npm run cli -- digest friendly --id 4 --style warm
 ```
 
 Queries are saved as Markdown under `QUERY_OUTPUT_DIR` by default:

@@ -4,10 +4,12 @@ import { config, requireConfig } from "./config.js";
 import { getDigestForRendering, migrate, pool, resetSyncCursor } from "./db.js";
 import { createDigest } from "./digest.js";
 import { FeedbinClient } from "./feedbin.js";
-import { renderDigestMarkdown, renderQueryMarkdown } from "./markdown.js";
+import { cleanFriendlyDigestMarkdown, friendlyDigestStyle } from "./friendly-digest.js";
+import { renderDigestMarkdown, renderQueryMarkdown, type DigestMarkdownResult } from "./markdown.js";
 import {
   digestOutputPath,
   digestOutputPathForId,
+  friendlyDigestOutputPath,
   jsonSidecarPath,
   latestQueryStatePath,
   queryOutputPath,
@@ -20,7 +22,7 @@ import { enrichStoredContent, lookbackSince, syncFeedbin, syncTwitterLists } fro
 import { queryArchive, queryFollowUp } from "./query.js";
 import { TwitterApiClient } from "./twitterapi.js";
 import type { SourceType } from "./enrichment-policy.js";
-import type { QuerySession } from "./types.js";
+import type { FriendlyDigestStyle, QuerySession } from "./types.js";
 
 const program = new Command().name("pnd").description("Feedbin-first synthetic analyst");
 
@@ -184,13 +186,12 @@ program
 
 const digestCommand = program
   .command("digest")
-  .description("Create, render, or inspect digests");
-
-digestCommand
-  .command("create", { isDefault: true })
-  .description("Create and store a new digest with the configured LLM")
+  .description("Create, render, or inspect digests")
+  .enablePositionalOptions()
   .option("-H, --hours <number>", "lookback hours", String(config.DIGEST_HOURS))
   .option("--days-ago <number>", "end the digest window N days before now")
+  .option("--style <style>", "friendly style: plain or warm", "plain")
+  .option("--canonical-only", "create only the canonical digest and skip friendly rendering")
   .option("-f, --format <format>", "output format: markdown or json", "markdown")
   .option("-o, --output <path>", "write Markdown to this path instead of DIGEST_OUTPUT_DIR")
   .action(createDigestAction);
@@ -212,8 +213,44 @@ digestCommand
     const markdown = renderDigestMarkdown(result, createdAt);
     const outputPath = options.output ?? digestOutputPathForId(config.DIGEST_OUTPUT_DIR, result.id, createdAt);
     const path = await writeMarkdownFile(outputPath, markdown);
-    timestampLogger(`Wrote digest Markdown to ${path}`);
+    timestampLogger(`Wrote canonical digest Markdown to ${path}`);
     printFormattedOutput(format, result, markdown, true);
+  });
+
+digestCommand
+  .command("friendly")
+  .description("Render a stored digest as reader-friendly Markdown with the configured LLM")
+  .option("--id <number>", "stored digest id; defaults to latest")
+  .option("--style <style>", "friendly style: plain or warm", "plain")
+  .option("-f, --format <format>", "output format: markdown or json", "markdown")
+  .option("-o, --output <path>", "write Markdown to this path instead of DIGEST_OUTPUT_DIR")
+  .action(async (
+    options: { id?: string; style: string; format: string; output?: string },
+    command: Command
+  ) => {
+    const format = outputFormat(options.format);
+    const style = friendlyDigestStyle(effectiveDigestStyle(options.style, command));
+    const requestedId = options.id === undefined ? undefined : positiveInteger(options.id, "--id");
+    const result = await getDigestForRendering(requestedId);
+    if (!result) {
+      throw new Error(requestedId === undefined ? "No stored digests found" : `Digest ${requestedId} not found`);
+    }
+    const createdAt = new Date(result.createdAt);
+    const canonicalMarkdown = renderDigestMarkdown(result, createdAt);
+    const log = timestampLogger;
+    log("Initializing AI client");
+    const ai = new AnalystAI();
+    log("Requesting friendly digest rewrite from LLM");
+    const markdown = cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));
+    log("Received friendly digest rewrite");
+    const outputPath = options.output ?? friendlyDigestOutputPath(
+      config.DIGEST_OUTPUT_DIR,
+      createdAt,
+      { id: requestedId === undefined ? undefined : result.id, style }
+    );
+    const path = await writeMarkdownFile(outputPath, markdown);
+    log(`Wrote friendly digest Markdown to ${path}`);
+    printFormattedOutput(format, friendlyDigestJson(result, createdAt, style, markdown), markdown, true);
   });
 
 program.parseAsync().catch((error) => {
@@ -255,28 +292,70 @@ function printFormattedOutput(
   }
 }
 
+function friendlyDigestJson(
+  result: DigestMarkdownResult,
+  createdAt: Date,
+  style: FriendlyDigestStyle,
+  markdown: string
+) {
+  return {
+    id: result.id,
+    createdAt: "createdAt" in result && typeof result.createdAt === "string"
+      ? result.createdAt
+      : createdAt.toISOString(),
+    periodStart: result.periodStart,
+    periodEnd: result.periodEnd,
+    style,
+    sourceCount: result.sources.length,
+    markdown
+  };
+}
+
+function effectiveDigestStyle(style: string, command: Command): string {
+  if (command.getOptionValueSource("style") !== "default") return style;
+  const parentStyle = command.parent?.opts<{ style?: string }>().style;
+  return parentStyle ?? style;
+}
+
 async function createDigestAction(options: {
   hours: string;
   daysAgo?: string;
+  style: string;
+  canonicalOnly?: boolean;
   format: string;
   output?: string;
 }): Promise<void> {
   const format = outputFormat(options.format);
+  const style = friendlyDigestStyle(options.style);
   const hours = positiveInteger(options.hours, "--hours");
   const daysAgo = options.daysAgo === undefined ? 0 : nonNegativeInteger(options.daysAgo, "--days-ago");
   const referenceTime = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
   const log = timestampLogger;
   log("Initializing AI client");
+  const ai = new AnalystAI();
   if (daysAgo > 0) {
     log(`Creating digest for ${hours} hours ending ${referenceTime.toISOString()} (--days-ago ${daysAgo})`);
   }
-  const result = await createDigest(hours, new AnalystAI(), log, referenceTime);
+  const result = await createDigest(hours, ai, log, referenceTime);
   const createdAt = new Date();
-  const markdown = renderDigestMarkdown(result, createdAt);
-  const outputPath = options.output ?? digestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt);
+
+  if (options.canonicalOnly) {
+    const markdown = renderDigestMarkdown(result, createdAt);
+    const outputPath = options.output ?? digestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt);
+    const path = await writeMarkdownFile(outputPath, markdown);
+    log(`Wrote canonical digest Markdown to ${path}`);
+    printFormattedOutput(format, result, markdown, true);
+    return;
+  }
+
+  const canonicalMarkdown = renderDigestMarkdown(result, createdAt);
+  log("Requesting friendly digest rewrite from LLM");
+  const markdown = cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));
+  log("Received friendly digest rewrite");
+  const outputPath = options.output ?? friendlyDigestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt, { style });
   const path = await writeMarkdownFile(outputPath, markdown);
-  log(`Wrote digest Markdown to ${path}`);
-  printFormattedOutput(format, result, markdown, true);
+  log(`Wrote friendly digest Markdown to ${path}`);
+  printFormattedOutput(format, friendlyDigestJson(result, createdAt, style, markdown), markdown, true);
 }
 
 function nonNegativeInteger(value: string, option: string): number {

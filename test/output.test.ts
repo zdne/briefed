@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   digestOutputPath,
   digestOutputPathForId,
+  friendlyDigestOutputPath,
   jsonSidecarPath,
   latestQueryStatePath,
   queryOutputPath,
@@ -15,14 +16,27 @@ import {
 } from "../src/output.js";
 
 describe("digestOutputPath", () => {
-  it("creates a filesystem-safe timestamped Markdown filename", () => {
+  it("creates a filesystem-safe canonical digest filename", () => {
     expect(digestOutputPath("output/digests", new Date("2026-06-04T10:30:12.123Z")))
-      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-daily-digest\.md$/);
+      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-canonical-digest\.md$/);
   });
 
-  it("creates a filesystem-safe digest render filename with id", () => {
+  it("creates a filesystem-safe canonical digest render filename with id", () => {
     expect(digestOutputPathForId("output/digests", "42", new Date("2026-06-04T10:30:12.123Z")))
+      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-canonical-digest-42\.md$/);
+  });
+
+  it("creates friendly digest filenames by style and id", () => {
+    const createdAt = new Date("2026-06-04T10:30:12.123Z");
+
+    expect(friendlyDigestOutputPath("output/digests", createdAt))
+      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-digest\.md$/);
+    expect(friendlyDigestOutputPath("output/digests", createdAt, { id: "42" }))
       .toMatch(/output\/digests\/2026-06-04T10-30-12Z-digest-42\.md$/);
+    expect(friendlyDigestOutputPath("output/digests", createdAt, { style: "warm" }))
+      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-daily-digest\.md$/);
+    expect(friendlyDigestOutputPath("output/digests", createdAt, { id: "42", style: "warm" }))
+      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-daily-digest-42\.md$/);
   });
 
   it("creates parent directories and writes Markdown", async () => {
