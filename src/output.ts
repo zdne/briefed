@@ -27,12 +27,12 @@ async function writeTextFile(path: string, content: string, label: string): Prom
 
 export function digestOutputPath(directory: string, createdAt = new Date()): string {
   const timestamp = createdAt.toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
-  return resolve(directory, `${timestamp}-canonical-digest.md`);
+  return resolve(directory, `${timestamp}-canonical-briefing.md`);
 }
 
 export function digestOutputPathForId(directory: string, id: string, createdAt: Date): string {
   const timestamp = createdAt.toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
-  return resolve(directory, `${timestamp}-canonical-digest-${id}.md`);
+  return resolve(directory, `${timestamp}-canonical-briefing-${id}.md`);
 }
 
 export function friendlyDigestOutputPath(
@@ -44,8 +44,8 @@ export function friendlyDigestOutputPath(
   const style = options.style ?? "plain";
   const idSuffix = options.id ? `-${options.id}` : "";
   const filename = style === "warm"
-    ? `${timestamp}-daily-digest${idSuffix}.md`
-    : `${timestamp}-digest${idSuffix}.md`;
+    ? `${timestamp}-morning-briefing${idSuffix}.md`
+    : `${timestamp}-briefing${idSuffix}.md`;
   return resolve(directory, filename);
 }
 

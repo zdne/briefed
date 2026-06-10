@@ -281,7 +281,7 @@ Rules:
 - Do not write social-source bullets in passive voice, including "is being developed", "was released", "was created", "was demonstrated", or "was published".
 - Do not write "Reddit questioned", "Reddit reported", "Reddit published", "Reddit launched", "Reddit demonstrated", "Reddit released", "Twitter reported", "Twitter published", "Hacker News reported", or "Hacker News published".
 - Do not write "A Reddit post", "Reddit queried", "Reddit users", "Reddit contributors", "a Twitter post", or "a Hacker News post" as the subject.
-- Do not include usernames or handles in the digest body.
+- Do not include usernames or handles in the briefing body.
 - Do not write "User launched a ...", "User published a ...", " User developed a...", " User built an...", "User released an..."
 - Do not combine multiple Reddit posts into a plural claim such as "Reddit users discussed", "Reddit posts highlighted", or "Reddit contributors compared"; keep separate Reddit posts in separate bullets unless they make the same concrete claim.
 - Do not write that a Reddit post shows adoption, deployment, market preference, or user preference unless the Reddit post gives named deployments, usage data, or quoted customer behavior.
@@ -333,9 +333,9 @@ export function buildFriendlyDigestPrompt(
   canonicalMarkdown: string,
   style: FriendlyDigestStyle = "plain"
 ): string {
-  return `Rewrite the supplied canonical digest into a reader-friendly daily digest in Markdown.
+  return `Rewrite the supplied canonical briefing into a reader-friendly briefing in Markdown.
 
-Use only the supplied canonical digest body and source metadata. Do not use outside knowledge.
+Use only the supplied canonical briefing body and source metadata. Do not use outside knowledge.
 
 Required output:
 - Return only Markdown.
@@ -347,12 +347,12 @@ Required output:
 - Do not include a source appendix, source list, bibliography, "Sources" section, "Source Appendix" section, or short URL section.
 - Include the date range and source count near the top.
 - Include a short closing theme summary.
-- Do not add facts, claims, interpretations, or links that are not supported by the supplied canonical digest body and source metadata.
+- Do not add facts, claims, interpretations, or links that are not supported by the supplied canonical briefing body and source metadata.
 
 Style:
 ${friendlyDigestStyleInstructions(style)}
 
-Canonical digest Markdown:
+Canonical briefing Markdown:
 ${canonicalMarkdown}
 
 Source metadata:

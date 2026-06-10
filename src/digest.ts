@@ -32,7 +32,7 @@ export async function createDigest(
   }
 
   if (candidates.length === 0) {
-    log("No entries available; digest generation skipped");
+    log("No entries available; briefing generation skipped");
     return {
       id: null,
       periodStart: null,
@@ -80,14 +80,14 @@ export async function createDigest(
   });
   const sources = selection.sources;
   log(
-    `Selected ${sources.length} digest sources: ` +
+    `Selected ${sources.length} briefing sources: ` +
     `${selection.requiredCount} required-topic, ${selection.focusCount} focus-area, ` +
     `${selection.importantGeneralCount} important-general, ${selection.generalCount} general`
   );
 
   const end = referenceTime;
   const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
-  log(`Generating digest with ${sources.length} sources using the configured LLM`);
+  log(`Generating briefing with ${sources.length} sources using the configured LLM`);
   const body = await ai.digest(sources, hours, {
     requiredTopics: config.DIGEST_REQUIRED_TOPICS,
     focusAreas: config.DIGEST_FOCUS_AREAS,
@@ -97,10 +97,10 @@ export async function createDigest(
       signalLabel: selectedSource.signalLabel
     }))
   });
-  log("Digest generation complete; storing result");
+  log("Briefing generation complete; storing result");
   const id = await saveDigest(start, end, sources.map((source) => source.id), body);
-  log(`Stored digest ${id}`);
-  log("Digest complete");
+  log(`Stored briefing ${id}`);
+  log("Briefing complete");
 
   return {
     id,
@@ -131,7 +131,7 @@ async function vectorMatchesForTopics(
   const matches: DigestTopicMatches[] = [];
 
   for (const topic of topics) {
-    log(`Finding vector matches for digest topic "${topic}"`);
+    log(`Finding vector matches for briefing topic "${topic}"`);
     const embedding = await ai.embed(topic);
     matches.push({
       topic,

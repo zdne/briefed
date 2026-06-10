@@ -1,6 +1,8 @@
-# PND: Feedbin-First Synthetic Analyst
+# Briefed.sh
 
-PND polls Feedbin, normalizes and enriches new entries, stores them in Postgres with pgvector, and answers questions over the archive with source citations.
+**Your agent's morning read.**
+
+Briefed is a personal news intelligence layer for you and your agents. It syncs your feeds, enriches and embeds every entry, and generates a daily briefing grounded in your interests — ready to serve via MCP. Ask questions over your archive, get cited answers, and let your agents keep you informed without the noise.
 
 ## Architecture
 
@@ -85,26 +87,26 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- query "<question>" --format json` | Print machine-readable query JSON |
 | `npm run cli -- query "<question>" --output output/query.md` | Write a query result to Markdown |
 | `npm run cli -- query-followup "<question>"` | Ask a follow-up using the latest saved query context |
-| `npm run digest` | Generate, store, and write a friendly digest for the last 24 hours |
-| `npm run digest -- --style warm` | Generate a warmer friendly digest |
-| `npm run digest -- --emit-canonical` | Generate a friendly digest and also write the canonical digest |
-| `npm run digest -- --canonical-only` | Generate and write only the canonical digest |
-| `npm run cli -- digest canonical` | Re-render the latest stored canonical digest as Markdown without calling the LLM |
-| `npm run cli -- digest canonical --id 4` | Re-render a specific stored canonical digest |
-| `npm run cli -- digest friendly` | Re-render the latest stored digest as friendly Markdown |
-| `npm run cli -- digest friendly --id 4 --style warm` | Re-render a specific stored digest as warm friendly Markdown |
-| `npm run digest -- --hours 48` | Generate a digest with a custom lookback |
-| `npm run digest -- --hours 24 --days-ago 3` | Generate a 24-hour digest window ending three days ago |
-| `npm run digest -- --format json` | Print machine-readable friendly digest JSON while still writing Markdown |
+| `npm run digest` | Generate, store, and write a friendly briefing for the last 24 hours |
+| `npm run digest -- --style warm` | Generate a warmer friendly briefing |
+| `npm run digest -- --emit-canonical` | Generate a friendly briefing and also write the canonical briefing |
+| `npm run digest -- --canonical-only` | Generate and write only the canonical briefing |
+| `npm run cli -- digest canonical` | Re-render the latest stored canonical briefing as Markdown without calling the LLM |
+| `npm run cli -- digest canonical --id 4` | Re-render a specific stored canonical briefing |
+| `npm run cli -- digest friendly` | Re-render the latest stored briefing as friendly Markdown |
+| `npm run cli -- digest friendly --id 4 --style warm` | Re-render a specific stored briefing as warm friendly Markdown |
+| `npm run digest -- --hours 48` | Generate a briefing with a custom lookback |
+| `npm run digest -- --hours 24 --days-ago 3` | Generate a 24-hour briefing window ending three days ago |
+| `npm run digest -- --format json` | Print machine-readable friendly briefing JSON while still writing Markdown |
 | `npm run dev` | Start the API with reload |
 | `npm run mcp` | Start the local stdio MCP server for agents |
 | `npm test` | Run unit tests |
 
-Run sync and digest from cron, a systemd timer, or a scheduler:
+Run sync and briefing generation from cron, a systemd timer, or a scheduler:
 
 ```cron
-*/15 * * * * cd /path/to/pnd && /usr/bin/npm run sync >> /var/log/pnd-sync.log 2>&1
-0 7 * * * cd /path/to/pnd && /usr/bin/npm run digest >> /var/log/pnd-digest.log 2>&1
+*/15 * * * * cd /path/to/brief && /usr/bin/npm run sync >> /var/log/brief-sync.log 2>&1
+0 7 * * * cd /path/to/brief && /usr/bin/npm run digest >> /var/log/briefing.log 2>&1
 ```
 
 ## Configuration
@@ -122,19 +124,19 @@ See [`.env.example`](.env.example). Important values:
 - `LIGHTWEIGHT_SOURCE_TYPES`: comma-separated source types that use embedding-only sync by default; defaults to `reddit,hackernews,twitter`.
 - `OPENAI_EMBEDDING_MODEL`: defaults to `text-embedding-3-small`; storage is fixed at 1536 dimensions.
 - `QUERY_LIMIT`: default number of vector matches passed to answer synthesis.
-- `DIGEST_MAX_ENTRIES`: hard cap on selected entries sent to one digest request; defaults to `200`.
+- `DIGEST_MAX_ENTRIES`: hard cap on selected entries sent to one briefing request; defaults to `200`.
 - `DIGEST_CANDIDATE_LIMIT`: newest completed entries loaded before topic-aware selection; defaults to `1000`.
 - `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES`, `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES`: per-topic vector bucket sizing for required topics; defaults to `6` and `16`.
 - `DIGEST_FOCUS_AREA_MIN_ENTRIES`, `DIGEST_FOCUS_AREA_MAX_ENTRIES`: per-topic vector bucket sizing for focus areas; defaults to `3` and `10`.
 - `DIGEST_REQUIRED_TOPIC_MIN_SCORE`, `DIGEST_FOCUS_AREA_MIN_SCORE`: minimum vector similarity for topic matches; defaults to `0.25` and `0.35`.
 - `DIGEST_IMPORTANT_GENERAL_MIN_SCORE`: minimum keyword score for important-general entries; defaults to `3`.
 - `DIGEST_GENERAL_MAX_ENTRIES`: cap for newest general-fill entries after protected topic buckets; defaults to `120`.
-- `DIGEST_MAX_REDDIT_ENTRIES`, `DIGEST_MAX_TWITTER_ENTRIES`, `DIGEST_MAX_ARTICLE_ENTRIES`, `DIGEST_MAX_HACKERNEWS_ENTRIES`: source-type caps for one digest; defaults to `25`, `20`, `80`, and `15`.
-- `DIGEST_MAX_ENTRIES_PER_SOURCE_KEY`: cap per feed/list/source key for one digest; defaults to `20`.
-- `DIGEST_MAX_ENTRIES_PER_AUTHOR`: cap per normalized author for one digest; defaults to `4`.
-- `DIGEST_REQUIRED_TOPICS`: comma-separated durable watchlist topics that always appear in digests, even with no new signal.
+- `DIGEST_MAX_REDDIT_ENTRIES`, `DIGEST_MAX_TWITTER_ENTRIES`, `DIGEST_MAX_ARTICLE_ENTRIES`, `DIGEST_MAX_HACKERNEWS_ENTRIES`: source-type caps for one briefing; defaults to `25`, `20`, `80`, and `15`.
+- `DIGEST_MAX_ENTRIES_PER_SOURCE_KEY`: cap per feed/list/source key for one briefing; defaults to `20`.
+- `DIGEST_MAX_ENTRIES_PER_AUTHOR`: cap per normalized author for one briefing; defaults to `4`.
+- `DIGEST_REQUIRED_TOPICS`: comma-separated durable watchlist topics that always appear in briefings, even with no new signal.
 - `DIGEST_FOCUS_AREAS`: comma-separated softer interests that are highlighted only when relevant source-backed signal exists.
-- `DIGEST_OUTPUT_DIR`: directory for generated digest Markdown; defaults to `output/digests`.
+- `DIGEST_OUTPUT_DIR`: directory for generated briefing Markdown; defaults to `output/briefings`.
 - `QUERY_OUTPUT_DIR`: directory for generated query Markdown and JSON sidecars; defaults to `output/queries`.
 
 ## API
@@ -155,15 +157,22 @@ The MCP server is local-only and unauthenticated. Do not expose it over the publ
 Available tools:
 
 - `health`: checks database connectivity.
-- `query_archive`: asks a question over the archive with citations.
-- `create_digest`: creates and stores a digest with optional `hours` and `daysAgo`; this calls the LLM and may take 30-60 seconds.
-- `latest_digest`: renders the latest stored digest, or a specific digest by `id`.
+- `brief`: asks a question over the archive with citations.
+- `create_briefing`: creates and stores a briefing with optional `hours` and `daysAgo`; this calls the LLM and may take 30-60 seconds.
+- `briefing`: renders the latest stored briefing, or a specific briefing by `id`.
+
+Example prompts that map naturally to the MCP tools:
+
+- `brief`: "Give me a brief on agentic payments"; "Brief me on what's happening with MCP"; "What do I know about Anthropic's latest moves?"
+- `briefing`: "Give me my morning briefing"; "What's my latest briefing?"; "Show me briefing #4"; "Brief me on the last 24 hours"
+- `create_briefing`: "Create a briefing for the last 48 hours"; "Generate my briefing for yesterday"; "Make a briefing for the past week"
+- `health`: "Is Brief connected?"; "Check Brief health"
 
 ## Data Model
 
 - `content`: normalized source content, enrichment output, and vector embedding.
 - `sync_state`: exact Feedbin incremental-sync cursor.
-- `digests`: generated daily digest history and referenced content IDs.
+- `digests`: generated briefing history and referenced content IDs.
 
 Failed enrichments remain stored with `enrichment_status = 'failed'` and an error message for operational inspection and a future retry worker.
 
@@ -171,7 +180,7 @@ Sync prints Feedbin's total matching entry count plus per-entry counts and perce
 
 If a cursor must be rebuilt, run `npm run cli -- sync --reset-cursor`. Existing entries are deduplicated, but missing older entries are fetched and processed. Sync refuses to advance the cursor if Feedbin reports more records than pagination returned.
 
-For an MVP focused on recent digests, avoid a complete historical backfill:
+For an MVP focused on recent briefings, avoid a complete historical backfill:
 
 ```bash
 # Fetch the last 48 hours, then continue incrementally on later normal syncs
@@ -191,45 +200,45 @@ npm run sync-twitter
 
 It reads `TWITTERAPI_LIST_IDS`, fetches newest tweets first, stops when it reaches the stored latest tweet ID for each list, and otherwise stops at `TWITTERAPI_LIST_MAX_PAGES` or `TWITTERAPI_LIST_MAX_TWEETS`. Tweets use `source_key = twitterapi:list:<list_id>` and `source_type = twitter`.
 
-Digest generation prints progress while loading sources, waiting for LLM synthesis, and storing the completed digest.
-It loads up to `DIGEST_CANDIDATE_LIMIT` entries published during the digest lookback window, uses vector search to reserve source buckets for configured required topics and focus areas, then fills the remaining prompt budget with newest-published general entries. `DIGEST_MAX_ENTRIES` remains the final hard cap.
+Briefing generation prints progress while loading sources, waiting for LLM synthesis, and storing the completed briefing.
+It loads up to `DIGEST_CANDIDATE_LIMIT` entries published during the briefing lookback window, uses vector search to reserve source buckets for configured required topics and focus areas, then fills the remaining prompt budget with newest-published general entries. `DIGEST_MAX_ENTRIES` remains the final hard cap.
 
-Use digest topic config to protect important topics during source selection and shape the writeup:
+Use briefing topic config to protect important topics during source selection and shape the writeup:
 
 ```env
 DIGEST_REQUIRED_TOPICS=agentic payments, agentic B2B, agentic commerce, personal memory
 DIGEST_FOCUS_AREAS=MCP, AI observability, agent frameworks
 ```
 
-Required topics always get a watchlist subsection. If there is no source-backed update, the digest says so. Focus areas are included only when the selected entries contain meaningful signal.
+Required topics always get a watchlist subsection. If there is no source-backed update, the briefing says so. Focus areas are included only when the selected entries contain meaningful signal.
 
 ## Markdown Output
 
-Queries and digests save readable Markdown by default. When Markdown is saved to a file, it is not echoed to stdout. Use `--format json` for automation.
+Queries and briefings save readable Markdown by default. When Markdown is saved to a file, it is not echoed to stdout. Use `--format json` for automation.
 
-Digests are always stored in Postgres in canonical form. By default, the CLI writes a friendly Markdown digest under `DIGEST_OUTPUT_DIR`; use `--canonical-only` or `digest canonical` to write the canonical Markdown with Obsidian-compatible frontmatter and source citations.
+Briefings are always stored in Postgres in canonical form. By default, the CLI writes a friendly Markdown briefing under `DIGEST_OUTPUT_DIR`; use `--canonical-only` or `digest canonical` to write the canonical Markdown with Obsidian-compatible frontmatter and source citations.
 
-To write digests directly into an Obsidian vault, set an absolute folder path:
+To write briefings directly into an Obsidian vault, set an absolute folder path:
 
 ```env
-DIGEST_OUTPUT_DIR=/Users/you/Documents/MyVault/PND/Digests
+DIGEST_OUTPUT_DIR=/Users/you/Documents/MyVault/Briefed/Briefings
 ```
 
-Override the configured directory for one digest:
+Override the configured directory for one briefing:
 
 ```bash
 npm run digest -- --output /path/to/digest.md
 ```
 
-Write the friendly digest and canonical digest together:
+Write the friendly briefing and canonical briefing together:
 
 ```bash
 npm run digest -- --emit-canonical
 ```
 
-If `--output` is supplied, the friendly digest is written to that exact path and the canonical digest is written beside it with the standard canonical filename.
+If `--output` is supplied, the friendly briefing is written to that exact path and the canonical briefing is written beside it with the standard canonical filename.
 
-Write only the canonical digest, or re-render an existing stored canonical digest without running the LLM again:
+Write only the canonical briefing, or re-render an existing stored canonical briefing without running the LLM again:
 
 ```bash
 npm run digest -- --canonical-only
@@ -238,7 +247,7 @@ npm run cli -- digest canonical --id 4
 npm run cli -- digest canonical --output /path/to/digest.md
 ```
 
-Re-render an existing stored digest as friendly Markdown:
+Re-render an existing stored briefing as friendly Markdown:
 
 ```bash
 npm run cli -- digest friendly
@@ -264,7 +273,7 @@ npm run cli -- query-followup "Which of these seem most important?"
 
 Query progress logs are written to stderr, so Markdown and JSON stdout remain clean for piping.
 Use `--no-save` to print query Markdown to stdout instead of writing it to a file.
-PND keeps a hidden `.latest.json` state file for follow-ups; visible JSON sidecars are only written with `--save-json`.
+Brief keeps a hidden `.latest.json` state file for follow-ups; visible JSON sidecars are only written with `--save-json`.
 
 ## Lightweight Source Strategy
 
@@ -274,7 +283,7 @@ Reddit, Hacker News, and Twitter/X feeds can produce many entries whose records 
 - Generate and store an OpenAI embedding from the title and full post text.
 - Copy the Feedbin summary into `analyst_summary`.
 - Leave generated topic tags and entities empty.
-- Keep the post available to semantic queries and daily digests.
+- Keep the post available to semantic queries and daily briefings.
 
 Article entries continue to receive full LLM enrichment. Fully enrich selected stored lightweight posts later:
 

@@ -1,6 +1,6 @@
-# How PND Works
+# How Briefed.sh Works
 
-PND uses Feedbin as its collector, Postgres and pgvector as its local archive, OpenAI for embeddings, and OpenAI or Anthropic for language-model synthesis.
+Briefed.sh uses Feedbin as its collector, Postgres and pgvector as its local archive, OpenAI for embeddings, and OpenAI or Anthropic for language-model synthesis.
 
 ## Sync Pipeline
 
@@ -27,7 +27,7 @@ The sync command:
 
 It is safe to interrupt sync with `Ctrl-C`. Already processed entries remain stored, but the cursor is not advanced. The next sync may revisit those entries, and deduplication prevents duplicate rows.
 
-Feedbin limits pages to 100 entries. PND follows Feedbin's pagination links and refuses to advance the cursor if Feedbin reports more matching records than were fetched.
+Feedbin limits pages to 100 entries. Briefed.sh follows Feedbin's pagination links and refuses to advance the cursor if Feedbin reports more matching records than were fetched.
 
 To clear a bad cursor and safely rescan the full Feedbin archive:
 
@@ -44,9 +44,9 @@ npm run cli -- sync --hours 48
 npm run cli -- sync --days 7
 ```
 
-These options temporarily override the starting cursor without changing the stored cursor before processing. After all matching pages finish successfully, PND stores the newest fetched Feedbin timestamp as the next incremental cursor. This is normally close to the present, but deliberately uses Feedbin's timestamp rather than the local clock to avoid skipping entries.
+These options temporarily override the starting cursor without changing the stored cursor before processing. After all matching pages finish successfully, Briefed.sh stores the newest fetched Feedbin timestamp as the next incremental cursor. This is normally close to the present, but deliberately uses Feedbin's timestamp rather than the local clock to avoid skipping entries.
 
-If a recent-only sync is interrupted, the previous stored cursor remains unchanged. Resume using the same lookback option. If Feedbin returns no matching entries, PND also leaves the existing cursor unchanged.
+If a recent-only sync is interrupted, the previous stored cursor remains unchanged. Resume using the same lookback option. If Feedbin returns no matching entries, Briefed.sh also leaves the existing cursor unchanged.
 
 ## Twitter/X List Sync
 
@@ -61,20 +61,20 @@ TWITTERAPI_LIST_MAX_PAGES=3
 TWITTERAPI_LIST_MAX_TWEETS=200
 ```
 
-For each list, PND stores the newest successfully processed tweet ID in `sync_state` under `twitterapi:list:<list_id>:latest_id`. A normal run fetches newest tweets first and stops when it reaches that stored tweet. If the stored tweet is not reached, sync continues only up to the configured page and tweet limits.
+For each list, Briefed.sh stores the newest successfully processed tweet ID in `sync_state` under `twitterapi:list:<list_id>:latest_id`. A normal run fetches newest tweets first and stops when it reaches that stored tweet. If the stored tweet is not reached, sync continues only up to the configured page and tweet limits.
 
 Twitter/X entries use `source_key = 'twitterapi:list:<list_id>'`, `source_item_id = '<tweet_id>'`, and `source_type = 'twitter'`. They are embedding-only by default because `twitter` is included in `LIGHTWEIGHT_SOURCE_TYPES`.
 
 ## Source Detection
 
-PND currently assigns one of four `source_type` values:
+Briefed.sh currently assigns one of four `source_type` values:
 
 - `article`: entries that are not classified as a known lightweight source.
 - `reddit`: canonical URLs on a Reddit hostname with a path beginning with `/r/`.
 - `hackernews`: canonical URLs on `news.ycombinator.com/item` with an `id` query parameter.
 - `twitter`: posts imported from Twitter/X list APIs.
 
-This source type controls the default enrichment policy. It does not prevent an entry from appearing in queries or digests.
+This source type controls the default enrichment policy. It does not prevent an entry from appearing in queries or briefings.
 
 ## Enrichment Modes
 
@@ -93,7 +93,7 @@ First, the configured LLM receives the title and normalized text and returns:
 - `topics`: short lowercase topic tags.
 - `entities`: important named entities and their types.
 
-PND validates the response, normalizes and deduplicates tags/entities, and caps them at 10 topics and 30 entities. Excess valid items are trimmed instead of failing the complete enrichment.
+Briefed.sh validates the response, normalizes and deduplicates tags/entities, and caps them at 10 topics and 30 entities. Excess valid items are trimmed instead of failing the complete enrichment.
 
 Second, OpenAI creates a 1,536-dimension embedding from the title, generated summary, topics, and full text.
 
@@ -109,7 +109,7 @@ By default:
 LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews,twitter
 ```
 
-For each lightweight item, PND stores:
+For each lightweight item, Briefed.sh stores:
 
 - Source identity and original JSON. Every entry uses `source_key` and `source_item_id`; for example, Feedbin entries use `source_key = 'feedbin:feed:<feed_id>'`, while Twitter/X list entries can use `source_key = 'twitterapi:list:<list_id>'`.
 - Canonical URL, title, author, and timestamps.
@@ -122,7 +122,7 @@ For each lightweight item, PND stores:
 - `enrichment_mode = 'embedded_only'`.
 - `enrichment_status = 'complete'`.
 
-This keeps lightweight entries semantically searchable and eligible for digests while avoiding one LLM analysis call per item.
+This keeps lightweight entries semantically searchable and eligible for briefings while avoiding one LLM analysis call per item.
 
 Feedbin's Reddit content generally contains the original post body, but it does not contain comments, discussion summaries, scores, or reliable engagement signals.
 
@@ -172,7 +172,7 @@ npm run cli -- query-followup "Which of these seem most important?"
 
 Or send a request to `POST /query`.
 
-PND:
+Briefed.sh:
 
 1. Creates an OpenAI embedding for the question.
 2. Uses pgvector cosine similarity to retrieve relevant archived entries.
@@ -183,9 +183,9 @@ Both fully enriched and embedding-only lightweight entries participate in semant
 
 The CLI renders queries as Markdown by default, including clickable source links, authors, dates, summaries, and similarity scores. Query answers are prompted to stay brief: 3-5 cited bullets, with an optional short list of best sources to open. Query results are saved as Markdown under `QUERY_OUTPUT_DIR` unless `--no-save` is supplied. Saved Markdown is not echoed to stdout. Use `--format json` for machine-readable stdout, or `--save-json` to also write a visible JSON sidecar. CLI query progress logs are written to stderr so stdout remains usable for Markdown or JSON piping.
 
-`npm run cli -- query-followup "<question>"` uses the latest saved query session as context. PND stores that context in a hidden `.latest.json` state file in `QUERY_OUTPUT_DIR`. It reuses the previous answer and sources, calls the LLM for synthesis, and saves the follow-up as a new query session. It does not run a new embedding search.
+`npm run cli -- query-followup "<question>"` uses the latest saved query session as context. Briefed.sh stores that context in a hidden `.latest.json` state file in `QUERY_OUTPUT_DIR`. It reuses the previous answer and sources, calls the LLM for synthesis, and saves the follow-up as a new query session. It does not run a new embedding search.
 
-## Daily Digest
+## Daily Briefing
 
 Run:
 
@@ -199,43 +199,43 @@ npm run digest -- --canonical-only
 npm run cli -- digest canonical
 ```
 
-The digest command:
+The briefing command:
 
 1. Loads completed entries published during the lookback period.
 2. Loads a broader recent candidate pool controlled by `DIGEST_CANDIDATE_LIMIT`.
 3. Uses vector search for each configured required topic and focus area.
 4. Selects protected topic buckets, then fills the remaining budget with newest-published general entries.
 5. Sends selected titles, stored summaries, URLs, and dates to the configured LLM.
-6. Asks the LLM to create a canonical source-grounded digest.
-7. Stores the canonical digest in the local `digests` table.
+6. Asks the LLM to create a canonical source-grounded briefing.
+7. Stores the canonical briefing in the local `digests` table.
 8. Unless `--canonical-only` is set, asks the LLM for a friendly Markdown rewrite.
-9. Writes the digest Markdown file. With `--emit-canonical`, it also writes the canonical Markdown; when `--output` is supplied, the canonical file is written beside that output path.
+9. Writes the briefing Markdown file. With `--emit-canonical`, it also writes the canonical Markdown; when `--output` is supplied, the canonical file is written beside that output path.
 
-Embedding-only lightweight entries remain eligible for the digest. The digest sees their source-provided summaries rather than individually generated LLM summaries. Their embeddings are still used for required-topic and focus-area source selection.
+Embedding-only lightweight entries remain eligible for the briefing. The briefing sees their source-provided summaries rather than individually generated LLM summaries. Their embeddings are still used for required-topic and focus-area source selection.
 
-To prevent unexpectedly large or expensive LLM requests, PND sends at most `DIGEST_MAX_ENTRIES` selected entries. The default is `200`. Digest logs report the total eligible count, candidate count, and final required-topic, focus-area, and general source counts.
+To prevent unexpectedly large or expensive LLM requests, Briefed.sh sends at most `DIGEST_MAX_ENTRIES` selected entries. The default is `200`. Briefing logs report the total eligible count, candidate count, and final required-topic, focus-area, and general source counts.
 
-Digest topic config protects important topics during selection and shapes the synthesis prompt:
+Briefing topic config protects important topics during selection and shapes the synthesis prompt:
 
 ```env
 DIGEST_REQUIRED_TOPICS=agentic payments, agentic B2B, agentic commerce, personal memory
 DIGEST_FOCUS_AREAS=MCP, AI observability, agent frameworks
 ```
 
-Required topics always appear under a required watchlist section. If the selected sources have no meaningful update for one of those topics, the digest explicitly says there was no signal in the window. Focus areas are softer interests; the digest highlights them only when there is meaningful source-backed signal.
+Required topics always appear under a required watchlist section. If the selected sources have no meaningful update for one of those topics, the briefing explicitly says there was no signal in the window. Focus areas are softer interests; the briefing highlights them only when there is meaningful source-backed signal.
 
-Each digest is stored in Postgres in canonical form and written as a timestamped Markdown file under `DIGEST_OUTPUT_DIR`. The default CLI output is a friendly digest; `--emit-canonical` writes the canonical Markdown alongside the friendly output, while `--canonical-only` and `digest canonical` write only the canonical Markdown with Obsidian-compatible frontmatter, digest body, and clickable sources. Inline canonical citations use Obsidian heading links such as `[[#Source 32|32]]`, and source titles link to original URLs. Point `DIGEST_OUTPUT_DIR` at an Obsidian vault folder to make generated digests appear there without an additional integration.
+Each briefing is stored in Postgres in canonical form and written as a timestamped Markdown file under `DIGEST_OUTPUT_DIR`. The default CLI output is a friendly briefing; `--emit-canonical` writes the canonical Markdown alongside the friendly output, while `--canonical-only` and `digest canonical` write only the canonical Markdown with Obsidian-compatible frontmatter, briefing body, and clickable sources. Inline canonical citations use Obsidian heading links such as `[[#Source 32|32]]`, and source titles link to original URLs. Point `DIGEST_OUTPUT_DIR` at an Obsidian vault folder to make generated briefings appear there without an additional integration.
 
 CLI Markdown is the default and is written to a file without echoing the document to stdout. `--format json` prints machine-readable output. Progress logs are written to stderr so JSON stdout remains parseable.
 
-`npm run cli -- digest canonical` re-renders the latest stored canonical digest from Postgres without calling the LLM. Use `--id <digest_id>` to render a specific stored digest. MCP digest tools continue to create and return canonical digest Markdown, not the CLI-only friendly rewrite.
+`npm run cli -- digest canonical` re-renders the latest stored canonical briefing from Postgres without calling the LLM. Use `--id <briefing_id>` to render a specific stored briefing. MCP briefing tools continue to create and return canonical briefing Markdown, not the CLI-only friendly rewrite.
 
 ## Local And External Data
 
-The normalized archive, generated enrichment, embeddings, cursors, and digests are stored locally in Postgres.
+The normalized archive, generated enrichment, embeddings, cursors, and briefings are stored locally in Postgres.
 
 External requests still occur:
 
 - Feedbin supplies entries.
 - OpenAI receives text for embeddings.
-- The configured LLM provider receives text for full enrichment, queries, and digests.
+- The configured LLM provider receives text for full enrichment, queries, and briefings.

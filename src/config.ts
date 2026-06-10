@@ -54,7 +54,7 @@ const schema = z.object({
   DIGEST_MAX_ENTRIES_PER_AUTHOR: z.coerce.number().int().min(0).default(4),
   DIGEST_REQUIRED_TOPICS: z.string().default("").transform(parseCommaSeparatedList),
   DIGEST_FOCUS_AREAS: z.string().default("").transform(parseCommaSeparatedList),
-  DIGEST_OUTPUT_DIR: z.string().min(1).default("output/digests"),
+  DIGEST_OUTPUT_DIR: z.string().min(1).default("output/briefings"),
   QUERY_OUTPUT_DIR: z.string().min(1).default("output/queries")
 });
 

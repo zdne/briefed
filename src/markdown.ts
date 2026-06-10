@@ -27,12 +27,12 @@ export function renderQueryMarkdown(question: string, result: QueryMarkdownResul
   const createdAt = result.createdAt ?? new Date().toISOString();
   const frontmatter = [
     "---",
-    "type: pnd-query",
+    "type: brief-query",
     `created: ${createdAt}`,
     `question: ${JSON.stringify(question)}`,
     `source_count: ${result.sources.length}`,
     "tags:",
-    "  - pnd",
+    "  - brief",
     "  - query",
     "---"
   ].join("\n");
@@ -60,20 +60,20 @@ export function renderDigestMarkdown(result: DigestMarkdownResult, createdAt = n
   const citedSources = filterCitedSources(result.sources, body);
   const frontmatter = [
     "---",
-    "type: pnd-digest",
+    "type: briefing",
     `created: ${createdAt.toISOString()}`,
     `period_start: ${result.periodStart ?? ""}`,
     `period_end: ${result.periodEnd ?? ""}`,
     `source_count: ${citedSources.length}`,
     "tags:",
-    "  - pnd",
-    "  - digest",
+    "  - brief",
+    "  - briefing",
     "---"
   ].join("\n");
 
   return `${frontmatter}
 
-# Daily Digest
+# Briefing
 
 ${body}
 

@@ -53,7 +53,7 @@ describe("renderQueryMarkdown", () => {
     });
 
     expect(markdown).toContain("**Question:** What changed?");
-    expect(markdown).toContain("type: pnd-query");
+    expect(markdown).toContain("type: brief-query");
     expect(markdown).toContain('question: "What changed?"');
     expect(markdown).toContain("A useful answer [[#Source 1|1]].");
     expect(markdown).toContain("### Source 1");
@@ -74,9 +74,9 @@ describe("renderDigestMarkdown", () => {
       sources: [{ citation: 1, title: "Source", url: "https://example.com" }]
     }, new Date("2026-06-04T10:30:00.000Z"));
 
-    expect(markdown).toContain("type: pnd-digest");
+    expect(markdown).toContain("type: briefing");
     expect(markdown).toContain("source_count: 1");
-    expect(markdown).toContain("# Daily Digest");
+    expect(markdown).toContain("# Briefing");
     expect(markdown).toContain("Digest body [[#Source 1|1]].");
     expect(markdown).not.toContain("Sources:\n- [[#Source 1|[1]]] [Source](https://example.com)");
     expect(markdown).not.toContain("Short URLs for reference");
@@ -107,7 +107,7 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).toContain("### Source 2");
   });
 
-  it("renders only sources cited in the final digest body", () => {
+  it("renders only sources cited in the final briefing body", () => {
     const markdown = renderDigestMarkdown({
       id: "5",
       periodStart: "2026-06-04T10:00:00.000Z",

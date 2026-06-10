@@ -1,4 +1,4 @@
-# PND: Personal News Dashboard
+# Briefed.sh: Personal News Dashboard
 
 We are building a Feedbin-first Synthetic Analyst MVP.
 
@@ -30,7 +30,7 @@ MVP tasks:
 6. Add summarization, topic tags, entity extraction.
 7. Add embeddings using pgvector.
 8. Add `/query` endpoint that retrieves relevant content and answers with citations.
-9. Add daily digest job.
+9. Add daily briefing job.
 10. Add README with setup instructions.
 
 

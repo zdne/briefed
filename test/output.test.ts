@@ -16,31 +16,31 @@ import {
 } from "../src/output.js";
 
 describe("digestOutputPath", () => {
-  it("creates a filesystem-safe canonical digest filename", () => {
-    expect(digestOutputPath("output/digests", new Date("2026-06-04T10:30:12.123Z")))
-      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-canonical-digest\.md$/);
+  it("creates a filesystem-safe canonical briefing filename", () => {
+    expect(digestOutputPath("output/briefings", new Date("2026-06-04T10:30:12.123Z")))
+      .toMatch(/output\/briefings\/2026-06-04T10-30-12Z-canonical-briefing\.md$/);
   });
 
-  it("creates a filesystem-safe canonical digest filename with id", () => {
-    expect(digestOutputPathForId("output/digests", "42", new Date("2026-06-04T10:30:12.123Z")))
-      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-canonical-digest-42\.md$/);
+  it("creates a filesystem-safe canonical briefing filename with id", () => {
+    expect(digestOutputPathForId("output/briefings", "42", new Date("2026-06-04T10:30:12.123Z")))
+      .toMatch(/output\/briefings\/2026-06-04T10-30-12Z-canonical-briefing-42\.md$/);
   });
 
-  it("creates friendly digest filenames by style and id", () => {
+  it("creates friendly briefing filenames by style and id", () => {
     const createdAt = new Date("2026-06-04T10:30:12.123Z");
 
-    expect(friendlyDigestOutputPath("output/digests", createdAt))
-      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-digest\.md$/);
-    expect(friendlyDigestOutputPath("output/digests", createdAt, { id: "42" }))
-      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-digest-42\.md$/);
-    expect(friendlyDigestOutputPath("output/digests", createdAt, { style: "warm" }))
-      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-daily-digest\.md$/);
-    expect(friendlyDigestOutputPath("output/digests", createdAt, { id: "42", style: "warm" }))
-      .toMatch(/output\/digests\/2026-06-04T10-30-12Z-daily-digest-42\.md$/);
+    expect(friendlyDigestOutputPath("output/briefings", createdAt))
+      .toMatch(/output\/briefings\/2026-06-04T10-30-12Z-briefing\.md$/);
+    expect(friendlyDigestOutputPath("output/briefings", createdAt, { id: "42" }))
+      .toMatch(/output\/briefings\/2026-06-04T10-30-12Z-briefing-42\.md$/);
+    expect(friendlyDigestOutputPath("output/briefings", createdAt, { style: "warm" }))
+      .toMatch(/output\/briefings\/2026-06-04T10-30-12Z-morning-briefing\.md$/);
+    expect(friendlyDigestOutputPath("output/briefings", createdAt, { id: "42", style: "warm" }))
+      .toMatch(/output\/briefings\/2026-06-04T10-30-12Z-morning-briefing-42\.md$/);
   });
 
   it("creates parent directories and writes Markdown", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pnd-output-"));
+    const directory = await mkdtemp(join(tmpdir(), "brief-output-"));
     const path = join(directory, "nested", "result.md");
     try {
       expect(await writeMarkdownFile(path, "# Result\n")).toBe(path);
@@ -51,7 +51,7 @@ describe("digestOutputPath", () => {
   });
 
   it("wraps write failures with the target path", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pnd-output-"));
+    const directory = await mkdtemp(join(tmpdir(), "brief-output-"));
     const blockingFile = join(directory, "not-a-directory");
     const path = join(blockingFile, "result.md");
     try {
@@ -71,7 +71,7 @@ describe("digestOutputPath", () => {
   });
 
   it("reads the newest JSON sidecar", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pnd-output-"));
+    const directory = await mkdtemp(join(tmpdir(), "brief-output-"));
     try {
       await writeJsonFile(join(directory, "2026-01-01-a.json"), { id: 1 });
       await writeJsonFile(join(directory, "2026-01-02-b.json"), { id: 2 });
@@ -82,7 +82,7 @@ describe("digestOutputPath", () => {
   });
 
   it("reads a specific JSON file and returns null when missing", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pnd-output-"));
+    const directory = await mkdtemp(join(tmpdir(), "brief-output-"));
     try {
       const path = join(directory, ".latest.json");
       await writeJsonFile(path, { id: 3 });

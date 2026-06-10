@@ -1,21 +1,21 @@
 # Features
 
-Tracker of potential features to add to pnd:
+Tracker of potential features to add to brief:
 
 ## Current
 
 - [x] Better markdown reports 
-- [x] Steer the digest with topics that i am interested in 
+- [x] Steer the briefing with topics that i am interested in
 - [x] Access twitter using [xurl](https://github.com/xdevplatform/xurl)
 - [x] Prioritize sources
-- [x] Basic digest diversity caps
-- [x] Basic digest relevance thresholds
+- [x] Basic briefing diversity caps
+- [x] Basic briefing relevance thresholds
 - [x] Local MCP
 
 ## Later / TBD
 
-- [ ] Twitter engagement scoring: Further improvement to digest pre-qualification (see below) 
-- [ ] Run sync / digest periodically
+- [ ] Twitter engagement scoring: Further improvement to briefing pre-qualification (see below)
+- [ ] Run sync / briefing periodically
 - [ ] TBD: Remote MCP
 - [ ] TBD: Turn this into a service
 
@@ -23,7 +23,7 @@ Tracker of potential features to add to pnd:
 
 ## Notes on features
 
-### Further improvement to digest pre-qualification
+### Further improvement to briefing pre-qualification
 • Right now selection is bucket-based, but not yet quality/diversity-balanced inside those buckets.
 
   Current behavior:
@@ -65,7 +65,7 @@ Tracker of potential features to add to pnd:
 
   DIGEST_MAX_ENTRIES_PER_AUTHOR=4
 
-  This limits repeated posts from one author in a single digest.
+  This limits repeated posts from one author in a single briefing.
 
   Remaining work:
 
@@ -91,5 +91,5 @@ Tracker of potential features to add to pnd:
     source/author caps already apply
     still keep newest/relevant articles in the mix
 
-  Why it matters: with Twitter added, volume jumps. Without diversity and engagement scoring, digest selection can overrepresent high-volume feeds or prolific
+  Why it matters: with Twitter added, volume jumps. Without diversity and engagement scoring, briefing selection can overrepresent high-volume feeds or prolific
   posters. The current system protects topics; the next refinement would protect signal quality and variety.

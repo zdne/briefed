@@ -114,7 +114,7 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Do not write social-source bullets in passive voice");
     expect(prompt).toContain("Do not write \"Reddit questioned\", \"Reddit reported\", \"Reddit published\", \"Reddit launched\"");
     expect(prompt).toContain("Do not write \"A Reddit post\", \"Reddit queried\", \"Reddit users\"");
-    expect(prompt).toContain("Do not include usernames or handles in the digest body.");
+    expect(prompt).toContain("Do not include usernames or handles in the briefing body.");
     expect(prompt).toContain("Do not combine multiple Reddit posts into a plural claim");
     expect(prompt).toContain("Do not write that a Reddit post shows adoption, deployment, market preference, or user preference");
     expect(prompt).toContain("Include selected important-general items when they report named AI companies");
@@ -277,11 +277,11 @@ describe("buildFriendlyDigestPrompt", () => {
   it("includes canonical body, source metadata, and direct-link requirements", () => {
     const prompt = buildFriendlyDigestPrompt(
       digest,
-      "# Daily Digest\n\n## Watchlist\n- Example Corp reported a model update [[#Source 1|1]].",
+      "# Briefing\n\n## Watchlist\n- Example Corp reported a model update [[#Source 1|1]].",
       "plain"
     );
 
-    expect(prompt).toContain("Canonical digest Markdown:");
+    expect(prompt).toContain("Canonical briefing Markdown:");
     expect(prompt).toContain("Example Corp reported a model update");
     expect(prompt).toContain("Source metadata:");
     expect(prompt).toContain("Title: Example model update");
@@ -298,8 +298,8 @@ describe("buildFriendlyDigestPrompt", () => {
   });
 
   it("distinguishes plain and warm style instructions", () => {
-    const plain = buildFriendlyDigestPrompt(digest, "# Daily Digest", "plain");
-    const warm = buildFriendlyDigestPrompt(digest, "# Daily Digest", "warm");
+    const plain = buildFriendlyDigestPrompt(digest, "# Briefing", "plain");
+    const warm = buildFriendlyDigestPrompt(digest, "# Briefing", "warm");
 
     expect(plain).toContain("Use a concise plain-newsletter tone.");
     expect(plain).toContain("Do not use emoji headings.");

@@ -25,7 +25,7 @@ import { TwitterApiClient } from "./twitterapi.js";
 import type { SourceType } from "./enrichment-policy.js";
 import type { FriendlyDigestStyle, QuerySession } from "./types.js";
 
-const program = new Command().name("pnd").description("Feedbin-first synthetic analyst");
+const program = new Command().name("brief").description("Briefed.sh personal news intelligence");
 
 program.command("migrate").description("Apply database migrations").action(async () => {
   await migrate();
@@ -187,21 +187,21 @@ program
 
 const digestCommand = program
   .command("digest")
-  .description("Create, render, or inspect digests")
+  .description("Create, render, or inspect briefings")
   .enablePositionalOptions()
   .option("-H, --hours <number>", "lookback hours", String(config.DIGEST_HOURS))
-  .option("--days-ago <number>", "end the digest window N days before now")
+  .option("--days-ago <number>", "end the briefing window N days before now")
   .option("--style <style>", "friendly style: plain or warm", "plain")
-  .option("--canonical-only", "create only the canonical digest and skip friendly rendering")
-  .option("--emit-canonical", "also write the canonical digest Markdown when creating a friendly digest")
+  .option("--canonical-only", "create only the canonical briefing and skip friendly rendering")
+  .option("--emit-canonical", "also write the canonical briefing Markdown when creating a friendly briefing")
   .option("-f, --format <format>", "output format: markdown or json", "markdown")
   .option("-o, --output <path>", "write Markdown to this path instead of DIGEST_OUTPUT_DIR")
   .action(createDigestAction);
 
 digestCommand
   .command("canonical")
-  .description("Render a stored digest without calling the LLM")
-  .option("--id <number>", "stored digest id; defaults to latest")
+  .description("Render a stored briefing without calling the LLM")
+  .option("--id <number>", "stored briefing id; defaults to latest")
   .option("-f, --format <format>", "output format: markdown or json", "markdown")
   .option("-o, --output <path>", "write Markdown to this path instead of DIGEST_OUTPUT_DIR")
   .action(async (options: { id?: string; format: string; output?: string }) => {
@@ -209,20 +209,20 @@ digestCommand
     const id = options.id === undefined ? undefined : positiveInteger(options.id, "--id");
     const result = await getDigestForRendering(id);
     if (!result) {
-      throw new Error(id === undefined ? "No stored digests found" : `Digest ${id} not found`);
+      throw new Error(id === undefined ? "No stored briefings found" : `Briefing ${id} not found`);
     }
     const createdAt = new Date(result.createdAt);
     const markdown = renderDigestMarkdown(result, createdAt);
     const outputPath = options.output ?? digestOutputPathForId(config.DIGEST_OUTPUT_DIR, result.id, createdAt);
     const path = await writeMarkdownFile(outputPath, markdown);
-    timestampLogger(`Wrote canonical digest Markdown to ${path}`);
+    timestampLogger(`Wrote canonical briefing Markdown to ${path}`);
     printFormattedOutput(format, result, markdown, true);
   });
 
 digestCommand
   .command("friendly")
-  .description("Render a stored digest as reader-friendly Markdown with the configured LLM")
-  .option("--id <number>", "stored digest id; defaults to latest")
+  .description("Render a stored briefing as reader-friendly Markdown with the configured LLM")
+  .option("--id <number>", "stored briefing id; defaults to latest")
   .option("--style <style>", "friendly style: plain or warm", "plain")
   .option("-f, --format <format>", "output format: markdown or json", "markdown")
   .option("-o, --output <path>", "write Markdown to this path instead of DIGEST_OUTPUT_DIR")
@@ -235,23 +235,23 @@ digestCommand
     const requestedId = options.id === undefined ? undefined : positiveInteger(options.id, "--id");
     const result = await getDigestForRendering(requestedId);
     if (!result) {
-      throw new Error(requestedId === undefined ? "No stored digests found" : `Digest ${requestedId} not found`);
+      throw new Error(requestedId === undefined ? "No stored briefings found" : `Briefing ${requestedId} not found`);
     }
     const createdAt = new Date(result.createdAt);
     const canonicalMarkdown = renderDigestMarkdown(result, createdAt);
     const log = timestampLogger;
     log("Initializing AI client");
     const ai = new AnalystAI();
-    log("Requesting friendly digest rewrite from LLM");
+    log("Requesting friendly briefing rewrite from LLM");
     const markdown = cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));
-    log("Received friendly digest rewrite");
+    log("Received friendly briefing rewrite");
     const outputPath = options.output ?? friendlyDigestOutputPath(
       config.DIGEST_OUTPUT_DIR,
       createdAt,
       { id: requestedId === undefined ? undefined : result.id, style }
     );
     const path = await writeMarkdownFile(outputPath, markdown);
-    log(`Wrote friendly digest Markdown to ${path}`);
+    log(`Wrote friendly briefing Markdown to ${path}`);
     printFormattedOutput(format, friendlyDigestJson(result, createdAt, style, markdown), markdown, true);
   });
 
@@ -337,7 +337,7 @@ async function createDigestAction(options: {
   log("Initializing AI client");
   const ai = new AnalystAI();
   if (daysAgo > 0) {
-    log(`Creating digest for ${hours} hours ending ${referenceTime.toISOString()} (--days-ago ${daysAgo})`);
+    log(`Creating briefing for ${hours} hours ending ${referenceTime.toISOString()} (--days-ago ${daysAgo})`);
   }
   const result = await createDigest(hours, ai, log, referenceTime);
   const createdAt = new Date();
@@ -346,7 +346,7 @@ async function createDigestAction(options: {
     const markdown = renderDigestMarkdown(result, createdAt);
     const outputPath = options.output ?? digestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt);
     const path = await writeMarkdownFile(outputPath, markdown);
-    log(`Wrote canonical digest Markdown to ${path}`);
+    log(`Wrote canonical briefing Markdown to ${path}`);
     printFormattedOutput(format, result, markdown, true);
     return;
   }
@@ -358,15 +358,15 @@ async function createDigestAction(options: {
       createdAt
     );
     const canonicalPath = await writeMarkdownFile(canonicalOutputPath, canonicalMarkdown);
-    log(`Wrote canonical digest Markdown to ${canonicalPath}`);
+    log(`Wrote canonical briefing Markdown to ${canonicalPath}`);
   }
 
-  log("Requesting friendly digest rewrite from LLM");
+  log("Requesting friendly briefing rewrite from LLM");
   const markdown = cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));
-  log("Received friendly digest rewrite");
+  log("Received friendly briefing rewrite");
   const outputPath = options.output ?? friendlyDigestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt, { style });
   const path = await writeMarkdownFile(outputPath, markdown);
-  log(`Wrote friendly digest Markdown to ${path}`);
+  log(`Wrote friendly briefing Markdown to ${path}`);
   printFormattedOutput(format, friendlyDigestJson(result, createdAt, style, markdown), markdown, true);
 }
 

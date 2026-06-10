@@ -1,9 +1,9 @@
- # Thin Agent-First PND Plan
+ # Thin Agent-First Briefed.sh Plan
 
   ## Summary
 
   - Use Neon Free Postgres with pgvector as the shared cloud database.
-  - Keep local CLI sync/digest for now; no hosted cron yet.
+  - Keep local CLI sync/briefing for now; no hosted cron yet.
   - Add local MCP as the first agent-facing surface.
   - Keep Obsidian Markdown export local-only.
   - Keep Docker/Colima Postgres as the OSS/dev/offline fallback.
@@ -43,11 +43,11 @@
       - Add npm run mcp entrypoint (tsx src/mcp.ts) using @modelcontextprotocol/sdk.
       - Initial tools:
           - health: check DB connectivity.
-          - query_archive: ask a question over the archive with citations.
-          - create_digest: create/store digest with { hours?, daysAgo? }.
-          - latest_digest: render latest or selected stored digest with { id? }.
+          - brief: ask a question over the archive with citations.
+          - create_briefing: create/store briefing with { hours?, daysAgo? }.
+          - briefing: render latest or selected stored briefing with { id? }.
 
-      - create_digest is slow/expensive because it calls the LLM; document expected wait.
+      - create_briefing is slow/expensive because it calls the LLM; document expected wait.
       - MCP is local-only, unauthenticated, and must bind to localhost/stdio only.
       - Defer search_sources, get_source, auth, job IDs, remote MCP, and hosted API.
 
@@ -61,19 +61,19 @@
 
   - Verify local Docker PG:
       - migrations
-      - query/digest smoke test
+      - query/briefing smoke test
 
   - Verify Neon:
       - migrations
       - migrated data count sanity check
       - CLI query against Neon
-      - CLI digest canonical against Neon
+      - CLI briefing canonical against Neon
 
   - Verify MCP against Neon DATABASE_URL using mcp-inspector or Claude Desktop config:
       - health
-      - query_archive
-      - create_digest
-      - latest_digest
+      - brief
+      - create_briefing
+      - briefing
 
   - Run:
       - npm run typecheck

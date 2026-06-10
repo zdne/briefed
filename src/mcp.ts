@@ -9,7 +9,7 @@ import { renderDigestMarkdown, renderQueryMarkdown } from "./markdown.js";
 import { queryArchive } from "./query.js";
 
 const server = new McpServer({
-  name: "pnd",
+  name: "brief",
   version: "0.1.0"
 });
 
@@ -20,18 +20,18 @@ const queryArchiveInput = {
 
 const createDigestInput = {
   hours: z.number().int().min(1).optional().describe("Lookback window in hours. Defaults to DIGEST_HOURS."),
-  daysAgo: z.number().int().min(0).optional().describe("End the digest window N days before now.")
+  daysAgo: z.number().int().min(0).optional().describe("End the briefing window N days before now.")
 };
 
 const latestDigestInput = {
-  id: z.number().int().min(1).optional().describe("Stored digest id. Defaults to the latest stored digest.")
+  id: z.number().int().min(1).optional().describe("Stored briefing id. Defaults to the latest stored briefing.")
 };
 
 server.registerTool(
   "health",
   {
     title: "Health",
-    description: "Check that PND can connect to the configured Postgres database."
+    description: "Check that Brief can connect to the configured Postgres database."
   },
   async () => {
     await pool.query("SELECT 1");
@@ -44,10 +44,10 @@ server.registerTool(
 );
 
 server.registerTool(
-  "query_archive",
+  "brief",
   {
-    title: "Query Archive",
-    description: "Ask a question over the PND archive. Returns an answer with citations and source metadata.",
+    title: "Brief",
+    description: "Ask a question over the Brief archive. Returns an answer with citations and source metadata.",
     inputSchema: queryArchiveInput
   },
   async ({ question, limit }) => {
@@ -65,11 +65,11 @@ server.registerTool(
 );
 
 server.registerTool(
-  "create_digest",
+  "create_briefing",
   {
-    title: "Create Digest",
+    title: "Create Briefing",
     description:
-      "Create and store a PND digest. This performs embedding and LLM calls, can be slow, and may take 30-60 seconds.",
+      "Create and store a briefing in Brief. This performs embedding and LLM calls, can be slow, and may take 30-60 seconds.",
     inputSchema: createDigestInput
   },
   async ({ hours, daysAgo }) => {
@@ -94,16 +94,16 @@ server.registerTool(
 );
 
 server.registerTool(
-  "latest_digest",
+  "briefing",
   {
-    title: "Latest Digest",
-    description: "Render the latest stored PND digest, or a specific stored digest by id.",
+    title: "Briefing",
+    description: "Render the latest stored Brief briefing, or a specific stored briefing by id.",
     inputSchema: latestDigestInput
   },
   async ({ id }) => {
     const result = await getDigestForRendering(id);
     if (!result) {
-      const message = id === undefined ? "No stored digests found." : `Digest ${id} not found.`;
+      const message = id === undefined ? "No stored briefings found." : `Briefing ${id} not found.`;
       return jsonToolResult({ error: message }, message, true);
     }
     const createdAt = new Date(result.createdAt);
