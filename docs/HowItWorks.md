@@ -1,8 +1,10 @@
 # How Briefed.sh Works
 
-Briefed.sh uses Feedbin as its collector, Postgres and pgvector as its local archive, OpenAI for embeddings, and OpenAI or Anthropic for language-model synthesis.
+Briefed.sh uses Feedbin and TwitterAPI.io as collectors, Postgres and pgvector as its local archive, OpenAI for embeddings, and OpenAI or Anthropic for language-model synthesis.
 
-## Sync Pipeline
+Feedbin entries and Twitter/X list tweets are normalized into the same `content` table. Source identity fields keep collectors separate while shared embeddings make both collectors searchable through queries and eligible for briefings.
+
+## Feedbin Sync Pipeline
 
 Run:
 
@@ -61,9 +63,9 @@ TWITTERAPI_LIST_MAX_PAGES=3
 TWITTERAPI_LIST_MAX_TWEETS=200
 ```
 
-For each list, Briefed.sh stores the newest successfully processed tweet ID in `sync_state` under `twitterapi:list:<list_id>:latest_id`. A normal run fetches newest tweets first and stops when it reaches that stored tweet. If the stored tweet is not reached, sync continues only up to the configured page and tweet limits.
+For each list, Briefed.sh stores the newest successfully processed tweet ID in `sync_state` under `twitterapi:list:<list_id>:latest_id`. A normal run fetches newest tweets first and stops when it reaches that stored tweet. If the stored tweet is not reached, sync continues only up to the configured page and tweet limits. The sync summary records pages fetched, tweets returned and processed, whether a next cursor was present, and the reason the list stopped.
 
-Twitter/X entries use `source_key = 'twitterapi:list:<list_id>'`, `source_item_id = '<tweet_id>'`, and `source_type = 'twitter'`. They are embedding-only by default because `twitter` is included in `LIGHTWEIGHT_SOURCE_TYPES`.
+Twitter/X entries use `source_key = 'twitterapi:list:<list_id>'`, `source_item_id = '<tweet_id>'`, and `source_type = 'twitter'`. Normalization keeps the tweet author, URL, text, quoted or retweeted tweet text, and attached article title or preview when present. Twitter/X entries are embedding-only by default because `twitter` is included in `LIGHTWEIGHT_SOURCE_TYPES`.
 
 ## Source Detection
 
@@ -237,5 +239,6 @@ The normalized archive, generated enrichment, embeddings, cursors, and briefings
 External requests still occur:
 
 - Feedbin supplies entries.
+- TwitterAPI.io supplies configured Twitter/X list timelines.
 - OpenAI receives text for embeddings.
 - The configured LLM provider receives text for full enrichment, queries, and briefings.

@@ -15,6 +15,7 @@ Tracker of potential features to add to brief:
 ## Later / TBD
 
 - [ ] Twitter engagement scoring: Further improvement to briefing pre-qualification (see below)
+- [ ] TBD: Hook Apify to read linked in posts
 - [ ] Run sync / briefing periodically
 - [ ] TBD: Remote MCP
 - [ ] TBD: Turn this into a service

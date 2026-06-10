@@ -4,15 +4,24 @@
 
 Briefed is a personal news intelligence layer for you and your agents. It syncs your feeds, enriches and embeds every entry, and generates a daily briefing grounded in your interests — ready to serve via MCP. Ask questions over your archive, get cited answers, and let your agents keep you informed without the noise.
 
+Example MCP prompt:
+
+- "What's my latest briefing?"
+- "Give me a brief on agentic payments"
+- "Brief me on recent topics from Twitter."
+
 ## Architecture
 
 ```text
-Feedbin API -> sync CLI -> Postgres/pgvector -> LLM enrichment + OpenAI embeddings
-                                                       |
-                                              CLI and POST /query
+Feedbin API ───────┐
+                   ├─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector
+TwitterAPI.io ─────┘                                      │
+                                                          ├─ OpenAI embeddings
+                                                          ├─ LLM enrichment and synthesis
+                                                          └─ CLI, HTTP API, and MCP tools
 ```
 
-The MVP uses Feedbin's `GET /v2/entries.json?since=...` endpoint and preserves the exact newest `created_at` timestamp as its next cursor. Entries are deduplicated by both Feedbin entry ID and canonicalized URL.
+The MVP uses Feedbin's `GET /v2/entries.json?since=...` endpoint and TwitterAPI.io list timelines as collectors. Feedbin sync preserves the exact newest `created_at` timestamp as its next cursor; Twitter/X sync stores the newest processed tweet ID per configured list. Entries are deduplicated by source identity and canonicalized URL.
 
 ## Prerequisites
 
