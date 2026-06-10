@@ -157,13 +157,13 @@ The MCP server is local-only and unauthenticated. Do not expose it over the publ
 Available tools:
 
 - `health`: checks database connectivity.
-- `brief`: asks a question over the archive with citations.
-- `create_briefing`: creates and stores a briefing with optional `hours` and `daysAgo`; this calls the LLM and may take 30-60 seconds.
-- `briefing`: renders the latest stored briefing, or a specific briefing by `id`.
+- `brief`: asks ad hoc questions over the synced archive, including articles, newsletters, Reddit, Hacker News, and Twitter/X, with citations.
+- `create_briefing`: creates and stores a new time-window briefing with optional `hours` and `daysAgo`; this calls the LLM and may take 30-60 seconds.
+- `briefing`: renders the latest stored briefing, or a specific stored briefing by `id`.
 
 Example prompts that map naturally to the MCP tools:
 
-- `brief`: "Give me a brief on agentic payments"; "Brief me on what's happening with MCP"; "What do I know about Anthropic's latest moves?"
+- `brief`: "Give me a brief on agentic payments"; "Brief me on recent topics from Twitter"; "Brief me on what's happening with MCP"; "What do I know about Anthropic's latest moves?"
 - `briefing`: "Give me my morning briefing"; "What's my latest briefing?"; "Show me briefing #4"; "Brief me on the last 24 hours"
 - `create_briefing`: "Create a briefing for the last 48 hours"; "Generate my briefing for yesterday"; "Make a briefing for the past week"
 - `health`: "Is Brief connected?"; "Check Brief health"

@@ -14,24 +14,34 @@ const server = new McpServer({
 });
 
 const queryArchiveInput = {
-  question: z.string().trim().min(1).describe("Question to answer from the archived sources."),
-  limit: z.number().int().min(1).max(30).optional().describe("Maximum number of sources to retrieve.")
+  question: z.string().trim().min(1).describe(
+    "Natural-language question to answer from the synced Brief archive. Use this for topical, source-specific, or exploratory requests such as \"brief me on recent topics from Twitter\", \"what is happening with MCP?\", or \"any signal on open-source agent frameworks?\""
+  ),
+  limit: z.number().int().min(1).max(30).optional().describe(
+    "Maximum number of archived sources to retrieve for the answer. Increase for broad or multi-topic questions."
+  )
 };
 
 const createDigestInput = {
-  hours: z.number().int().min(1).optional().describe("Lookback window in hours. Defaults to DIGEST_HOURS."),
-  daysAgo: z.number().int().min(0).optional().describe("End the briefing window N days before now.")
+  hours: z.number().int().min(1).optional().describe(
+    "Lookback window in hours for a new briefing. Defaults to DIGEST_HOURS."
+  ),
+  daysAgo: z.number().int().min(0).optional().describe(
+    "End the new briefing window N days before now. Use 1 for yesterday."
+  )
 };
 
 const latestDigestInput = {
-  id: z.number().int().min(1).optional().describe("Stored briefing id. Defaults to the latest stored briefing.")
+  id: z.number().int().min(1).optional().describe(
+    "Stored briefing id to render. Omit to return the latest stored briefing."
+  )
 };
 
 server.registerTool(
   "health",
   {
     title: "Health",
-    description: "Check that Brief can connect to the configured Postgres database."
+    description: "Use to check whether Brief is connected and able to reach the configured Postgres archive."
   },
   async () => {
     await pool.query("SELECT 1");
@@ -47,7 +57,8 @@ server.registerTool(
   "brief",
   {
     title: "Brief",
-    description: "Ask a question over the Brief archive. Returns an answer with citations and source metadata.",
+    description:
+      "Use for ad hoc questions over the synced Brief archive, including articles, newsletters, Reddit, Hacker News, and Twitter/X sources. Best for prompts like \"brief me on recent topics from Twitter\", \"give me a brief on agentic payments\", \"what do I know about Anthropic's latest moves?\", or \"any signal on open-source agent frameworks this week?\" Returns a cited answer and source metadata. Do not use this just to show the latest saved morning briefing; use briefing for that.",
     inputSchema: queryArchiveInput
   },
   async ({ question, limit }) => {
@@ -69,7 +80,7 @@ server.registerTool(
   {
     title: "Create Briefing",
     description:
-      "Create and store a briefing in Brief. This performs embedding and LLM calls, can be slow, and may take 30-60 seconds.",
+      "Use when the user asks to generate a new briefing for a time window, such as \"create my briefing for the last 48 hours\", \"generate yesterday's briefing\", or \"make a briefing for the past week\". This creates and stores a new briefing, performs embedding and LLM calls, can be slow, and may take 30-60 seconds. Do not use for quick topical questions; use brief instead.",
     inputSchema: createDigestInput
   },
   async ({ hours, daysAgo }) => {
@@ -97,7 +108,8 @@ server.registerTool(
   "briefing",
   {
     title: "Briefing",
-    description: "Render the latest stored Brief briefing, or a specific stored briefing by id.",
+    description:
+      "Use to show an already stored briefing, especially for prompts like \"give me my morning briefing\", \"what's my latest briefing?\", \"show me briefing #4\", or \"show the latest saved briefing\". It returns the latest stored briefing by default or a specific briefing by id. Do not use for new topical archive searches; use brief instead.",
     inputSchema: latestDigestInput
   },
   async ({ id }) => {
