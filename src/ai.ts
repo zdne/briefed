@@ -257,6 +257,8 @@ Rules:
 - Each bullet must cite exactly one source.
 - Do not put multiple citation numbers in one bullet.
 - Do not merge sources into a single bullet.
+- If several selected sources cover the same announcement, write one bullet using the strongest source and do not repeat the event in another Watchlist or Focus Areas subsection.
+- Do not create separate bullets for outlet variants of the same company announcement.
 - If multiple sources cover related but distinct facts, write separate bullets or choose the strongest source.
 - Do not repeat the same source and same claim across sections.
 - Do not repeat the same source in multiple required watchlist or focus-area subsections.

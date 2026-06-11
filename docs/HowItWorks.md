@@ -4,6 +4,18 @@ Briefed.sh uses Feedbin and TwitterAPI.io as collectors, Postgres and pgvector a
 
 Feedbin entries and Twitter/X list tweets are normalized into the same `content` table. Source identity fields keep collectors separate while shared embeddings make both collectors searchable through queries and eligible for briefings.
 
+```text
+Feedbin API ───────┐
+                   ├─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector ─┬─ CLI query/digest render
+TwitterAPI.io ─────┘                                      │                  ├─ HTTP API query
+                                                          │                  └─ local MCP tools
+                                                          │                     ├─ brief: vector query archive
+                                                          │                     ├─ briefing: read stored digest
+                                                          │                     └─ create_briefing: query PG + synthesize + store
+                                                          ├─ OpenAI embeddings
+                                                          └─ LLM enrichment and synthesis
+```
+
 ## Feedbin Sync Pipeline
 
 Run:

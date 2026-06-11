@@ -49,10 +49,18 @@ interface SelectionBucket {
 interface SelectionState {
   selected: SelectedDigestSource[];
   seen: Set<string>;
-  seenContentKeys: Set<string>;
+  seenTitleKeys: Set<string>;
+  eventClusters: EventCluster[];
   sourceTypeCounts: Map<DigestCandidate["sourceType"], number>;
   sourceKeyCounts: Map<string, number>;
   authorCounts: Map<string, number>;
+}
+
+interface EventCluster {
+  entities: Set<string>;
+  keywords: Set<string>;
+  factKeys: Set<string>;
+  candidates: DigestCandidate[];
 }
 
 export function selectDigestSources(
@@ -64,7 +72,8 @@ export function selectDigestSources(
   const state: SelectionState = {
     selected: [],
     seen: new Set<string>(),
-    seenContentKeys: new Set<string>(),
+    seenTitleKeys: new Set<string>(),
+    eventClusters: [],
     sourceTypeCounts: new Map<DigestCandidate["sourceType"], number>(),
     sourceKeyCounts: new Map<string, number>(),
     authorCounts: new Map<string, number>()
@@ -151,11 +160,24 @@ function rankedTopicCandidates(
   const combined = [...exactMatches, ...vectorMatches];
   const seen = new Set<string>();
 
-  return combined.filter((candidate) => {
-    if (seen.has(candidate.id)) return false;
-    seen.add(candidate.id);
-    return true;
-  });
+  return combined
+    .map((candidate, index) => ({
+      candidate,
+      group: exactMatches.some((match) => match.id === candidate.id) ? 0 : 1,
+      index
+    }))
+    .filter((item) => {
+      if (seen.has(item.candidate.id)) return false;
+      seen.add(item.candidate.id);
+      return true;
+    })
+    .sort((a, b) =>
+      a.group - b.group ||
+      representativeSort(b.candidate, a.candidate) ||
+      b.candidate.score - a.candidate.score ||
+      a.index - b.index
+    )
+    .map((item) => item.candidate);
 }
 
 function addTopicBuckets(
@@ -187,14 +209,16 @@ function addSelected(
   options: DigestSelectionOptions
 ): boolean {
   if (state.seen.has(candidate.id)) return false;
-  const contentKey = candidateContentKey(candidate);
-  if (contentKey && state.seenContentKeys.has(contentKey)) return false;
+  const titleKey = candidateTitleKey(candidate);
+  if (titleKey && state.seenTitleKeys.has(titleKey)) return false;
+  if (exceedsEventClusterCap(state, candidate)) return false;
   if (state.selected.length >= options.maxEntries) return false;
   if (exceedsCaps(state, candidate, options)) return false;
 
   state.selected.push({ source: candidate, ...selection });
   state.seen.add(candidate.id);
-  if (contentKey) state.seenContentKeys.add(contentKey);
+  if (titleKey) state.seenTitleKeys.add(titleKey);
+  recordEventCluster(state, candidate);
   increment(state.sourceTypeCounts, candidate.sourceType);
   increment(state.sourceKeyCounts, candidate.sourceKey);
   const authorKey = normalizedAuthor(candidate.author);
@@ -240,13 +264,140 @@ function normalizedAuthor(author: string | null): string | null {
   return value || null;
 }
 
-function candidateContentKey(candidate: DigestCandidate): string | null {
-  const title = normalizeText(stripPublisherSuffix(candidate.title ?? ""));
+function candidateTitleKey(candidate: DigestCandidate): string | null {
+  const title = normalizeEventText(stripPublisherSuffix(candidate.title ?? ""));
   return title || null;
 }
 
 function stripPublisherSuffix(title: string): string {
   return title.replace(/\s+-\s+[^-]+$/u, "").trim();
+}
+
+function exceedsEventClusterCap(state: SelectionState, candidate: DigestCandidate): boolean {
+  const signature = eventSignature(candidate);
+  const cluster = state.eventClusters.find((item) => sameCoverageEvent(item, signature));
+  if (!cluster) return false;
+  if (cluster.candidates.length >= 2) return true;
+  return !materiallyDistinctFact(cluster, signature);
+}
+
+function recordEventCluster(state: SelectionState, candidate: DigestCandidate): void {
+  const signature = eventSignature(candidate);
+  const cluster = state.eventClusters.find((item) => sameCoverageEvent(item, signature));
+  if (cluster) {
+    cluster.candidates.push(candidate);
+    for (const factKey of signature.factKeys) cluster.factKeys.add(factKey);
+    for (const keyword of signature.keywords) cluster.keywords.add(keyword);
+    for (const entity of signature.entities) cluster.entities.add(entity);
+    return;
+  }
+
+  state.eventClusters.push({
+    entities: signature.entities,
+    keywords: signature.keywords,
+    factKeys: signature.factKeys,
+    candidates: [candidate]
+  });
+}
+
+function sameCoverageEvent(cluster: EventCluster, signature: EventCluster): boolean {
+  const sharedEntities = intersectionSize(cluster.entities, signature.entities);
+  if (sharedEntities < 1) return false;
+
+  const keywordOverlap = intersectionSize(cluster.keywords, signature.keywords);
+  const smallerKeywordSetSize = Math.min(cluster.keywords.size, signature.keywords.size);
+  return keywordOverlap >= 4 || (smallerKeywordSetSize >= 4 && keywordOverlap / smallerKeywordSetSize >= 0.6);
+}
+
+function materiallyDistinctFact(cluster: EventCluster, signature: EventCluster): boolean {
+  if (signature.factKeys.size === 0) return false;
+  for (const factKey of signature.factKeys) {
+    if (!cluster.factKeys.has(factKey)) return true;
+  }
+  return false;
+}
+
+function eventSignature(candidate: DigestCandidate): EventCluster {
+  const text = normalizeEventText([
+    stripPublisherSuffix(candidate.title ?? ""),
+    candidate.summary,
+    ...entitySearchParts(candidate.entities)
+  ].filter((part): part is string => Boolean(part)).join(" "));
+  return {
+    entities: majorEntityTerms(candidate),
+    keywords: eventKeywords(text),
+    factKeys: materialFactKeys(text),
+    candidates: [candidate]
+  };
+}
+
+function majorEntityTerms(candidate: DigestCandidate): Set<string> {
+  const entities = entityNameParts(candidate.entities)
+    .map(normalizeEntityTerm)
+    .filter((value): value is string => Boolean(value));
+  const text = normalizeEventText(`${candidate.title ?? ""} ${candidate.summary ?? ""}`);
+  const knownEntities = [
+    "openai",
+    "visa",
+    "mastercard",
+    "ripple",
+    "trustap",
+    "fastly",
+    "skyfire",
+    "google",
+    "paypal",
+    "stripe",
+    "worldpay",
+    "amazon",
+    "microsoft",
+    "anthropic"
+  ].filter((entity) => text.includes(entity));
+  return new Set([...entities, ...knownEntities]);
+}
+
+function entityNameParts(entities: unknown): string[] {
+  if (!Array.isArray(entities)) return [];
+  return entities.flatMap((entity) => {
+    if (!entity || typeof entity !== "object") return [];
+    const maybeEntity = entity as { name?: unknown };
+    return typeof maybeEntity.name === "string" ? [maybeEntity.name] : [];
+  });
+}
+
+function normalizeEntityTerm(value: string): string | null {
+  const normalized = normalizeEventText(value);
+  if (!normalized || EVENT_STOPWORDS.has(normalized)) return null;
+  return normalized;
+}
+
+function eventKeywords(text: string): Set<string> {
+  return new Set(text
+    .split(" ")
+    .map((term) => term.replace(/s$/u, ""))
+    .filter((term) => term.length >= 4 && !EVENT_STOPWORDS.has(term))
+    .slice(0, 30));
+}
+
+function materialFactKeys(text: string): Set<string> {
+  const keys = new Set<string>();
+  const groups: Array<[string, RegExp]> = [
+    ["checkout", /\bcheckout\b|\bcheckouts\b/u],
+    ["stablecoin", /\bstablecoins?\b|\busdc\b|\busdt\b/u],
+    ["tokenization", /\btokeni[sz]ation\b|\btokeni[sz]ed\b|\btokens?\b/u],
+    ["protocol", /\bprotocol\b|\bstandard\b|\bframework\b/u]
+  ];
+  for (const [key, pattern] of groups) {
+    if (pattern.test(text)) keys.add(key);
+  }
+  return keys;
+}
+
+function intersectionSize<T>(left: Set<T>, right: Set<T>): number {
+  let size = 0;
+  for (const item of left) {
+    if (right.has(item)) size += 1;
+  }
+  return size;
 }
 
 function candidateMatchesTopic(candidate: DigestCandidate, topic: string): boolean {
@@ -287,7 +438,7 @@ function rankedImportantGeneralCandidates(candidates: DigestCandidate[], minScor
   return candidates
     .map((candidate, index) => ({ candidate, score: importantGeneralScore(candidate), index }))
     .filter((item) => item.score >= minScore)
-    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .sort((a, b) => b.score - a.score || representativeSort(b.candidate, a.candidate) || a.index - b.index)
     .map((item) => item.candidate);
 }
 
@@ -322,8 +473,49 @@ function importantGeneralScore(candidate: DigestCandidate): number {
 function rankedGeneralCandidates(candidates: DigestCandidate[]): DigestCandidate[] {
   return candidates
     .map((candidate, index) => ({ candidate, score: generalQualityScore(candidate), index }))
-    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .sort((a, b) => b.score - a.score || representativeSort(b.candidate, a.candidate) || a.index - b.index)
     .map((item) => item.candidate);
+}
+
+function representativeSort(left: DigestCandidate, right: DigestCandidate): number {
+  return sameEventCandidates(left, right) ? representativeScore(left) - representativeScore(right) : 0;
+}
+
+function sameEventCandidates(left: DigestCandidate, right: DigestCandidate): boolean {
+  const leftSignature = eventSignature(left);
+  const rightSignature = eventSignature(right);
+  return sameCoverageEvent(leftSignature, rightSignature);
+}
+
+function representativeScore(candidate: DigestCandidate): number {
+  const summaryLength = normalizeText(candidate.summary ?? "").length;
+  let score = 0;
+  if (isSourcefulUrl(candidate.canonicalUrl)) score += 8;
+  if (!isGoogleNewsWrapper(candidate.canonicalUrl)) score += 4;
+  if (summaryLength >= 160) score += 3;
+  else if (summaryLength >= 80) score += 2;
+  else if (summaryLength >= 40) score += 1;
+  if (entitySearchParts(candidate.entities).length > 0) score += 1;
+  return score;
+}
+
+function isSourcefulUrl(input: string | null): boolean {
+  if (!input) return false;
+  try {
+    const hostname = new URL(input).hostname.replace(/^www\./u, "");
+    return OFFICIAL_OR_SOURCEFUL_DOMAINS.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
+}
+
+function isGoogleNewsWrapper(input: string | null): boolean {
+  if (!input) return false;
+  try {
+    return new URL(input).hostname.replace(/^www\./u, "") === "news.google.com";
+  } catch {
+    return false;
+  }
 }
 
 function generalQualityScore(candidate: DigestCandidate): number {
@@ -449,3 +641,59 @@ function rawEntrySearchText(rawEntry: unknown): string {
 function normalizeText(value: string): string {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
+
+function normalizeEventText(value: string): string {
+  return normalizeText(value)
+    .normalize("NFKD")
+    .replace(/https?:\/\/\S+/gu, " ")
+    .replace(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/gu, " ")
+    .replace(/\b20\d{2}\b/gu, " ")
+    .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
+    .replace(/\b(?:announces?|announced|launches?|launched|introduces?|introduced|unveils?|unveiled|rolls?|rolled|partners?|partnered|reports?|reported|says|said|new|latest|update|updates|press|release|pr)\b/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+const EVENT_STOPWORDS = new Set([
+  "about",
+  "after",
+  "agent",
+  "agentic",
+  "also",
+  "amid",
+  "and",
+  "article",
+  "from",
+  "into",
+  "its",
+  "more",
+  "news",
+  "open",
+  "over",
+  "said",
+  "says",
+  "that",
+  "the",
+  "their",
+  "this",
+  "through",
+  "with"
+]);
+
+const OFFICIAL_OR_SOURCEFUL_DOMAINS = [
+  "openai.com",
+  "visa.com",
+  "mastercard.com",
+  "ripple.com",
+  "trustap.com",
+  "fastly.com",
+  "skyfire.xyz",
+  "paypal.com",
+  "stripe.com",
+  "worldpay.com",
+  "googleblog.com",
+  "blog.google",
+  "microsoft.com",
+  "anthropic.com",
+  "sec.gov"
+];

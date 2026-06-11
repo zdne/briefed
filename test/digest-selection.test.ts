@@ -178,6 +178,146 @@ describe("selectDigestSources", () => {
     expect(result.selectedSources.map((selection) => selection.topic)).toEqual(["agentic payments"]);
   });
 
+  it("caps outlet variants covering the same Visa and OpenAI announcement", () => {
+    const result = selectDigestSources(
+      [
+        visaOpenAi("official", {
+          canonicalUrl: "https://usa.visa.com/about-visa/newsroom/press-releases/openai-agentic-commerce.html",
+          summary: "Visa announced work with OpenAI on agentic commerce checkout and payments for ChatGPT users."
+        }),
+        visaOpenAi("wrapper-1", {
+          title: "Visa and OpenAI team on agentic commerce payments - Outlet One",
+          canonicalUrl: "https://news.google.com/rss/articles/one",
+          summary: "Visa and OpenAI announced agentic commerce payments."
+        }),
+        visaOpenAi("wrapper-2", {
+          title: "OpenAI taps Visa for agentic checkout - Outlet Two",
+          canonicalUrl: "https://news.google.com/rss/articles/two",
+          summary: "OpenAI and Visa announced agentic checkout."
+        }),
+        visaOpenAi("wire", {
+          title: "Visa backs OpenAI shopping checkout push - Outlet Three",
+          canonicalUrl: "https://examplewire.com/visa-openai-shopping",
+          summary: "Visa and OpenAI announced shopping checkout and payments."
+        }),
+        visaOpenAi("syndicated", {
+          title: "OpenAI Visa payment partnership starts agentic commerce pilot - Outlet Four",
+          canonicalUrl: "https://syndicated.example/visa-openai",
+          summary: "OpenAI and Visa announced a payment partnership for agentic commerce."
+        }),
+        candidate("mastercard-ripple", {
+          title: "Mastercard and Ripple test stablecoin settlement",
+          summary: "Mastercard and Ripple reported a stablecoin settlement test.",
+          entities: [{ name: "Mastercard", type: "company" }, { name: "Ripple", type: "company" }]
+        }),
+        candidate("trustap", {
+          title: "Trustap launches escrow checkout for marketplaces",
+          summary: "Trustap launched escrow checkout tooling for marketplaces.",
+          entities: [{ name: "Trustap", type: "company" }]
+        }),
+        candidate("fastly-skyfire", {
+          title: "Fastly and Skyfire integrate agent payments",
+          summary: "Fastly and Skyfire integrated agent payment infrastructure.",
+          entities: [{ name: "Fastly", type: "company" }, { name: "Skyfire", type: "company" }]
+        })
+      ],
+      [],
+      [],
+      { ...defaults, maxEntries: 8, importantGeneralMaxEntries: 0, generalMaxEntries: 8 }
+    );
+
+    const ids = result.sources.map((source) => source.id);
+    expect(ids.filter((id) => id.startsWith("visa-openai-"))).toHaveLength(1);
+    expect(ids).toContain("visa-openai-official");
+    expect(ids).toEqual(expect.arrayContaining(["mastercard-ripple", "trustap", "fastly-skyfire"]));
+  });
+
+  it("selects a cross-topic event once under the first matching required topic", () => {
+    const shared = visaOpenAi("payments-commerce", {
+      title: "Visa and OpenAI announce agentic commerce checkout payments",
+      summary: "Visa and OpenAI announced agentic commerce checkout payments."
+    });
+
+    const result = selectDigestSources(
+      [shared],
+      [
+        { topic: "agentic payments", matches: [shared] },
+        { topic: "agentic commerce", matches: [shared] }
+      ],
+      [],
+      { ...defaults, requiredTopicMaxEntries: 2 }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["visa-openai-payments-commerce"]);
+    expect(result.selectedSources.map((selection) => selection.topic)).toEqual(["agentic payments"]);
+  });
+
+  it("allows a second same-event source only when it adds a distinct material fact", () => {
+    const result = selectDigestSources(
+      [
+        visaOpenAi("checkout", {
+          summary: "Visa and OpenAI announced agentic commerce checkout for ChatGPT shopping."
+        }),
+        visaOpenAi("stablecoin", {
+          title: "Visa and OpenAI add stablecoin tokenization to agent payments",
+          summary: "Visa and OpenAI announced stablecoin tokenization for agent payments."
+        }),
+        visaOpenAi("thin-copy", {
+          title: "OpenAI and Visa announce agentic commerce - Outlet",
+          summary: "OpenAI and Visa announced agentic commerce payments."
+        })
+      ],
+      [],
+      [],
+      { ...defaults, maxEntries: 3, importantGeneralMaxEntries: 0, generalMaxEntries: 3 }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual([
+      "visa-openai-checkout",
+      "visa-openai-stablecoin"
+    ]);
+  });
+
+  it("prefers sourceful direct coverage over thin Google News wrappers", () => {
+    const result = selectDigestSources(
+      [
+        visaOpenAi("wrapper", {
+          canonicalUrl: "https://news.google.com/rss/articles/visa-openai",
+          summary: "Visa and OpenAI announced payments."
+        }),
+        visaOpenAi("official", {
+          canonicalUrl: "https://openai.com/index/agentic-commerce-visa/",
+          summary: "OpenAI announced work with Visa on agentic commerce checkout, payments, and buying through ChatGPT."
+        })
+      ],
+      [{ topic: "agentic commerce", matches: [] }],
+      [],
+      defaults
+    );
+
+    expect(result.sources[0]?.id).toBe("visa-openai-official");
+  });
+
+  it("prefers a fuller wrapper summary when all same-event sources are wrappers", () => {
+    const result = selectDigestSources(
+      [
+        visaOpenAi("thin-wrapper", {
+          canonicalUrl: "https://news.google.com/rss/articles/thin",
+          summary: "Visa and OpenAI announced payments."
+        }),
+        visaOpenAi("full-wrapper", {
+          canonicalUrl: "https://news.google.com/rss/articles/full",
+          summary: "Visa and OpenAI announced agentic commerce checkout, payment credentials, shopping flows, and merchant payment handling for ChatGPT users."
+        })
+      ],
+      [{ topic: "agentic commerce", matches: [] }],
+      [],
+      defaults
+    );
+
+    expect(result.sources[0]?.id).toBe("visa-openai-full-wrapper");
+  });
+
   it("respects the digest max entry cap", () => {
     const result = selectDigestSources(
       [candidate("general-1"), candidate("general-2"), candidate("general-3")],
@@ -387,4 +527,14 @@ function candidate(id: string, overrides: Partial<DigestCandidate> = {}): Digest
     rawEntry: {},
     ...overrides
   };
+}
+
+function visaOpenAi(id: string, overrides: Partial<DigestCandidate> = {}): DigestCandidate {
+  return candidate(`visa-openai-${id}`, {
+    title: "Visa and OpenAI announce agentic commerce payments",
+    summary: "Visa and OpenAI announced agentic commerce payments and checkout.",
+    topicTags: ["agentic payments", "agentic commerce"],
+    entities: [{ name: "Visa", type: "company" }, { name: "OpenAI", type: "company" }],
+    ...overrides
+  });
 }

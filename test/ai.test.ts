@@ -94,6 +94,9 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Each bullet must cite exactly one source.");
     expect(prompt).toContain("Do not put multiple citation numbers in one bullet.");
     expect(prompt).toContain("Do not merge sources into a single bullet.");
+    expect(prompt).toContain("If several selected sources cover the same announcement");
+    expect(prompt).toContain("do not repeat the event in another Watchlist or Focus Areas subsection");
+    expect(prompt).toContain("Do not create separate bullets for outlet variants of the same company announcement.");
     expect(prompt).toContain("If sources are weakly related, keep them in separate bullets");
     expect(prompt).toContain("If multiple sources cover related but distinct facts, write separate bullets or choose the strongest source.");
     expect(prompt).toContain("Do not repeat the same source and same claim across sections.");

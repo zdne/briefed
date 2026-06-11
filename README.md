@@ -14,11 +14,14 @@ Example MCP prompt:
 
 ```text
 Feedbin API ───────┐
-                   ├─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector
-TwitterAPI.io ─────┘                                      │
+                   ├─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector ─┬─ CLI query/digest render
+TwitterAPI.io ─────┘                                      │                  ├─ HTTP API query
+                                                          │                  └─ local MCP tools
+                                                          │                     ├─ brief: vector query archive
+                                                          │                     ├─ briefing: read stored digest
+                                                          │                     └─ create_briefing: query PG + synthesize + store
                                                           ├─ OpenAI embeddings
-                                                          ├─ LLM enrichment and synthesis
-                                                          └─ CLI, HTTP API, and MCP tools
+                                                          └─ LLM enrichment and synthesis
 ```
 
 The MVP uses Feedbin's `GET /v2/entries.json?since=...` endpoint and TwitterAPI.io list timelines as collectors. Feedbin sync preserves the exact newest `created_at` timestamp as its next cursor; Twitter/X sync stores the newest processed tweet ID per configured list. Entries are deduplicated by source identity and canonicalized URL.
