@@ -64,7 +64,7 @@ describe("buildDigestPrompt", () => {
       focusAreas: ["MCP"],
       sourceContexts: [
         { bucket: "required", topic: "agentic payments" },
-        { bucket: "important_general" }
+        { bucket: "important_general", freshnessLabel: "follow_up" }
       ]
     });
 
@@ -97,6 +97,9 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("If several selected sources cover the same announcement");
     expect(prompt).toContain("do not repeat the event in another Watchlist or Focus Areas subsection");
     expect(prompt).toContain("Do not create separate bullets for outlet variants of the same company announcement.");
+    expect(prompt).toContain("Sources labeled \"follow-up to recent coverage\"");
+    expect(prompt).toContain("Do not let follow-up sources dominate a section.");
+    expect(prompt).toContain("Selection: important general / follow-up to recent coverage");
     expect(prompt).toContain("If sources are weakly related, keep them in separate bullets");
     expect(prompt).toContain("If multiple sources cover related but distinct facts, write separate bullets or choose the strongest source.");
     expect(prompt).toContain("Do not repeat the same source and same claim across sections.");

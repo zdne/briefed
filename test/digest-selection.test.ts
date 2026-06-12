@@ -351,6 +351,106 @@ describe("selectDigestSources", () => {
     expect(result.sources[0]?.id).toBe("visa-openai-full-wrapper");
   });
 
+  it("suppresses stale repeats already covered in recent digests", () => {
+    const yesterday = visaOpenAi("yesterday", {
+      summary: "OpenAI and Visa announced agentic commerce checkout payments for ChatGPT users."
+    });
+
+    const result = selectDigestSources(
+      [
+        visaOpenAi("follow-on", {
+          title: "Visa to enable OpenAI payments in agentic commerce - CFOtech Asia",
+          canonicalUrl: "https://news.google.com/rss/articles/follow-on",
+          summary: "Visa and OpenAI announced agentic commerce payments."
+        }),
+        candidate("fresh", {
+          title: "Pine Labs launches agentic payment protocol",
+          summary: "Pine Labs launched an agentic payment protocol for payment processing.",
+          entities: [{ name: "Pine Labs", type: "company" }]
+        })
+      ],
+      [{ topic: "agentic payments", matches: [] }],
+      [],
+      {
+        ...defaults,
+        priorDigestCandidates: [yesterday],
+        importantGeneralMaxEntries: 0
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["fresh"]);
+  });
+
+  it("allows one material follow-up for a recently covered event", () => {
+    const yesterday = visaOpenAi("yesterday", {
+      summary: "OpenAI and Visa announced agentic commerce checkout payments for ChatGPT users."
+    });
+
+    const result = selectDigestSources(
+      [
+        visaOpenAi("stablecoin-1", {
+          title: "Visa and OpenAI add stablecoin settlement to agent payments",
+          summary: "Visa and OpenAI added stablecoin settlement expansion to agentic payments."
+        }),
+        visaOpenAi("stablecoin-2", {
+          title: "Visa deepens OpenAI commerce push with stablecoin settlement",
+          summary: "Visa and OpenAI expanded stablecoin settlement for agentic payments."
+        }),
+        candidate("fresh", {
+          title: "Trustap raises funding for agentic commerce",
+          summary: "Trustap raised funding for agentic commerce infrastructure.",
+          entities: [{ name: "Trustap", type: "company" }]
+        })
+      ],
+      [],
+      [],
+      {
+        ...defaults,
+        priorDigestCandidates: [yesterday],
+        maxFollowupsPerEvent: 1,
+        importantGeneralMaxEntries: 0
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual([
+      "visa-openai-stablecoin-1",
+      "fresh"
+    ]);
+    expect(result.selectedSources[0]?.freshnessLabel).toBe("follow_up");
+  });
+
+  it("uses fresh watchlist candidates before material follow-ups", () => {
+    const yesterday = visaOpenAi("yesterday", {
+      summary: "OpenAI and Visa announced agentic commerce checkout payments for ChatGPT users."
+    });
+
+    const result = selectDigestSources(
+      [
+        visaOpenAi("stablecoin", {
+          title: "Visa and OpenAI add stablecoin settlement to agent payments",
+          summary: "Visa and OpenAI added stablecoin settlement expansion to agentic payments."
+        }),
+        candidate("fresh-payments", {
+          title: "Pine Labs launches agentic payments protocol",
+          summary: "Pine Labs launched an agentic payments protocol for payment processing.",
+          entities: [{ name: "Pine Labs", type: "company" }]
+        })
+      ],
+      [{ topic: "agentic payments", matches: [] }],
+      [],
+      {
+        ...defaults,
+        requiredTopicMaxEntries: 2,
+        priorDigestCandidates: [yesterday],
+        importantGeneralMaxEntries: 0,
+        generalMaxEntries: 0
+      }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["fresh-payments"]);
+    expect(result.selectedSources.map((selection) => selection.freshnessLabel)).toEqual(["fresh"]);
+  });
+
   it("respects the digest max entry cap", () => {
     const result = selectDigestSources(
       [candidate("general-1"), candidate("general-2"), candidate("general-3")],

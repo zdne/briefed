@@ -68,6 +68,7 @@ export interface DigestSourceContext {
   bucket: "required" | "focus" | "important_general" | "general";
   topic?: string;
   signalLabel?: "important_general" | "strategic_analysis" | "general";
+  freshnessLabel?: "fresh" | "follow_up";
 }
 
 export interface DigestForRendering {

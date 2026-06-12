@@ -146,6 +146,8 @@ See [`.env.example`](.env.example). Important values:
 - `DIGEST_MAX_REDDIT_ENTRIES`, `DIGEST_MAX_TWITTER_ENTRIES`, `DIGEST_MAX_ARTICLE_ENTRIES`, `DIGEST_MAX_HACKERNEWS_ENTRIES`: source-type caps for one briefing; defaults to `25`, `20`, `80`, and `15`.
 - `DIGEST_MAX_ENTRIES_PER_SOURCE_KEY`: cap per feed/list/source key for one briefing; defaults to `20`.
 - `DIGEST_MAX_ENTRIES_PER_AUTHOR`: cap per normalized author for one briefing; defaults to `4`.
+- `DIGEST_REPEAT_LOOKBACK_HOURS`: recent stored briefing history used to suppress stale repeat coverage; defaults to `72`.
+- `DIGEST_MAX_FOLLOWUPS_PER_EVENT`: max material follow-up sources allowed for a recently briefed event; defaults to `1`.
 - `DIGEST_REQUIRED_TOPICS`: comma-separated durable watchlist topics that always appear in briefings, even with no new signal.
 - `DIGEST_FOCUS_AREAS`: comma-separated softer interests that are highlighted only when relevant source-backed signal exists.
 - `DIGEST_OUTPUT_DIR`: directory for generated briefing Markdown; defaults to `output/briefings`.

@@ -52,6 +52,8 @@ const schema = z.object({
   DIGEST_MAX_TWITTER_ENTRIES: z.coerce.number().int().min(0).default(20),
   DIGEST_MAX_ENTRIES_PER_SOURCE_KEY: z.coerce.number().int().min(0).default(20),
   DIGEST_MAX_ENTRIES_PER_AUTHOR: z.coerce.number().int().min(0).default(4),
+  DIGEST_REPEAT_LOOKBACK_HOURS: z.coerce.number().int().min(0).default(72),
+  DIGEST_MAX_FOLLOWUPS_PER_EVENT: z.coerce.number().int().min(0).default(1),
   DIGEST_REQUIRED_TOPICS: z.string().default("").transform(parseCommaSeparatedList),
   DIGEST_FOCUS_AREAS: z.string().default("").transform(parseCommaSeparatedList),
   DIGEST_OUTPUT_DIR: z.string().min(1).default("output/briefings"),

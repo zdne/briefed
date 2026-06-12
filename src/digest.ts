@@ -2,6 +2,7 @@ import { AnalystAI } from "./ai.js";
 import { config } from "./config.js";
 import {
   countRecentContent,
+  recentDigestHistoryCandidates,
   recentDigestCandidates,
   recentVectorMatches,
   saveDigest
@@ -19,6 +20,8 @@ export async function createDigest(
   log: DigestLogger = () => {},
   referenceTime = new Date()
 ) {
+  const end = referenceTime;
+  const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
   log(`Loading enriched entries published during the last ${hours} hours`);
   const eligibleCount = await countRecentContent(hours, referenceTime);
   const candidates = await recentDigestCandidates(hours, config.DIGEST_CANDIDATE_LIMIT, referenceTime);
@@ -58,6 +61,18 @@ export async function createDigest(
     ai,
     log
   );
+  const priorDigestCandidates = await recentDigestHistoryCandidates(
+    config.DIGEST_REPEAT_LOOKBACK_HOURS,
+    referenceTime,
+    start,
+    end
+  );
+  if (priorDigestCandidates.length > 0) {
+    log(
+      `Loaded ${priorDigestCandidates.length} recent briefing source(s) for repeat detection ` +
+      `over ${config.DIGEST_REPEAT_LOOKBACK_HOURS} hours`
+    );
+  }
   const selection = selectDigestSources(candidates, requiredTopicMatches, focusAreaMatches, {
     maxEntries: config.DIGEST_MAX_ENTRIES,
     requiredTopicMinEntries: config.DIGEST_REQUIRED_TOPIC_MIN_ENTRIES,
@@ -76,7 +91,9 @@ export async function createDigest(
       twitter: config.DIGEST_MAX_TWITTER_ENTRIES
     },
     maxEntriesPerSourceKey: config.DIGEST_MAX_ENTRIES_PER_SOURCE_KEY,
-    maxEntriesPerAuthor: config.DIGEST_MAX_ENTRIES_PER_AUTHOR
+    maxEntriesPerAuthor: config.DIGEST_MAX_ENTRIES_PER_AUTHOR,
+    priorDigestCandidates,
+    maxFollowupsPerEvent: config.DIGEST_MAX_FOLLOWUPS_PER_EVENT
   });
   const sources = selection.sources;
   log(
@@ -85,8 +102,6 @@ export async function createDigest(
     `${selection.importantGeneralCount} important-general, ${selection.generalCount} general`
   );
 
-  const end = referenceTime;
-  const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
   log(`Generating briefing with ${sources.length} sources using the configured LLM`);
   const body = await ai.digest(sources, hours, {
     requiredTopics: config.DIGEST_REQUIRED_TOPICS,

@@ -261,6 +261,8 @@ Rules:
 - Do not merge sources into a single bullet.
 - If several selected sources cover the same announcement, write one bullet using the strongest source and do not repeat the event in another Watchlist or Focus Areas subsection.
 - Do not create separate bullets for outlet variants of the same company announcement.
+- Sources labeled "follow-up to recent coverage" match an event covered in a recent briefing. Include them only if the supplied summary contains a materially new fact; prefer Other Items over Watchlist or Focus Areas unless no fresh source covers that topic.
+- Do not let follow-up sources dominate a section. If a follow-up is included, make the prior-coverage status explicit with "Follow-up:" at the start of the bullet.
 - If multiple sources cover related but distinct facts, write separate bullets or choose the strongest source.
 - Do not repeat the same source and same claim across sections.
 - Do not repeat the same source in multiple required watchlist or focus-area subsections.
@@ -438,11 +440,14 @@ function shouldIncludeDigestAuthor(sourceType: DigestCandidate["sourceType"] | u
 }
 
 function selectionLabel(context: DigestSourceContext): string {
-  if (context.bucket === "required") return `required watchlist${context.topic ? ` / ${context.topic}` : ""}`;
-  if (context.bucket === "focus") return `focus area${context.topic ? ` / ${context.topic}` : ""}`;
-  if (context.signalLabel === "strategic_analysis") return "strategic analysis";
-  if (context.bucket === "important_general" || context.signalLabel === "important_general") return "important general";
-  return "general";
+  const freshness = context.freshnessLabel === "follow_up" ? " / follow-up to recent coverage" : "";
+  if (context.bucket === "required") return `required watchlist${context.topic ? ` / ${context.topic}` : ""}${freshness}`;
+  if (context.bucket === "focus") return `focus area${context.topic ? ` / ${context.topic}` : ""}${freshness}`;
+  if (context.signalLabel === "strategic_analysis") return `strategic analysis${freshness}`;
+  if (context.bucket === "important_general" || context.signalLabel === "important_general") {
+    return `important general${freshness}`;
+  }
+  return `general${freshness}`;
 }
 
 function formatOtherNotableRelevance(requiredTopics: string[], focusAreas: string[]): string {

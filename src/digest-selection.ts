@@ -19,6 +19,8 @@ export interface DigestSelectionOptions {
   sourceTypeMaxEntries?: Partial<Record<DigestCandidate["sourceType"], number>>;
   maxEntriesPerSourceKey?: number;
   maxEntriesPerAuthor?: number;
+  priorDigestCandidates?: DigestCandidate[];
+  maxFollowupsPerEvent?: number;
 }
 
 export interface DigestSelectionResult {
@@ -35,6 +37,7 @@ export interface SelectedDigestSource {
   bucket: "required" | "focus" | "important_general" | "general";
   topic?: string;
   signalLabel?: "important_general" | "strategic_analysis" | "general";
+  freshnessLabel?: "fresh" | "follow_up";
 }
 
 interface SelectionBucket {
@@ -51,6 +54,8 @@ interface SelectionState {
   seen: Set<string>;
   seenTitleKeys: Set<string>;
   eventClusters: EventCluster[];
+  priorEventClusters: EventCluster[];
+  followupCounts: Map<EventCluster, number>;
   sourceTypeCounts: Map<DigestCandidate["sourceType"], number>;
   sourceKeyCounts: Map<string, number>;
   authorCounts: Map<string, number>;
@@ -74,6 +79,8 @@ export function selectDigestSources(
     seen: new Set<string>(),
     seenTitleKeys: new Set<string>(),
     eventClusters: [],
+    priorEventClusters: buildPriorEventClusters(options.priorDigestCandidates ?? []),
+    followupCounts: new Map<EventCluster, number>(),
     sourceTypeCounts: new Map<DigestCandidate["sourceType"], number>(),
     sourceKeyCounts: new Map<string, number>(),
     authorCounts: new Map<string, number>()
@@ -104,9 +111,12 @@ export function selectDigestSources(
   let importantGeneralCount = 0;
   for (const candidate of rankedImportantGeneralCandidates(recentCandidates, options.importantGeneralMinScore ?? 1)) {
     if (importantGeneralCount >= importantGeneralLimit || state.selected.length >= options.maxEntries) break;
+    const freshness = classifyFreshness(state, candidate, options);
+    if (freshness.label === "stale_repeat") continue;
     if (!addSelected(state, candidate, {
       bucket: "important_general",
-      signalLabel: importantGeneralLabel(candidate)
+      signalLabel: importantGeneralLabel(candidate),
+      freshnessLabel: freshness.label
     }, options)) continue;
     importantGeneralCount += 1;
   }
@@ -116,9 +126,12 @@ export function selectDigestSources(
   for (const candidate of rankedGeneralCandidates(recentCandidates)) {
     if (generalCount >= generalLimit || state.selected.length >= options.maxEntries) break;
     if (generalQualityScore(candidate) <= -4) continue;
+    const freshness = classifyFreshness(state, candidate, options);
+    if (freshness.label === "stale_repeat") continue;
     if (!addSelected(state, candidate, {
       bucket: "general",
-      signalLabel: generalSelectionLabel(candidate)
+      signalLabel: generalSelectionLabel(candidate),
+      freshnessLabel: freshness.label
     }, options)) continue;
     generalCount += 1;
   }
@@ -193,16 +206,59 @@ function addTopicBuckets(
   for (const bucket of buckets) {
     const target = Math.min(bucket.maxEntries, Math.max(bucket.minEntries, bucket.candidates.length));
     let bucketAdded = 0;
+    let freshSelected = 0;
 
     for (const candidate of bucket.candidates) {
       if (bucketAdded >= target || state.selected.length >= options.maxEntries) break;
-      if (!addSelected(state, candidate, { bucket: bucket.bucket, topic: bucket.topic }, options)) continue;
+      const freshness = classifyFreshness(state, candidate, options);
+      if (freshness.label !== "fresh") continue;
+      if (!addSelected(state, candidate, {
+        bucket: bucket.bucket,
+        topic: bucket.topic,
+        freshnessLabel: freshness.label
+      }, options)) continue;
+      bucketAdded += 1;
+      freshSelected += 1;
+      added += 1;
+    }
+
+    if (freshSelected > 0) continue;
+
+    for (const candidate of bucket.candidates) {
+      if (bucketAdded >= target || state.selected.length >= options.maxEntries) break;
+      const freshness = classifyFreshness(state, candidate, options);
+      if (freshness.label !== "follow_up") continue;
+      if (!addSelected(state, candidate, {
+        bucket: bucket.bucket,
+        topic: bucket.topic,
+        freshnessLabel: freshness.label
+      }, options)) continue;
       bucketAdded += 1;
       added += 1;
     }
   }
 
   return added;
+}
+
+type FreshnessClassification =
+  | { label: "fresh" }
+  | { label: "follow_up"; cluster: EventCluster }
+  | { label: "stale_repeat"; cluster: EventCluster };
+
+function classifyFreshness(
+  state: SelectionState,
+  candidate: DigestCandidate,
+  options: DigestSelectionOptions
+): FreshnessClassification {
+  const signature = eventSignature(candidate);
+  const cluster = state.priorEventClusters.find((item) => sameCoverageEvent(item, signature));
+  if (!cluster) return { label: "fresh" };
+  if (!materiallyDistinctFact(cluster, signature)) return { label: "stale_repeat", cluster };
+  if (currentCount(state.followupCounts, cluster) >= (options.maxFollowupsPerEvent ?? Number.POSITIVE_INFINITY)) {
+    return { label: "stale_repeat", cluster };
+  }
+  return { label: "follow_up", cluster };
 }
 
 function addSelected(
@@ -222,11 +278,33 @@ function addSelected(
   state.seen.add(candidate.id);
   if (titleKey) state.seenTitleKeys.add(titleKey);
   recordEventCluster(state, candidate);
+  if (selection.freshnessLabel === "follow_up") {
+    const signature = eventSignature(candidate);
+    const priorCluster = state.priorEventClusters.find((item) => sameCoverageEvent(item, signature));
+    if (priorCluster) increment(state.followupCounts, priorCluster);
+  }
   increment(state.sourceTypeCounts, candidate.sourceType);
   increment(state.sourceKeyCounts, candidate.sourceKey);
   const authorKey = normalizedAuthor(candidate.author);
   if (authorKey) increment(state.authorCounts, authorKey);
   return true;
+}
+
+function buildPriorEventClusters(candidates: DigestCandidate[]): EventCluster[] {
+  const clusters: EventCluster[] = [];
+  for (const candidate of candidates) {
+    const signature = eventSignature(candidate);
+    const cluster = clusters.find((item) => sameCoverageEvent(item, signature));
+    if (!cluster) {
+      clusters.push(signature);
+      continue;
+    }
+    for (const factKey of signature.factKeys) cluster.factKeys.add(factKey);
+    for (const keyword of signature.keywords) cluster.keywords.add(keyword);
+    for (const entity of signature.entities) cluster.entities.add(entity);
+    cluster.candidates.push(candidate);
+  }
+  return clusters;
 }
 
 function exceedsCaps(

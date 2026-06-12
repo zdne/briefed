@@ -294,6 +294,61 @@ export async function recentVectorMatches(
   return result.rows;
 }
 
+export async function recentDigestHistoryCandidates(
+  hours: number,
+  referenceTime = new Date(),
+  currentPeriodStart?: Date,
+  currentPeriodEnd?: Date
+): Promise<DigestCandidate[]> {
+  if (hours <= 0) return [];
+  const overlapThreshold = SAME_DIGEST_WINDOW_OVERLAP_THRESHOLD;
+  const currentStart = currentPeriodStart?.toISOString() ?? null;
+  const currentEnd = currentPeriodEnd?.toISOString() ?? null;
+  const result = await pool.query<DigestCandidate>(
+    `SELECT DISTINCT ON (c.id) c.id::text, c.title, c.canonical_url AS "canonicalUrl", c.author,
+      c.published_at::text AS "publishedAt", c.analyst_summary AS summary, c.content_text AS "contentText",
+      0::float AS score, c.source_type AS "sourceType", c.source_key AS "sourceKey",
+      c.topic_tags AS "topicTags", c.entities, c.raw_entry AS "rawEntry"
+     FROM digests d
+     CROSS JOIN LATERAL unnest(d.content_ids) AS u(content_id)
+     JOIN content c ON c.id = u.content_id
+     WHERE d.created_at >= $2::timestamptz - ($1 * interval '1 hour')
+       AND d.created_at < $2::timestamptz
+       AND (
+         $3::timestamptz IS NULL
+         OR $4::timestamptz IS NULL
+         OR (
+           GREATEST(
+             0,
+             EXTRACT(EPOCH FROM (LEAST(d.period_end, $4::timestamptz) - GREATEST(d.period_start, $3::timestamptz)))
+           )
+           / NULLIF(EXTRACT(EPOCH FROM ($4::timestamptz - $3::timestamptz)), 0)
+         ) < $5
+       )
+       AND c.enrichment_status = 'complete'
+     ORDER BY c.id, d.created_at DESC`,
+    [hours, referenceTime.toISOString(), currentStart, currentEnd, overlapThreshold]
+  );
+  return result.rows;
+}
+
+export const SAME_DIGEST_WINDOW_OVERLAP_THRESHOLD = 0.8;
+
+export function isSameDigestWindow(
+  currentPeriodStart: Date,
+  currentPeriodEnd: Date,
+  priorPeriodStart: Date,
+  priorPeriodEnd: Date,
+  threshold = SAME_DIGEST_WINDOW_OVERLAP_THRESHOLD
+): boolean {
+  const currentDuration = currentPeriodEnd.getTime() - currentPeriodStart.getTime();
+  if (currentDuration <= 0) return false;
+  const overlapStart = Math.max(currentPeriodStart.getTime(), priorPeriodStart.getTime());
+  const overlapEnd = Math.min(currentPeriodEnd.getTime(), priorPeriodEnd.getTime());
+  const overlap = Math.max(0, overlapEnd - overlapStart);
+  return overlap / currentDuration >= threshold;
+}
+
 export async function saveDigest(
   start: Date,
   end: Date,
