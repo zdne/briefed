@@ -217,13 +217,14 @@ Rules for each section:
 
 ## Watchlist
 Use only the exact required watchlist subsection headings listed below.
-For each topic, write 0-2 bullets with citations if there is meaningful source-backed signal.
+For each topic, write 0-5 bullets with citations if there is meaningful source-backed signal.
 If there is no meaningful signal for a topic, write exactly: No meaningful new signal found in this window.
 
 ## Focus Areas
 Use only the exact focus-area subsection headings listed below.
 Include only configured focus areas with meaningful source-backed signal.
-Include at most 5 focus areas and 1-2 bullets per focus area.
+If a focus area overlaps a required watchlist topic already covered above, omit that focus-area subsection.
+Include at most 5 focus areas and 1-4 bullets per focus area.
 If no focus area has meaningful signal, omit this section.
 
 ## Other Items
@@ -253,7 +254,8 @@ Rules:
 - Social-source bullets are noun phrases only — no verb, no platform as actor. The platform name ("Reddit:", "Twitter:", "Hacker News:") is a prefix, not a subject. Use a short label for the artifact, project, company, product, or topic.
 - For social-source bullets, prefer labels over verbs: "MCP for managing skills", "OSS MCP for the OpenAI ChatGPT Ads API", "agent-first API design patterns".
 - Do not start bullets with abstract topics like "Agentic commerce", "Trust", "Discovery", "The ecosystem", or "Technologies".
-- For every section, use at most 2 bullets per subsection.
+- For every Watchlist subsection, use at most 5 bullets.
+- For every Focus Areas subsection, use at most 4 bullets.
 - Each bullet must cite exactly one source.
 - Do not put multiple citation numbers in one bullet.
 - Do not merge sources into a single bullet.

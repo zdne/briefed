@@ -68,10 +68,10 @@ Example config:
 ```env
 DIGEST_CANDIDATE_LIMIT=1000
 DIGEST_MAX_ENTRIES=200
-DIGEST_REQUIRED_TOPIC_MIN_ENTRIES=8
-DIGEST_FOCUS_AREA_MIN_ENTRIES=4
-DIGEST_REQUIRED_TOPIC_MAX_ENTRIES=20
-DIGEST_FOCUS_AREA_MAX_ENTRIES=12
+DIGEST_REQUIRED_TOPIC_MIN_ENTRIES=3
+DIGEST_FOCUS_AREA_MIN_ENTRIES=2
+DIGEST_REQUIRED_TOPIC_MAX_ENTRIES=5
+DIGEST_FOCUS_AREA_MAX_ENTRIES=4
 ```
 
 Selection buckets:
@@ -80,7 +80,7 @@ Selection buckets:
 - Focus area buckets: one bucket per `DIGEST_FOCUS_AREAS` item.
 - General bucket: source-balanced newest/high-signal entries.
 
-An entry can satisfy more than one bucket but should only be included once in the final source list.
+An entry can satisfy more than one bucket but should only be included once in the final source list. Focus areas that overlap required topics, such as `MCP` when `MCP Discovery` is already required, should be skipped to avoid repeating the same source cluster in two sections.
 
 Pros:
 
@@ -149,10 +149,10 @@ Implement vector-first topic-protected selection with conservative defaults:
 ```env
 DIGEST_CANDIDATE_LIMIT=1000
 DIGEST_MAX_ENTRIES=200
-DIGEST_REQUIRED_TOPIC_MIN_ENTRIES=6
-DIGEST_REQUIRED_TOPIC_MAX_ENTRIES=16
-DIGEST_FOCUS_AREA_MIN_ENTRIES=3
-DIGEST_FOCUS_AREA_MAX_ENTRIES=10
+DIGEST_REQUIRED_TOPIC_MIN_ENTRIES=3
+DIGEST_REQUIRED_TOPIC_MAX_ENTRIES=5
+DIGEST_FOCUS_AREA_MIN_ENTRIES=2
+DIGEST_FOCUS_AREA_MAX_ENTRIES=4
 DIGEST_GENERAL_MAX_ENTRIES=120
 DIGEST_MAX_ENTRIES_PER_AUTHOR=5
 DIGEST_MAX_ENTRIES_PER_SOURCE_KEY=50
@@ -168,7 +168,7 @@ Algorithm:
    - Include high-confidence exact matches even if engagement is low.
    - Keep at least `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES` when enough matches exist.
    - Cap at `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES`.
-4. For each focus area:
+4. For each focus area that does not overlap a required topic:
    - Vector-search recent entries using the focus-area embedding.
    - Boost exact keyword/entity/topic-tag matches.
    - Keep at least `DIGEST_FOCUS_AREA_MIN_ENTRIES` when enough matches exist.

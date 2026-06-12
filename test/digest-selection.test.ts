@@ -130,6 +130,39 @@ describe("selectDigestSources", () => {
     expect(result.sources.map((source) => source.id)).toEqual(["shared", "focus-1", "general-1"]);
   });
 
+  it("skips focus area buckets that overlap required watchlist topics", () => {
+    const result = selectDigestSources(
+      [],
+      [{ topic: "MCP Discovery", matches: [
+        candidate("required-mcp", { title: "MCP discovery security update" })
+      ] }],
+      [{ topic: "MCP", matches: [
+        candidate("focus-mcp", { title: "MCP focus security update" })
+      ] }],
+      defaults
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["required-mcp"]);
+    expect(result.focusCount).toBe(0);
+    expect(result.selectedSources.map((selection) => selection.bucket)).toEqual(["required"]);
+  });
+
+  it("skips broad agentic focus buckets when required agentic topics already cover them", () => {
+    const result = selectDigestSources(
+      [],
+      [{ topic: "Agentic Payments", matches: [
+        candidate("required-agentic", { title: "Agentic payments update" })
+      ] }],
+      [{ topic: "Agentic", matches: [
+        candidate("focus-agentic", { title: "Agentic workflow update" })
+      ] }],
+      defaults
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["required-agentic"]);
+    expect(result.focusCount).toBe(0);
+  });
+
   it("deduplicates different candidates with the same normalized title", () => {
     const result = selectDigestSources(
       [

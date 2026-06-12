@@ -88,9 +88,12 @@ export function selectDigestSources(
     options.requiredTopicMinScore ?? 0
   ), options);
 
+  const focusMatchesWithoutRequiredOverlap = focusAreaMatches.filter((focusArea) =>
+    !requiredTopicMatches.some((requiredTopic) => topicsOverlap(focusArea.topic, requiredTopic.topic))
+  );
   const focusCount = addTopicBuckets(state, buildBuckets(
     recentCandidates,
-    focusAreaMatches,
+    focusMatchesWithoutRequiredOverlap,
     "focus",
     options.focusAreaMinEntries,
     options.focusAreaMaxEntries,
@@ -424,6 +427,21 @@ function topicAnchorTerms(topic: string): string[] {
     .split(" ")
     .filter(Boolean)
     .filter((term) => !["agentic", "ai", "artificial", "intelligence"].includes(term));
+}
+
+function topicsOverlap(left: string, right: string): boolean {
+  const leftTerms = topicOverlapTerms(left);
+  const rightTerms = topicOverlapTerms(right);
+  if (leftTerms.size === 0 || rightTerms.size === 0) return false;
+  const shared = intersectionSize(leftTerms, rightTerms);
+  return shared === Math.min(leftTerms.size, rightTerms.size);
+}
+
+function topicOverlapTerms(topic: string): Set<string> {
+  return new Set(normalizeText(topic)
+    .split(" ")
+    .filter(Boolean)
+    .filter((term) => !["and", "area", "discovery", "focus", "the", "watchlist"].includes(term)));
 }
 
 function requiresAgenticAnchor(topic: string): boolean {

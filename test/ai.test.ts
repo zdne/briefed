@@ -171,6 +171,11 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Do not write \"No meaningful new signal found in this window\" in this section.");
     expect(prompt).toContain("Use only the exact required watchlist subsection headings listed below.");
     expect(prompt).toContain("Use only the exact focus-area subsection headings listed below.");
+    expect(prompt).toContain("For each topic, write 0-5 bullets");
+    expect(prompt).toContain("If a focus area overlaps a required watchlist topic already covered above");
+    expect(prompt).toContain("Include at most 5 focus areas and 1-4 bullets per focus area.");
+    expect(prompt).toContain("For every Watchlist subsection, use at most 5 bullets.");
+    expect(prompt).toContain("For every Focus Areas subsection, use at most 4 bullets.");
     expect(prompt).toContain("Exact required watchlist subsection headings:");
     expect(prompt).toContain("For every required watchlist topic, include exactly one subsection using the exact heading text above.");
     expect(prompt).toContain("Exact focus-area subsection headings:");

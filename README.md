@@ -138,8 +138,8 @@ See [`.env.example`](.env.example). Important values:
 - `QUERY_LIMIT`: default number of vector matches passed to answer synthesis.
 - `DIGEST_MAX_ENTRIES`: hard cap on selected entries sent to one briefing request; defaults to `200`.
 - `DIGEST_CANDIDATE_LIMIT`: newest completed entries loaded before topic-aware selection; defaults to `1000`.
-- `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES`, `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES`: per-topic vector bucket sizing for required topics; defaults to `6` and `16`.
-- `DIGEST_FOCUS_AREA_MIN_ENTRIES`, `DIGEST_FOCUS_AREA_MAX_ENTRIES`: per-topic vector bucket sizing for focus areas; defaults to `3` and `10`.
+- `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES`, `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES`: per-topic vector bucket sizing for required topics; defaults to `3` and `5`.
+- `DIGEST_FOCUS_AREA_MIN_ENTRIES`, `DIGEST_FOCUS_AREA_MAX_ENTRIES`: per-topic vector bucket sizing for focus areas; defaults to `2` and `4`.
 - `DIGEST_REQUIRED_TOPIC_MIN_SCORE`, `DIGEST_FOCUS_AREA_MIN_SCORE`: minimum vector similarity for topic matches; defaults to `0.25` and `0.35`.
 - `DIGEST_IMPORTANT_GENERAL_MIN_SCORE`: minimum keyword score for important-general entries; defaults to `3`.
 - `DIGEST_GENERAL_MAX_ENTRIES`: cap for newest general-fill entries after protected topic buckets; defaults to `120`.
