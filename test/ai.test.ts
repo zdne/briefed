@@ -303,9 +303,15 @@ describe("buildFriendlyDigestPrompt", () => {
     expect(prompt).toContain("[Source title](https://example.com)");
     expect(prompt).toContain("Do not include a source appendix");
     expect(prompt).toContain("Preserve this date range exactly: 2026-06-04T00:00:00.000Z to 2026-06-05T00:00:00.000Z");
-    expect(prompt).toContain("Preserve this source count exactly: 1");
-    expect(prompt).toContain("Do not preserve Watchlist / Focus Areas / Other Items exactly");
-    expect(prompt).toContain("Include a short closing theme summary.");
+    expect(prompt).toContain("Preserve this selected source count exactly: 1");
+    expect(prompt).toContain("Label that count as \"Sources reviewed for briefing\"");
+    expect(prompt).toContain("Preserve the canonical briefing's Watchlist / Focus Areas / Other Items hierarchy when present.");
+    expect(prompt).toContain("Preserve explicit \"no meaningful signal\" watchlist lines.");
+    expect(prompt).toContain("Do not replace watchlist or focus sections with generic categories");
+    expect(prompt).toContain("Rank and group by relevance to the canonical watchlist and focus areas");
+    expect(prompt).toContain("Include a short closing \"Honest Read\" section");
+    expect(prompt).toContain("Do not promote weakly related general-news items above watchlist or focus-area items.");
+    expect(prompt).toContain("Deduplicate repeated claims across sections");
   });
 
   it("distinguishes plain and warm style instructions", () => {

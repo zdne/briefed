@@ -346,14 +346,20 @@ Use only the supplied canonical briefing body and source metadata. Do not use ou
 Required output:
 - Return only Markdown.
 - Preserve this date range exactly: ${digest.periodStart} to ${digest.periodEnd}.
-- Preserve this source count exactly: ${digest.sources.length}.
-- Produce readable editorial sections based on the content. Do not preserve Watchlist / Focus Areas / Other Items exactly unless those are the best section names.
+- Preserve this selected source count exactly: ${digest.sources.length}.
+- Label that count as "Sources reviewed for briefing" or "Selected sources reviewed", not as total archive size or surfaced item count.
+- Preserve the canonical briefing's Watchlist / Focus Areas / Other Items hierarchy when present.
+- Preserve explicit "no meaningful signal" watchlist lines. Do not omit absence reporting for required watchlist topics.
+- Do not replace watchlist or focus sections with generic categories such as "Industry Trends", "Community and Collaboration", "Security and Ethics", or "Additional Notable Mentions".
+- Rank and group by relevance to the canonical watchlist and focus areas, not by broad news taxonomy.
 - Each bullet must contain exactly one factual item and exactly one direct Markdown source link to the supporting source, such as [Source title](https://example.com).
 - Do not use citation-only links like [1], wiki links, footnotes, reference-style links, or source numbers as the only link text.
 - Do not include a source appendix, source list, bibliography, "Sources" section, "Source Appendix" section, or short URL section.
-- Include the date range and source count near the top.
-- Include a short closing theme summary.
+- Include the date range and selected source count near the top.
+- Include a short closing "Honest Read" section that identifies the strongest signals and notes when the window is thin, using only claims supported by the canonical briefing.
 - Do not add facts, claims, interpretations, or links that are not supported by the supplied canonical briefing body and source metadata.
+- Do not promote weakly related general-news items above watchlist or focus-area items.
+- Deduplicate repeated claims across sections; keep the strongest placement and source link.
 
 Style:
 ${friendlyDigestStyleInstructions(style)}
