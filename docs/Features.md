@@ -11,6 +11,7 @@ Tracker of potential features to add to brief:
 - [x] Basic briefing diversity caps
 - [x] Basic briefing relevance thresholds
 - [x] Local MCP
+- [ ] MCP / CLI feedback "hey i dont like this story in here" 
 
 ## Later / TBD
 
