@@ -19,7 +19,7 @@ const schema = z.object({
   FEEDBIN_BASE_URL: z.string().url().default("https://api.feedbin.com/v2"),
   RSS_FEEDS_PATH: z.string().min(1).default("feeds.json"),
   RSS_FETCH_DELAY_MS: z.coerce.number().int().min(0).default(1500),
-  RSS_REDDIT_FETCH_DELAY_MS: z.coerce.number().int().min(0).default(65000),
+  RSS_REDDIT_FETCH_DELAY_MS: z.coerce.number().int().min(0).default(10000),
   REDDIT_RSS_USER: z.string().optional(),
   REDDIT_RSS_FEED: z.string().optional(),
   REDDIT_RSS_DEBUG: z.coerce.boolean().default(false),
