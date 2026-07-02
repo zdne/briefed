@@ -86,7 +86,13 @@ The feed config is JSON so agents can manage it deterministically:
 }
 ```
 
-RSS sync fetches enabled feeds sequentially, sends a configured user agent, applies per-request timeouts, and waits `RSS_FETCH_DELAY_MS` between feeds. Reddit feeds use the larger `RSS_REDDIT_FETCH_DELAY_MS` delay. If `REDDIT_RSS_USER` and `REDDIT_RSS_FEED` are configured, Briefed.sh appends those account-scoped parameters only to outbound Reddit RSS requests; they are not stored in `feeds.json`, source keys, canonical URLs, or logs. It stores RSS items with `source_key = 'rss:feed:<feed_hash>'`. Each feed has JSON state in `sync_state` under `rss:feed:<feed_hash>:state`, including recent item IDs, newest published timestamp, last success, last error, retry-after, auth mode, and overflow count.
+RSS sync fetches enabled feeds sequentially, sends a configured user agent, applies per-request timeouts, and waits `RSS_FETCH_DELAY_MS` between feeds. Reddit feeds use the larger `RSS_REDDIT_FETCH_DELAY_MS` inter-feed delay, which defaults to 10 seconds. This is separate from `RSS_REQUEST_TIMEOUT_MS`, which is the HTTP request timeout.
+
+`REDDIT_RSS_USER` and `REDDIT_RSS_FEED` are recommended for Reddit feeds. Get these account-scoped values from an authenticated Reddit RSS URL such as `https://www.reddit.com/r/example.rss?user=<user>&feed=<feed>`. Briefed.sh appends them only to outbound Reddit RSS requests. They are not stored in `feeds.json`, source keys, canonical URLs, or logs. Without them, Reddit RSS is likely to hit rate limits. Before fetching Reddit RSS, the client also bootstraps cookies from `https://www.reddit.com/` and sends the resulting cookie names only to Reddit requests.
+
+When `REDDIT_RSS_DEBUG=true`, debug logs include redacted request URLs, `has_user`, `has_feed`, feed token length, request headers with cookie values redacted, Reddit cookie names, response status, content type, `retry-after`, and Reddit `x-ratelimit-*` headers. If a stale Reddit domain retry blocks testing, remove the `sync_state` row for `rss:domain:reddit.com:state`.
+
+RSS stores items with `source_key = 'rss:feed:<feed_hash>'`. Each feed has JSON state in `sync_state` under `rss:feed:<feed_hash>:state`, including recent item IDs, newest published timestamp, last success, last error, retry-after, auth mode, and overflow count.
 
 The collector uses feed-provided content only. It does not fetch original article pages in v1. It processes at most `RSS_MAX_ITEMS_PER_FEED` newest matching items per feed per run. Use `npm run cli -- sync-rss --hours 48` for the first run to avoid importing large historical feeds.
 
