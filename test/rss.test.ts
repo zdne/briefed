@@ -4,16 +4,18 @@ import {
   filterNewRssItems,
   nextRssFeedState,
   parseRssXml,
-  redditRequestUrl,
-  redactRedditRssUrl,
-  retryAfterFromRateLimit,
-  RssAccessError,
   RssClient,
   RssRateLimitError,
   rssSourceKey,
-  shouldSkipFeedForRetry,
-  splitSetCookieHeader
+  shouldSkipFeedForRetry
 } from "../src/rss.js";
+import {
+  RedditRssAccessError,
+  redditRequestUrl,
+  redactRedditRssUrl,
+  retryAfterFromRateLimit,
+  splitSetCookieHeader
+} from "../src/reddit-rss.js";
 
 describe("parseRssFeeds", () => {
   it("validates, defaults, filters disabled feeds, and dedupes URLs", () => {
@@ -218,8 +220,8 @@ describe("RssClient", () => {
       error = caught;
     }
 
-    expect(error).toBeInstanceOf(RssAccessError);
-    expect(error).toMatchObject({ redditAuthMode: "user_feed_params" });
+    expect(error).toBeInstanceOf(RedditRssAccessError);
+    expect(error).toMatchObject({ authMode: "user_feed_params" });
     expect(String(error)).not.toContain("user-token");
     expect(String(error)).toContain("user_feed_params");
     expect(String(error).length).toBeLessThan(650);

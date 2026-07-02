@@ -23,9 +23,6 @@ import {
   filterNewRssItems,
   nextRssFeedState,
   parseRssXml,
-  redditRssAuthMode,
-  retryAfterFromRateLimit,
-  RssAccessError,
   RssClient,
   RssRateLimitError,
   rssFeedHash,
@@ -33,6 +30,11 @@ import {
   type ParsedFeedItem,
   type RssFeedState
 } from "./rss.js";
+import {
+  RedditRssAccessError,
+  redditRssAuthMode,
+  retryAfterFromRateLimit
+} from "./reddit-rss.js";
 import { normalizeEntry } from "./normalize.js";
 import {
   buildGmailQuery,
@@ -360,7 +362,7 @@ export async function syncRssFeeds(
         ...failedRssFeedState(previousState, error),
         redditAuthMode: summary.redditAuthMode
       }));
-      if (domainStateKey && (error instanceof RssRateLimitError || error instanceof RssAccessError)) {
+      if (domainStateKey && (error instanceof RssRateLimitError || error instanceof RedditRssAccessError)) {
         await setSyncCursorForKey(domainStateKey, JSON.stringify({
           ...failedRssFeedState(previousDomainState, error),
           redditAuthMode: summary.redditAuthMode
@@ -678,7 +680,7 @@ function failedRssFeedState(previous: RssFeedState, error: unknown): RssFeedStat
 
 function rssErrorRetryAfter(error: unknown): string | null {
   if (error instanceof RssRateLimitError) return error.retryAfter;
-  if (error instanceof RssAccessError) return error.retryAfter;
+  if (error instanceof RedditRssAccessError) return error.retryAfter;
   return null;
 }
 
