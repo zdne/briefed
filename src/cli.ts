@@ -5,6 +5,7 @@ import { config, requireConfig } from "./config.js";
 import { getDigestForRendering, migrate, pool, resetSyncCursor } from "./db.js";
 import { createDigest } from "./digest.js";
 import { FeedbinClient } from "./feedbin.js";
+import { GmailClient } from "./gmail.js";
 import { cleanFriendlyDigestMarkdown, friendlyDigestStyle } from "./friendly-digest.js";
 import { renderDigestMarkdown, renderQueryMarkdown, type DigestMarkdownResult } from "./markdown.js";
 import {
@@ -19,7 +20,7 @@ import {
   writeJsonFile,
   writeMarkdownFile
 } from "./output.js";
-import { enrichStoredContent, lookbackSince, syncFeedbin, syncTwitterLists } from "./pipeline.js";
+import { enrichStoredContent, lookbackSince, syncFeedbin, syncGmail, syncRssFeeds, syncTwitterLists } from "./pipeline.js";
 import { queryArchive, queryFollowUp } from "./query.js";
 import { TwitterApiClient } from "./twitterapi.js";
 import type { SourceType } from "./enrichment-policy.js";
@@ -91,6 +92,61 @@ program.command("sync-twitter")
         maxPages: config.TWITTERAPI_LIST_MAX_PAGES,
         maxTweets: config.TWITTERAPI_LIST_MAX_TWEETS
       },
+      log
+    );
+    console.log(JSON.stringify(result, null, 2));
+  });
+
+program.command("sync-rss")
+  .description("Sync configured RSS/Atom feeds from feeds.json")
+  .option("--feeds <path>", "path to feeds.json")
+  .option("-H, --hours <number>", "sync entries published within the last N hours")
+  .action(async (options: { feeds?: string; hours?: string }) => {
+    const hours = options.hours === undefined ? undefined : positiveInteger(options.hours, "--hours");
+    const log = timestampLogger;
+    log("Initializing RSS and AI clients");
+    const result = await syncRssFeeds(
+      {
+        feedsPath: options.feeds ?? config.RSS_FEEDS_PATH,
+        hours,
+        fetchDelayMs: config.RSS_FETCH_DELAY_MS,
+        redditFetchDelayMs: config.RSS_REDDIT_FETCH_DELAY_MS,
+        redditUser: config.REDDIT_RSS_USER,
+        redditFeed: config.REDDIT_RSS_FEED,
+        maxItemsPerFeed: config.RSS_MAX_ITEMS_PER_FEED,
+        userAgent: config.RSS_USER_AGENT,
+        requestTimeoutMs: config.RSS_REQUEST_TIMEOUT_MS
+      },
+      new AnalystAI(),
+      log
+    );
+    console.log(JSON.stringify(result, null, 2));
+  });
+
+program.command("sync-gmail")
+  .description("Sync newsletters from a configured Gmail query or label")
+  .option("-H, --hours <number>", "sync messages received within the last N hours")
+  .action(async (options: { hours?: string }) => {
+    requireConfig(["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"]);
+    const query = config.GMAIL_QUERY ?? (config.GMAIL_LABEL ? `label:${config.GMAIL_LABEL}` : undefined);
+    if (!query) {
+      throw new Error("Missing required configuration: GMAIL_QUERY or GMAIL_LABEL");
+    }
+    const hours = options.hours === undefined ? undefined : positiveInteger(options.hours, "--hours");
+    const log = timestampLogger;
+    log("Initializing Gmail and AI clients");
+    const result = await syncGmail(
+      new GmailClient({
+        clientId: config.GMAIL_CLIENT_ID!,
+        clientSecret: config.GMAIL_CLIENT_SECRET!,
+        refreshToken: config.GMAIL_REFRESH_TOKEN!
+      }),
+      {
+        query,
+        hours,
+        maxMessages: config.GMAIL_MAX_MESSAGES
+      },
+      new AnalystAI(),
       log
     );
     console.log(JSON.stringify(result, null, 2));

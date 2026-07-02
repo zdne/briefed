@@ -18,7 +18,28 @@ import {
   type SourceType
 } from "./enrichment-policy.js";
 import { FeedbinClient } from "./feedbin.js";
+import { loadRssFeeds, type RssFeedConfig } from "./rss-feeds.js";
+import {
+  filterNewRssItems,
+  nextRssFeedState,
+  parseRssXml,
+  redditRssAuthMode,
+  retryAfterFromRateLimit,
+  RssClient,
+  RssRateLimitError,
+  rssFeedHash,
+  shouldSkipFeedForRetry,
+  type ParsedFeedItem,
+  type RssFeedState
+} from "./rss.js";
 import { normalizeEntry } from "./normalize.js";
+import {
+  buildGmailQuery,
+  GmailClient,
+  gmailSourceKey,
+  messageInternalDate,
+  normalizeGmailMessage
+} from "./gmail.js";
 import { normalizeTwitterTweet } from "./twitter-normalize.js";
 import { TwitterApiClient } from "./twitterapi.js";
 import type { ContentForEnrichment, FeedbinEntry, SourceEntry } from "./types.js";
@@ -31,6 +52,8 @@ export interface SyncResult {
   enrichmentFailed: number;
   cursor?: string;
   twitterLists?: TwitterListSyncSummary[];
+  rssFeeds?: RssFeedSyncSummary[];
+  gmail?: GmailSyncSummary;
 }
 
 export type SyncLogger = (message: string) => void;
@@ -55,6 +78,44 @@ export interface TwitterListSyncSummary {
   stoppedReason: "stored_latest_reached" | "max_pages" | "max_tweets" | "no_next_page" | "empty_page";
   hasNextPage?: boolean;
   nextCursorPresent?: boolean;
+}
+
+export interface RssSyncOptions {
+  feedsPath: string;
+  hours?: number;
+  fetchDelayMs: number;
+  redditFetchDelayMs: number;
+  redditUser?: string;
+  redditFeed?: string;
+  maxItemsPerFeed: number;
+  userAgent: string;
+  requestTimeoutMs: number;
+}
+
+export interface RssFeedSyncSummary {
+  title: string;
+  url: string;
+  fetched: boolean;
+  parsedItems: number;
+  processedItems: number;
+  overflowCount: number;
+  redditAuthMode?: "user_feed_params" | "none" | "fallback_none";
+  skippedReason?: "retry_after" | "domain_retry_after";
+  error?: string;
+}
+
+export interface GmailSyncOptions {
+  query: string;
+  hours?: number;
+  maxMessages: number;
+}
+
+export interface GmailSyncSummary {
+  query: string;
+  effectiveQuery: string;
+  messagesReturned: number;
+  messagesProcessed: number;
+  cursor?: string;
 }
 
 export async function enrichContent(id: string, entry: SourceEntry, ai: AnalystAI): Promise<void> {
@@ -168,6 +229,212 @@ export async function syncFeedbin(
     log("Feedbin cursor unchanged");
   }
   log("Sync complete");
+  return result;
+}
+
+export async function syncRssFeeds(
+  options: RssSyncOptions,
+  ai: AnalystAI,
+  log: SyncLogger = () => {}
+): Promise<SyncResult> {
+  const feeds = await loadRssFeeds(options.feedsPath);
+  const client = new RssClient({
+    userAgent: options.userAgent,
+    timeoutMs: options.requestTimeoutMs,
+    redditUser: options.redditUser,
+    redditFeed: options.redditFeed
+  });
+  const result: SyncResult = {
+    fetched: 0,
+    insertedOrUpdated: 0,
+    fullyEnriched: 0,
+    embeddedOnly: 0,
+    enrichmentFailed: 0,
+    rssFeeds: []
+  };
+  let successfulFeeds = 0;
+  log(`Loaded ${feeds.length} RSS feed(s) from ${options.feedsPath}`);
+
+  let previousFetchedFeed: RssFeedConfig | undefined;
+  for (const feed of feeds) {
+    const summary: RssFeedSyncSummary = {
+      title: feed.title,
+      url: feed.url,
+      fetched: false,
+      parsedItems: 0,
+      processedItems: 0,
+      overflowCount: 0,
+      redditAuthMode: rssRetryDomain(feed) === "reddit.com"
+        ? redditRssAuthMode({ redditUser: options.redditUser, redditFeed: options.redditFeed })
+        : undefined
+    };
+    result.rssFeeds!.push(summary);
+
+    const stateKey = rssFeedStateKey(feed);
+    const previousState = await readRssFeedState(stateKey);
+    const domainStateKey = rssDomainStateKey(feed);
+    const previousDomainState = domainStateKey ? await readRssFeedState(domainStateKey) : {};
+    if (shouldSkipFeedForRetry(previousState)) {
+      summary.skippedReason = "retry_after";
+      log(`Skipping RSS feed ${feed.title}: retry-after active until ${previousState.retryAfter}`);
+      continue;
+    }
+    if (shouldSkipFeedForRetry(previousDomainState)) {
+      summary.skippedReason = "domain_retry_after";
+      log(`Skipping RSS feed ${feed.title}: domain retry-after active until ${previousDomainState.retryAfter}`);
+      continue;
+    }
+
+    try {
+      if (previousFetchedFeed) {
+        const delay = rssDelayForFeed(feed, options);
+        if (delay > 0) await sleep(delay);
+      }
+      previousFetchedFeed = feed;
+      log(`Fetching RSS feed ${feed.title}`);
+      const fetched = await client.fetchFeed(feed);
+      summary.fetched = true;
+      if (summary.redditAuthMode !== undefined) {
+        summary.redditAuthMode = fetched.redditAuthMode;
+      }
+      const now = new Date();
+      const nowIso = now.toISOString();
+      if (domainStateKey) {
+        const domainRetryAfter = retryAfterFromRateLimit(fetched.rateLimit, now);
+        if (domainRetryAfter) {
+          await setSyncCursorForKey(
+            domainStateKey,
+            JSON.stringify({
+              ...previousDomainState,
+              lastError: null,
+              redditAuthMode: summary.redditAuthMode,
+              retryAfter: domainRetryAfter
+            })
+          );
+          log(`RSS domain ${rssRetryDomain(feed)} rate limit exhausted; pausing until ${domainRetryAfter}`);
+        }
+      }
+      const parsed = parseRssXml(fetched.xml, feed, nowIso);
+      const parsedItems = parsed.items.sort(compareParsedNewestFirst);
+      summary.parsedItems = parsedItems.length;
+      const selected = filterNewRssItems(parsedItems, previousState, {
+        hours: options.hours,
+        maxItems: options.maxItemsPerFeed,
+        referenceTime: now
+      });
+      summary.overflowCount = selected.overflowCount;
+      log(
+        `RSS feed ${feed.title}: ${parsedItems.length} parsed, ` +
+        `${selected.items.length} selected, ${selected.overflowCount} overflow`
+      );
+
+      for (const [itemIndex, item] of selected.items.entries()) {
+        result.fetched++;
+        summary.processedItems++;
+        await processSourceEntry(
+          item.sourceEntry,
+          ai,
+          result,
+          `[${itemIndex + 1}/${selected.items.length}]`,
+          log
+        );
+      }
+
+      await setSyncCursorForKey(
+        stateKey,
+        JSON.stringify({
+          ...nextRssFeedState(previousState, selected.items, nowIso, selected.overflowCount),
+          redditAuthMode: summary.redditAuthMode
+        })
+      );
+      successfulFeeds++;
+    } catch (error) {
+      summary.error = errorMessage(error);
+      await setSyncCursorForKey(stateKey, JSON.stringify({
+        ...failedRssFeedState(previousState, error),
+        redditAuthMode: summary.redditAuthMode
+      }));
+      if (domainStateKey && error instanceof RssRateLimitError) {
+        await setSyncCursorForKey(domainStateKey, JSON.stringify({
+          ...failedRssFeedState(previousDomainState, error),
+          redditAuthMode: summary.redditAuthMode
+        }));
+      }
+      log(`RSS feed ${feed.title} failed: ${summary.error}`);
+    }
+  }
+
+  if (feeds.length > 0 && successfulFeeds === 0) {
+    throw new Error("All enabled RSS feeds failed or were skipped");
+  }
+
+  log("RSS sync complete");
+  return result;
+}
+
+export async function syncGmail(
+  client: GmailClient,
+  options: GmailSyncOptions,
+  ai: AnalystAI,
+  log: SyncLogger = () => {}
+): Promise<SyncResult> {
+  const cursorKey = gmailCursorKey(options.query);
+  const storedCursor = await getSyncCursorForKey(cursorKey);
+  const lookback = options.hours === undefined ? undefined : lookbackSince(new Date(), options.hours);
+  const since = lookback ?? storedCursor;
+  const effectiveQuery = buildGmailQuery(options.query, since);
+  const result: SyncResult = {
+    fetched: 0,
+    insertedOrUpdated: 0,
+    fullyEnriched: 0,
+    embeddedOnly: 0,
+    enrichmentFailed: 0,
+    gmail: {
+      query: options.query,
+      effectiveQuery,
+      messagesReturned: 0,
+      messagesProcessed: 0,
+      cursor: storedCursor
+    }
+  };
+
+  log(`Listing Gmail messages with query: ${effectiveQuery}`);
+  const messageIds = await client.listMessages(effectiveQuery, options.maxMessages);
+  result.gmail!.messagesReturned = messageIds.length;
+  let newestInternalDate = storedCursor;
+
+  for (const [index, id] of messageIds.entries()) {
+    log(`[${index + 1}/${messageIds.length}] Fetching Gmail message ${id}`);
+    const message = await client.getMessage(id);
+    const internalDate = messageInternalDate(message);
+    if (storedCursor && !lookback && internalDate && Date.parse(internalDate) <= Date.parse(storedCursor)) {
+      continue;
+    }
+    const entry = normalizeGmailMessage(message, options.query, new Date().toISOString());
+    result.fetched++;
+    result.gmail!.messagesProcessed++;
+    await processSourceEntry(
+      entry,
+      ai,
+      result,
+      `[${index + 1}/${messageIds.length}]`,
+      log
+    );
+    if (internalDate && (!newestInternalDate || Date.parse(internalDate) > Date.parse(newestInternalDate))) {
+      newestInternalDate = internalDate;
+    }
+  }
+
+  if (newestInternalDate && newestInternalDate !== storedCursor) {
+    await setSyncCursorForKey(cursorKey, newestInternalDate);
+    result.cursor = newestInternalDate;
+    result.gmail!.cursor = newestInternalDate;
+    log(`Advanced Gmail cursor to ${newestInternalDate}`);
+  } else {
+    log("Gmail cursor unchanged");
+  }
+
+  log("Gmail sync complete");
   return result;
 }
 
@@ -340,6 +607,68 @@ function laterTimestamp(current: string | undefined, entry: FeedbinEntry): strin
   return Date.parse(entry.created_at) > Date.parse(current) ? entry.created_at : current;
 }
 
+function rssFeedStateKey(feed: RssFeedConfig): string {
+  return `rss:feed:${rssFeedHash(feed.normalizedUrl)}:state`;
+}
+
+function rssDomainStateKey(feed: RssFeedConfig): string | undefined {
+  const domain = rssRetryDomain(feed);
+  return domain ? `rss:domain:${domain}:state` : undefined;
+}
+
+function rssDelayForFeed(feed: RssFeedConfig, options: RssSyncOptions): number {
+  return rssRetryDomain(feed) === "reddit.com"
+    ? Math.max(options.fetchDelayMs, options.redditFetchDelayMs)
+    : options.fetchDelayMs;
+}
+
+function rssRetryDomain(feed: RssFeedConfig): string | undefined {
+  try {
+    const hostname = new URL(feed.normalizedUrl).hostname.toLowerCase();
+    if (hostname === "reddit.com" || hostname.endsWith(".reddit.com")) return "reddit.com";
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function gmailCursorKey(query: string): string {
+  return `${gmailSourceKey(query)}:latest_internal_date`;
+}
+
+async function readRssFeedState(key: string): Promise<RssFeedState> {
+  const raw = await getSyncCursorForKey(key);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as RssFeedState;
+    return typeof parsed === "object" && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function failedRssFeedState(previous: RssFeedState, error: unknown): RssFeedState {
+  return {
+    ...previous,
+    lastError: errorMessage(error),
+    retryAfter: error instanceof RssRateLimitError ? error.retryAfter : previous.retryAfter ?? null
+  };
+}
+
+function compareParsedNewestFirst(a: ParsedFeedItem, b: ParsedFeedItem): number {
+  return timeValue(b.publishedAt) - timeValue(a.publishedAt);
+}
+
+function timeValue(value: string | null): number {
+  if (!value) return 0;
+  const time = Date.parse(value);
+  return Number.isFinite(time) ? time : 0;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -348,6 +677,19 @@ function formatProgress(current: number, total: number | null): string {
   if (total === null || total === 0) return `[${current}]`;
   const percent = Math.min(100, Math.round((current / total) * 100));
   return `[${current}/${total} ${percent}%]`;
+}
+
+export async function processSourceEntry(
+  entry: SourceEntry,
+  ai: AnalystAI,
+  result: Pick<SyncResult, "insertedOrUpdated" | "fullyEnriched" | "embeddedOnly" | "enrichmentFailed">,
+  progress: string,
+  log: SyncLogger
+): Promise<void> {
+  const sourceType = detectSourceType(entry);
+  const mode = desiredEnrichmentMode(sourceType, config.LIGHTWEIGHT_SOURCE_TYPES);
+  const label = entry.title ?? entry.canonicalUrl ?? `${entry.sourceKey}:${entry.sourceItemId}`;
+  await storeAndProcessEntry(entry, sourceType, mode, ai, result, progress, log, label);
 }
 
 async function storeAndProcessEntry(
@@ -379,12 +721,39 @@ async function storeAndProcessEntry(
     } catch (error) {
       result.enrichmentFailed++;
       log(`${progress} Enrichment failed: ${errorMessage(error)}`);
+      if (isFatalProviderError(error)) {
+        throw new Error(`Stopping sync after provider failure: ${errorMessage(error)}`);
+      }
     }
   } else if (!entry.contentText) {
     log(`${progress} Skipped enrichment: entry has no text content`);
   } else {
     log(`${progress} Skipped enrichment: already complete`);
   }
+}
+
+export function isFatalProviderError(error: unknown): boolean {
+  const candidate = error as { status?: unknown; code?: unknown; type?: unknown };
+  const status = typeof candidate.status === "number" ? candidate.status : undefined;
+  const code = typeof candidate.code === "string" ? candidate.code.toLowerCase() : "";
+  const type = typeof candidate.type === "string" ? candidate.type.toLowerCase() : "";
+  const message = errorMessage(error).toLowerCase();
+
+  return (
+    status === 401 ||
+    status === 403 ||
+    status === 429 ||
+    code === "insufficient_quota" ||
+    code === "invalid_api_key" ||
+    code === "rate_limit_exceeded" ||
+    type.includes("authentication") ||
+    type.includes("permission") ||
+    message.includes("exceeded your current quota") ||
+    message.includes("insufficient_quota") ||
+    message.includes("invalid api key") ||
+    message.includes("incorrect api key") ||
+    message.includes("billing")
+  );
 }
 
 function twitterListCursorKey(listId: string): string {

@@ -14,24 +14,28 @@ Example MCP prompt:
 
 ```text
 Feedbin API ───────┐
-                   ├─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector ─┬─ CLI query/digest render
-TwitterAPI.io ─────┘                                      │                  ├─ HTTP API query
-                                                          │                  └─ local MCP tools
-                                                          │                     ├─ brief: vector query archive
-                                                          │                     ├─ briefing: read stored digest
-                                                          │                     └─ create_briefing: query PG + synthesize + store
-                                                          ├─ OpenAI embeddings
-                                                          └─ LLM enrichment and synthesis
+RSS/Atom feeds ────┤
+Gmail newsletters ─┤
+TwitterAPI.io ─────┘
+        │
+        └─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector ─┬─ CLI query/digest render
+                                      │                          ├─ HTTP API query
+                                      │                          └─ local MCP tools
+                                      │                             ├─ brief: vector query archive
+                                      │                             ├─ briefing: read stored digest
+                                      │                             └─ create_briefing: query PG + synthesize + store
+                                      ├─ OpenAI embeddings
+                                      └─ LLM enrichment and synthesis
 ```
 
-The MVP uses Feedbin's `GET /v2/entries.json?since=...` endpoint and TwitterAPI.io list timelines as collectors. Feedbin sync preserves the exact newest `created_at` timestamp as its next cursor; Twitter/X sync stores the newest processed tweet ID per configured list. Entries are deduplicated by source identity and canonicalized URL.
+The MVP uses Feedbin's `GET /v2/entries.json?since=...` endpoint, direct RSS/Atom feed polling from `feeds.json`, Gmail newsletter sync, and TwitterAPI.io list timelines as collectors. Entries are deduplicated by source identity and canonicalized URL.
 
 ## Prerequisites
 
 - Node.js 22+
 - Docker with Compose
 - Colima, if using Docker through Colima on macOS
-- Feedbin account
+- Feedbin account, `feeds.json`, or Gmail credentials for at least one collector
 - OpenAI API key for embeddings
 - OpenAI or Anthropic API key for enrichment and answer synthesis
 
@@ -39,13 +43,14 @@ The MVP uses Feedbin's `GET /v2/entries.json?since=...` endpoint and TwitterAPI.
 
 ```bash
 cp .env.example .env
-# Fill in Feedbin and model-provider credentials.
+# Fill in model-provider credentials and at least one collector.
+# For RSS, copy feeds.example.json to feeds.json and tune it.
 
 colima start # If using Colima on macOS.
 docker compose up -d postgres
 npm install
 npm run db:migrate
-npm run sync
+npm run cli -- sync-rss --hours 48
 ```
 
 After a system restart, start Colima before bringing Postgres back up:
@@ -88,6 +93,9 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- sync --hours 48` | Sync only entries created within the last 48 hours |
 | `npm run cli -- sync --days 7` | Sync only entries created within the last seven days |
 | `npm run cli -- sync --reset-cursor` | Clear the cursor and safely rescan the complete Feedbin archive |
+| `npm run cli -- sync-rss --hours 48` | Sync direct RSS/Atom feeds from `feeds.json` with a lookback |
+| `npm run cli -- sync-rss --feeds feeds.example.json` | Sync direct RSS/Atom feeds from a specific feed config |
+| `npm run cli -- sync-gmail --hours 48` | Sync Gmail newsletters using the configured query or label |
 | `npm run sync-twitter` | Sync configured Twitter/X lists through TwitterAPI.io |
 | `npm run cli -- enrich --source reddit --limit 20` | Fully enrich the newest 20 eligible Reddit entries |
 | `npm run cli -- enrich --source hackernews --limit 20` | Fully enrich the newest 20 eligible Hacker News entries |
@@ -117,7 +125,7 @@ The response contains an answer with `[1]`-style inline citations and a matching
 Run sync and briefing generation from cron, a systemd timer, or a scheduler:
 
 ```cron
-*/15 * * * * cd /path/to/brief && /usr/bin/npm run sync >> /var/log/brief-sync.log 2>&1
+*/15 * * * * cd /path/to/brief && /usr/bin/npm run sync-rss >> /var/log/brief-rss-sync.log 2>&1
 0 7 * * * cd /path/to/brief && /usr/bin/npm run digest >> /var/log/briefing.log 2>&1
 ```
 
@@ -126,6 +134,12 @@ Run sync and briefing generation from cron, a systemd timer, or a scheduler:
 See [`.env.example`](.env.example). Important values:
 
 - `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: Feedbin HTTP Basic Auth credentials.
+- `RSS_FEEDS_PATH`: JSON feed-list path for direct RSS/Atom sync; defaults to `feeds.json`.
+- `RSS_FETCH_DELAY_MS`, `RSS_REDDIT_FETCH_DELAY_MS`, `RSS_MAX_ITEMS_PER_FEED`, `RSS_USER_AGENT`, `RSS_REQUEST_TIMEOUT_MS`: direct RSS fetch safety limits.
+- `REDDIT_RSS_USER`, `REDDIT_RSS_FEED`: optional Reddit RSS preference parameters appended only to outbound Reddit RSS requests.
+- `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`: Gmail OAuth credentials for newsletter sync.
+- `GMAIL_QUERY` or `GMAIL_LABEL`: Gmail search query or label used to select newsletters.
+- `GMAIL_MAX_MESSAGES`: maximum Gmail messages to fetch per sync; defaults to `50`.
 - `DATABASE_URL`: Postgres connection string. For shared prototype storage, use a Neon Postgres pooled connection string; local Docker Postgres remains the dev/offline default.
 - `PG_POOL_MAX`: maximum Postgres pool connections per process; defaults to `3` for long-running MCP sessions.
 - `TWITTERAPI_IO_API_KEY`: TwitterAPI.io key for `sync-twitter`.
@@ -185,7 +199,7 @@ Example prompts that map naturally to the MCP tools:
 ## Data Model
 
 - `content`: normalized source content, enrichment output, and vector embedding.
-- `sync_state`: exact Feedbin incremental-sync cursor.
+- `sync_state`: collector cursors and per-feed state for Feedbin, RSS, Gmail, and Twitter/X.
 - `digests`: generated briefing history and referenced content IDs.
 
 Failed enrichments remain stored with `enrichment_status = 'failed'` and an error message for operational inspection and a future retry worker.
@@ -333,6 +347,6 @@ See [`docs/HowItWorks.md`](docs/HowItWorks.md) for the processing and lightweigh
 ## Current MVP Boundaries
 
 - Enrichment runs serially during sync to keep rate-limit behavior predictable.
-- Feedbin content is used as delivered; external full-text extraction is not fetched.
+- Feedbin and RSS content are used as delivered; external full-text extraction is not fetched.
 - The pgvector column is fixed to 1536 dimensions.
 - Digests are stored and printed; delivery to email or chat is not included.
