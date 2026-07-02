@@ -25,6 +25,7 @@ import {
   parseRssXml,
   redditRssAuthMode,
   retryAfterFromRateLimit,
+  RssAccessError,
   RssClient,
   RssRateLimitError,
   rssFeedHash,
@@ -87,6 +88,7 @@ export interface RssSyncOptions {
   redditFetchDelayMs: number;
   redditUser?: string;
   redditFeed?: string;
+  redditDebug: boolean;
   maxItemsPerFeed: number;
   userAgent: string;
   requestTimeoutMs: number;
@@ -99,7 +101,7 @@ export interface RssFeedSyncSummary {
   parsedItems: number;
   processedItems: number;
   overflowCount: number;
-  redditAuthMode?: "user_feed_params" | "none" | "fallback_none";
+  redditAuthMode?: "user_feed_params" | "none";
   skippedReason?: "retry_after" | "domain_retry_after";
   error?: string;
 }
@@ -242,7 +244,9 @@ export async function syncRssFeeds(
     userAgent: options.userAgent,
     timeoutMs: options.requestTimeoutMs,
     redditUser: options.redditUser,
-    redditFeed: options.redditFeed
+    redditFeed: options.redditFeed,
+    debug: options.redditDebug,
+    debugLog: log
   });
   const result: SyncResult = {
     fetched: 0,
@@ -276,11 +280,13 @@ export async function syncRssFeeds(
     const previousDomainState = domainStateKey ? await readRssFeedState(domainStateKey) : {};
     if (shouldSkipFeedForRetry(previousState)) {
       summary.skippedReason = "retry_after";
+      logRssRetryDebug(feed, stateKey, previousState, options, log);
       log(`Skipping RSS feed ${feed.title}: retry-after active until ${previousState.retryAfter}`);
       continue;
     }
     if (shouldSkipFeedForRetry(previousDomainState)) {
       summary.skippedReason = "domain_retry_after";
+      logRssRetryDebug(feed, domainStateKey ?? "unknown", previousDomainState, options, log);
       log(`Skipping RSS feed ${feed.title}: domain retry-after active until ${previousDomainState.retryAfter}`);
       continue;
     }
@@ -354,7 +360,7 @@ export async function syncRssFeeds(
         ...failedRssFeedState(previousState, error),
         redditAuthMode: summary.redditAuthMode
       }));
-      if (domainStateKey && error instanceof RssRateLimitError) {
+      if (domainStateKey && (error instanceof RssRateLimitError || error instanceof RssAccessError)) {
         await setSyncCursorForKey(domainStateKey, JSON.stringify({
           ...failedRssFeedState(previousDomainState, error),
           redditAuthMode: summary.redditAuthMode
@@ -632,6 +638,21 @@ function rssRetryDomain(feed: RssFeedConfig): string | undefined {
   }
 }
 
+function logRssRetryDebug(
+  feed: RssFeedConfig,
+  stateKey: string,
+  state: RssFeedState,
+  options: RssSyncOptions,
+  log: SyncLogger
+): void {
+  if (!options.redditDebug || rssRetryDomain(feed) !== "reddit.com") return;
+  log(
+    `Reddit RSS retry state key=${stateKey} retry_after=${state.retryAfter ?? "none"} ` +
+    `last_error=${state.lastError ? state.lastError.slice(0, 200) : "none"} ` +
+    `auth_mode=${state.redditAuthMode ?? redditRssAuthMode({ redditUser: options.redditUser, redditFeed: options.redditFeed })}`
+  );
+}
+
 function gmailCursorKey(query: string): string {
   return `${gmailSourceKey(query)}:latest_internal_date`;
 }
@@ -651,8 +672,14 @@ function failedRssFeedState(previous: RssFeedState, error: unknown): RssFeedStat
   return {
     ...previous,
     lastError: errorMessage(error),
-    retryAfter: error instanceof RssRateLimitError ? error.retryAfter : previous.retryAfter ?? null
+    retryAfter: rssErrorRetryAfter(error) ?? previous.retryAfter ?? null
   };
+}
+
+function rssErrorRetryAfter(error: unknown): string | null {
+  if (error instanceof RssRateLimitError) return error.retryAfter;
+  if (error instanceof RssAccessError) return error.retryAfter;
+  return null;
 }
 
 function compareParsedNewestFirst(a: ParsedFeedItem, b: ParsedFeedItem): number {

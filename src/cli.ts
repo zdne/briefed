@@ -113,6 +113,7 @@ program.command("sync-rss")
         redditFetchDelayMs: config.RSS_REDDIT_FETCH_DELAY_MS,
         redditUser: config.REDDIT_RSS_USER,
         redditFeed: config.REDDIT_RSS_FEED,
+        redditDebug: config.REDDIT_RSS_DEBUG,
         maxItemsPerFeed: config.RSS_MAX_ITEMS_PER_FEED,
         userAgent: config.RSS_USER_AGENT,
         requestTimeoutMs: config.RSS_REQUEST_TIMEOUT_MS

@@ -9,6 +9,8 @@ export interface RssClientOptions {
   timeoutMs: number;
   redditUser?: string;
   redditFeed?: string;
+  debug?: boolean;
+  debugLog?: (message: string) => void;
   fetchImpl?: typeof fetch;
 }
 
@@ -19,6 +21,7 @@ export interface RssFeedState {
   newestPublishedAt?: string | null;
   recentItemIds?: string[];
   lastOverflowCount?: number;
+  redditAuthMode?: "user_feed_params" | "none";
 }
 
 export interface ParsedFeedItem {
@@ -36,7 +39,7 @@ export interface ParsedRssFeed {
 export interface RssFetchResult {
   xml: string;
   rateLimit: RssRateLimitHeaders;
-  redditAuthMode: "user_feed_params" | "none" | "fallback_none";
+  redditAuthMode: "user_feed_params" | "none";
 }
 
 export interface RssRateLimitHeaders {
@@ -50,13 +53,19 @@ export class RssClient {
   private readonly timeoutMs: number;
   private readonly redditUser?: string;
   private readonly redditFeed?: string;
+  private readonly debug: boolean;
+  private readonly debugLog: (message: string) => void;
   private readonly fetchImpl: typeof fetch;
+  private redditCookieHeader: string | null = null;
+  private redditCookieNames: string[] = [];
 
   constructor(options: RssClientOptions) {
     this.userAgent = options.userAgent;
     this.timeoutMs = options.timeoutMs;
     this.redditUser = options.redditUser;
     this.redditFeed = options.redditFeed;
+    this.debug = options.debug ?? false;
+    this.debugLog = options.debugLog ?? (() => {});
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
@@ -68,19 +77,25 @@ export class RssClient {
       feed: this.redditFeed
     });
     try {
+      if (isRedditUrl(requestUrl)) {
+        await this.ensureRedditCookies();
+      }
       let response = await this.request(requestUrl, controller.signal);
       let redditAuthMode: RssFetchResult["redditAuthMode"] = requestUrl === feed.url ? "none" : "user_feed_params";
       let effectiveUrl = requestUrl;
-      if (response.status === 403 && requestUrl !== feed.url && isRedditUrl(feed.url)) {
-        response = await this.request(feed.url, controller.signal);
-        redditAuthMode = "fallback_none";
-        effectiveUrl = feed.url;
-      }
 
       const rateLimit = parseRateLimitHeaders(response.headers);
       if (response.status === 429) {
         const retryAfter = rateLimit.retryAfter ?? defaultRetryAfter();
         throw new RssRateLimitError(feed.url, retryAfter);
+      }
+      if (response.status === 403 && isRedditUrl(feed.url)) {
+        throw new RssAccessError(
+          feed.url,
+          defaultRetryAfter(),
+          redditAuthMode,
+          await shortResponseText(response)
+        );
       }
       if (!response.ok) {
         throw new Error(`RSS request failed (${response.status}) for ${redactRedditRssUrl(effectiveUrl)}: ${await shortResponseText(response)}`);
@@ -96,14 +111,49 @@ export class RssClient {
   }
 
   private async request(url: string, signal: AbortSignal): Promise<Response> {
-    return this.fetchImpl(url, {
+    const headers = {
+      Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+      "User-Agent": this.userAgent,
+      ...this.cookieHeaderForUrl(url)
+    };
+    if (this.debug && isRedditUrl(url)) {
+      this.debugLog(`Reddit RSS request url=${redactRedditRssUrl(url)} has_user=${new URL(url).searchParams.has("user")} has_feed=${new URL(url).searchParams.has("feed")} feed_length=${new URL(url).searchParams.get("feed")?.length ?? 0}`);
+      this.debugLog(`Reddit RSS request headers=${redactRequestHeaders(headers)} reddit_cookie_names=${this.redditCookieNames.join(",") || "none"}`);
+    }
+    const response = await this.fetchImpl(url, {
       redirect: "follow",
       signal,
+      headers
+    });
+    if (this.debug && isRedditUrl(url)) {
+      this.debugLog(`Reddit RSS response status=${response.status} url=${redactRedditRssUrl(response.url || url)} content_type=${response.headers.get("content-type") ?? "unknown"} retry_after=${response.headers.get("retry-after") ?? "none"} x_ratelimit_used=${response.headers.get("x-ratelimit-used") ?? "none"} x_ratelimit_remaining=${response.headers.get("x-ratelimit-remaining") ?? "none"} x_ratelimit_reset=${response.headers.get("x-ratelimit-reset") ?? "none"}`);
+    }
+    return response;
+  }
+
+  private async ensureRedditCookies(): Promise<void> {
+    if (this.redditCookieHeader !== null) return;
+    const response = await this.fetchImpl("https://www.reddit.com/", {
+      redirect: "follow",
       headers: {
-        Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "User-Agent": this.userAgent
       }
     });
+    const cookies = setCookieHeaders(response.headers)
+      .map((cookie) => cookie.split(";")[0]?.trim())
+      .filter((cookie): cookie is string => Boolean(cookie && cookie.includes("=")));
+    this.redditCookieHeader = cookies.join("; ");
+    this.redditCookieNames = cookies.map((cookie) => cookie.split("=")[0]!).filter(Boolean);
+    if (this.debug) {
+      this.debugLog(`Reddit RSS cookie bootstrap status=${response.status} cookie_names=${this.redditCookieNames.join(",") || "none"}`);
+    }
+    await response.body?.cancel();
+  }
+
+  private cookieHeaderForUrl(url: string): { Cookie?: string } {
+    if (!isRedditUrl(url) || !this.redditCookieHeader) return {};
+    return { Cookie: this.redditCookieHeader };
   }
 }
 
@@ -113,6 +163,17 @@ export class RssRateLimitError extends Error {
     readonly retryAfter: string | null
   ) {
     super(`RSS feed rate limited: ${url}`);
+  }
+}
+
+export class RssAccessError extends Error {
+  constructor(
+    url: string,
+    readonly retryAfter: string,
+    readonly redditAuthMode: RssFetchResult["redditAuthMode"],
+    detail: string
+  ) {
+    super(`RSS feed access denied (${redditAuthMode}): ${redactRedditRssUrl(url)}: ${detail}`);
   }
 }
 
@@ -152,8 +213,8 @@ export function redditRequestUrl(
   }
   const parsed = new URL(url);
   if (!isRedditHostname(parsed.hostname) || !parsed.pathname.endsWith(".rss")) return url;
-  parsed.searchParams.set("user", options.user!);
   parsed.searchParams.set("feed", options.feed!);
+  parsed.searchParams.set("user", options.user!);
   return parsed.toString();
 }
 
@@ -377,6 +438,24 @@ function isRedditUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+function setCookieHeaders(headers: Headers): string[] {
+  const getSetCookie = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
+  if (getSetCookie) return getSetCookie.call(headers);
+  const combined = headers.get("set-cookie");
+  return combined ? splitSetCookieHeader(combined) : [];
+}
+
+export function splitSetCookieHeader(value: string): string[] {
+  return value.split(/,\s*(?=[^;,\s]+=)/g).map((cookie) => cookie.trim()).filter(Boolean);
+}
+
+function redactRequestHeaders(headers: Record<string, string>): string {
+  return JSON.stringify({
+    ...headers,
+    Cookie: headers.Cookie ? `<redacted:${headers.Cookie.split(";").length} cookies>` : undefined
+  });
 }
 
 async function shortResponseText(response: Response): Promise<string> {

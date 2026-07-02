@@ -7,10 +7,12 @@ import {
   redditRequestUrl,
   redactRedditRssUrl,
   retryAfterFromRateLimit,
+  RssAccessError,
   RssClient,
   RssRateLimitError,
   rssSourceKey,
-  shouldSkipFeedForRetry
+  shouldSkipFeedForRetry,
+  splitSetCookieHeader
 } from "../src/rss.js";
 
 describe("parseRssFeeds", () => {
@@ -145,13 +147,27 @@ describe("RSS state helpers", () => {
 
 describe("RssClient", () => {
   it("adds Reddit user/feed params only to outbound Reddit RSS requests", async () => {
+    const debug: string[] = [];
+    const requests: Array<{ url: string; cookie?: string }> = [];
     const client = new RssClient({
       userAgent: "test-agent",
       timeoutMs: 1000,
       redditUser: "user-token",
       redditFeed: "feed-token",
-      fetchImpl: async (input) => {
-        expect(String(input)).toBe("https://www.reddit.com/r/example.rss?user=user-token&feed=feed-token");
+      debug: true,
+      debugLog: (message) => debug.push(message),
+      fetchImpl: async (input, init) => {
+        requests.push({
+          url: String(input),
+          cookie: init?.headers && (init.headers as Record<string, string>).Cookie
+        });
+        if (String(input) === "https://www.reddit.com/") {
+          return new Response("<html></html>", {
+            status: 200,
+            headers: { "set-cookie": "csv=2; Path=/; Secure" }
+          });
+        }
+        expect(String(input)).toBe("https://www.reddit.com/r/example.rss?feed=feed-token&user=user-token");
         return new Response("<rss><channel /></rss>", { status: 200 });
       }
     });
@@ -162,36 +178,51 @@ describe("RssClient", () => {
       normalizedUrl: "https://www.reddit.com/r/example.rss",
       enabled: true
     });
+    expect(requests).toEqual([
+      { url: "https://www.reddit.com/", cookie: undefined },
+      { url: "https://www.reddit.com/r/example.rss?feed=feed-token&user=user-token", cookie: "csv=2" }
+    ]);
+    expect(debug.join("\n")).toContain("has_user=true");
+    expect(debug.join("\n")).toContain("has_feed=true");
+    expect(debug.join("\n")).toContain("feed_length=10");
+    expect(debug.join("\n")).toContain("cookie_names=csv");
+    expect(debug.join("\n")).toContain("reddit_cookie_names=csv");
+    expect(debug.join("\n")).toContain("Cookie\":\"<redacted:1 cookies>");
+    expect(debug.join("\n")).not.toContain("edgebucket=edge");
+    expect(debug.join("\n")).not.toContain("feed-token");
   });
 
-  it("falls back to the clean Reddit RSS URL when user/feed params return 403", async () => {
-    const requests: string[] = [];
+  it("splits combined Set-Cookie headers", () => {
+    expect(splitSetCookieHeader("csv=2; Path=/; Secure, edgebucket=edge; Path=/; Secure"))
+      .toEqual(["csv=2; Path=/; Secure", "edgebucket=edge; Path=/; Secure"]);
+  });
+
+  it("converts Reddit 403 into an access error with auth mode", async () => {
     const client = new RssClient({
       userAgent: "test-agent",
       timeoutMs: 1000,
       redditUser: "user-token",
       redditFeed: "feed-token",
-      fetchImpl: async (input) => {
-        requests.push(String(input));
-        return requests.length === 1
-          ? new Response("<html>Forbidden</html>", { status: 403 })
-          : new Response("<rss><channel /></rss>", { status: 200 });
-      }
+      fetchImpl: async () => new Response(`<html>${"x".repeat(1000)}</html>`, { status: 403 })
     });
 
-    await expect(client.fetchFeed({
-      title: "Reddit",
-      url: "https://www.reddit.com/r/example.rss",
-      normalizedUrl: "https://www.reddit.com/r/example.rss",
-      enabled: true
-    })).resolves.toMatchObject({
-      redditAuthMode: "fallback_none",
-      xml: "<rss><channel /></rss>"
-    });
-    expect(requests).toEqual([
-      "https://www.reddit.com/r/example.rss?user=user-token&feed=feed-token",
-      "https://www.reddit.com/r/example.rss"
-    ]);
+    let error: unknown;
+    try {
+      await client.fetchFeed({
+        title: "Reddit",
+        url: "https://www.reddit.com/r/example.rss",
+        normalizedUrl: "https://www.reddit.com/r/example.rss",
+        enabled: true
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(RssAccessError);
+    expect(error).toMatchObject({ redditAuthMode: "user_feed_params" });
+    expect(String(error)).not.toContain("user-token");
+    expect(String(error)).toContain("user_feed_params");
+    expect(String(error).length).toBeLessThan(650);
   });
 
   it("does not add Reddit user/feed params to non-Reddit requests", () => {

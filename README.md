@@ -137,6 +137,7 @@ See [`.env.example`](.env.example). Important values:
 - `RSS_FEEDS_PATH`: JSON feed-list path for direct RSS/Atom sync; defaults to `feeds.json`.
 - `RSS_FETCH_DELAY_MS`, `RSS_REDDIT_FETCH_DELAY_MS`, `RSS_MAX_ITEMS_PER_FEED`, `RSS_USER_AGENT`, `RSS_REQUEST_TIMEOUT_MS`: direct RSS fetch safety limits.
 - `REDDIT_RSS_USER`, `REDDIT_RSS_FEED`: optional Reddit RSS preference parameters appended only to outbound Reddit RSS requests.
+- `REDDIT_RSS_DEBUG`: when true, logs redacted Reddit RSS request URLs, request headers, status, content type, and rate-limit headers.
 - `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`: Gmail OAuth credentials for newsletter sync.
 - `GMAIL_QUERY` or `GMAIL_LABEL`: Gmail search query or label used to select newsletters.
 - `GMAIL_MAX_MESSAGES`: maximum Gmail messages to fetch per sync; defaults to `50`.
