@@ -1,14 +1,14 @@
 # How Briefed.sh Works
 
-Briefed.sh uses Feedbin, direct RSS/Atom polling, Gmail, and TwitterAPI.io as collectors, Postgres and pgvector as its local archive, OpenAI for embeddings, and OpenAI or Anthropic for language-model synthesis.
+Briefed.sh primarily uses direct RSS/Atom polling, optional Gmail newsletter sync, and optional TwitterAPI.io list sync as collectors. Feedbin remains available as a secondary/fallback collector. Postgres and pgvector provide the local archive, OpenAI provides embeddings, and OpenAI or Anthropic provide language-model synthesis.
 
-Feedbin entries, direct RSS/Atom items, Gmail newsletters, and Twitter/X list tweets are normalized into the same `content` table. Source identity fields keep collectors separate while shared embeddings make every collector searchable through queries and eligible for briefings.
+Direct RSS/Atom items, Gmail newsletters, Twitter/X list tweets, and optional Feedbin entries are normalized into the same `content` table. Source identity fields keep collectors separate while shared embeddings make every collector searchable through queries and eligible for briefings.
 
 ```text
-Feedbin API ───────┐
-RSS/Atom feeds ────┤
+RSS/Atom feeds ────┐
 Gmail newsletters ─┤
-TwitterAPI.io ─────┘
+TwitterAPI.io ─────┤
+Feedbin API ───────┘
         │
         └─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector ─┬─ CLI query/digest render
                                       │                          ├─ HTTP API query
@@ -19,52 +19,6 @@ TwitterAPI.io ─────┘
                                       ├─ OpenAI embeddings
                                       └─ LLM enrichment and synthesis
 ```
-
-## Feedbin Sync Pipeline
-
-Run:
-
-```bash
-npm run sync
-```
-
-The sync command:
-
-1. Reads the last successful Feedbin cursor from `sync_state`.
-2. Requests Feedbin entries created after that timestamp.
-3. Follows Feedbin pagination and reports total and per-entry progress.
-4. Normalizes each entry:
-   - Converts HTML into plain text.
-   - Removes common tracking parameters from canonical URLs.
-   - Preserves the original Feedbin JSON.
-5. Stores or updates the entry in `content`.
-6. Deduplicates entries using Feedbin entry ID and canonical URL.
-7. Selects the entry's enrichment strategy.
-8. Stores enrichment results and an embedding.
-9. Advances the Feedbin cursor only after the complete sync finishes.
-
-It is safe to interrupt sync with `Ctrl-C`. Already processed entries remain stored, but the cursor is not advanced. The next sync may revisit those entries, and deduplication prevents duplicate rows.
-
-Feedbin limits pages to 100 entries. Briefed.sh follows Feedbin's pagination links and refuses to advance the cursor if Feedbin reports more matching records than were fetched.
-
-To clear a bad cursor and safely rescan the full Feedbin archive:
-
-```bash
-npm run cli -- sync --reset-cursor
-```
-
-Existing entries are deduplicated during the rescan.
-
-For a recent-only initial sync or backfill:
-
-```bash
-npm run cli -- sync --hours 48
-npm run cli -- sync --days 7
-```
-
-These options temporarily override the starting cursor without changing the stored cursor before processing. After all matching pages finish successfully, Briefed.sh stores the newest fetched Feedbin timestamp as the next incremental cursor. This is normally close to the present, but deliberately uses Feedbin's timestamp rather than the local clock to avoid skipping entries.
-
-If a recent-only sync is interrupted, the previous stored cursor remains unchanged. Resume using the same lookback option. If Feedbin returns no matching entries, Briefed.sh also leaves the existing cursor unchanged.
 
 ## Direct RSS/Atom Sync
 
@@ -97,6 +51,54 @@ RSS stores items with `source_key = 'rss:feed:<feed_hash>'`. Each feed has JSON 
 The collector uses feed-provided content only. It does not fetch original article pages in v1. It processes at most `RSS_MAX_ITEMS_PER_FEED` newest matching items per feed per run. Use `npm run cli -- sync-rss --hours 48` for the first run to avoid importing large historical feeds.
 
 HTTP 429 is treated as a soft per-feed failure. Briefed.sh records retry-after state, skips that feed while retry-after is active, and continues syncing other feeds. Reddit 429s also set a shared `rss:domain:reddit.com:state` retry window so the same run does not hammer the next subreddit feed immediately.
+
+## Feedbin Sync Pipeline
+
+Feedbin is a secondary/fallback collector. New RSS and newsletter setups should prefer direct RSS plus Gmail.
+
+Run:
+
+```bash
+npm run sync-feedbin
+```
+
+The sync command:
+
+1. Reads the last successful Feedbin cursor from `sync_state`.
+2. Requests Feedbin entries created after that timestamp.
+3. Follows Feedbin pagination and reports total and per-entry progress.
+4. Normalizes each entry:
+   - Converts HTML into plain text.
+   - Removes common tracking parameters from canonical URLs.
+   - Preserves the original Feedbin JSON.
+5. Stores or updates the entry in `content`.
+6. Deduplicates entries using Feedbin entry ID and canonical URL.
+7. Selects the entry's enrichment strategy.
+8. Stores enrichment results and an embedding.
+9. Advances the Feedbin cursor only after the complete sync finishes.
+
+It is safe to interrupt sync with `Ctrl-C`. Already processed entries remain stored, but the cursor is not advanced. The next sync may revisit those entries, and deduplication prevents duplicate rows.
+
+Feedbin limits pages to 100 entries. Briefed.sh follows Feedbin's pagination links and refuses to advance the cursor if Feedbin reports more matching records than were fetched.
+
+To clear a bad cursor and safely rescan the full Feedbin archive:
+
+```bash
+npm run cli -- sync-feedbin --reset-cursor
+```
+
+Existing entries are deduplicated during the rescan.
+
+For a recent-only initial sync or backfill:
+
+```bash
+npm run cli -- sync-feedbin --hours 48
+npm run cli -- sync-feedbin --days 7
+```
+
+These options temporarily override the starting cursor without changing the stored cursor before processing. After all matching pages finish successfully, Briefed.sh stores the newest fetched Feedbin timestamp as the next incremental cursor. This is normally close to the present, but deliberately uses Feedbin's timestamp rather than the local clock to avoid skipping entries.
+
+If a recent-only sync is interrupted, the previous stored cursor remains unchanged. Resume using the same lookback option. If Feedbin returns no matching entries, Briefed.sh also leaves the existing cursor unchanged.
 
 ## Gmail Newsletter Sync
 
@@ -209,7 +211,7 @@ RSS/Feedbin Hacker News content is normally the HN item or discussion wrapper, n
 
 ## Upgrading Lightweight Enrichment
 
-The lightweight policy is reversible. Stored embedding-only entries can be upgraded to full enrichment without fetching them from Feedbin again.
+The lightweight policy is reversible. Stored embedding-only entries can be upgraded to full enrichment without fetching them from the original collector again.
 
 ```bash
 # Fully enrich the newest 20 eligible Reddit entries

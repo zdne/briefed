@@ -34,43 +34,43 @@ program.command("migrate").description("Apply database migrations").action(async
   console.log("Migrations applied.");
 });
 
-program.command("sync")
+program.command("sync-feedbin")
   .description("Incrementally sync and enrich Feedbin entries")
   .option("--reset-cursor", "clear the Feedbin cursor before syncing the full archive")
   .option("-H, --hours <number>", "sync entries created within the last N hours")
   .option("-D, --days <number>", "sync entries created within the last N days")
   .action(async (options: { resetCursor?: boolean; hours?: string; days?: string }) => {
-  requireConfig(["FEEDBIN_EMAIL", "FEEDBIN_PASSWORD"]);
-  const selectedModes = [options.resetCursor, options.hours !== undefined, options.days !== undefined]
-    .filter(Boolean).length;
-  if (selectedModes > 1) {
-    throw new Error("Use only one of --reset-cursor, --hours, or --days");
-  }
-  const log = timestampLogger;
-  let since: string | undefined;
-  if (options.resetCursor) {
-    await resetSyncCursor();
-    log("Cleared Feedbin cursor; syncing the full archive");
-  } else if (options.hours !== undefined) {
-    since = lookbackSince(new Date(), positiveInteger(options.hours, "--hours"));
-    log(`Overriding cursor to sync the last ${options.hours} hours`);
-  } else if (options.days !== undefined) {
-    const days = positiveInteger(options.days, "--days");
-    since = lookbackSince(new Date(), days * 24);
-    log(`Overriding cursor to sync the last ${days} days`);
-  }
-  log("Initializing Feedbin and AI clients");
-  const result = await syncFeedbin(
-    new FeedbinClient({
-      email: config.FEEDBIN_EMAIL!,
-      password: config.FEEDBIN_PASSWORD!,
-      baseUrl: config.FEEDBIN_BASE_URL
-    }),
-    new AnalystAI(),
-    log,
-    { since }
-  );
-  console.log(JSON.stringify(result, null, 2));
+    requireConfig(["FEEDBIN_EMAIL", "FEEDBIN_PASSWORD"]);
+    const selectedModes = [options.resetCursor, options.hours !== undefined, options.days !== undefined]
+      .filter(Boolean).length;
+    if (selectedModes > 1) {
+      throw new Error("Use only one of --reset-cursor, --hours, or --days");
+    }
+    const log = timestampLogger;
+    let since: string | undefined;
+    if (options.resetCursor) {
+      await resetSyncCursor();
+      log("Cleared Feedbin cursor; syncing the full archive");
+    } else if (options.hours !== undefined) {
+      since = lookbackSince(new Date(), positiveInteger(options.hours, "--hours"));
+      log(`Overriding cursor to sync the last ${options.hours} hours`);
+    } else if (options.days !== undefined) {
+      const days = positiveInteger(options.days, "--days");
+      since = lookbackSince(new Date(), days * 24);
+      log(`Overriding cursor to sync the last ${days} days`);
+    }
+    log("Initializing Feedbin and AI clients");
+    const result = await syncFeedbin(
+      new FeedbinClient({
+        email: config.FEEDBIN_EMAIL!,
+        password: config.FEEDBIN_PASSWORD!,
+        baseUrl: config.FEEDBIN_BASE_URL
+      }),
+      new AnalystAI(),
+      log,
+      { since }
+    );
+    console.log(JSON.stringify(result, null, 2));
   });
 
 program.command("sync-twitter")
