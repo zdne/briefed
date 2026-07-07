@@ -53,7 +53,7 @@ Cons:
 
 Recommended next step.
 
-Treat `DIGEST_REQUIRED_TOPICS` and `DIGEST_FOCUS_AREAS` as selection requirements, not only synthesis instructions.
+Treat `briefing.requiredTopics` and `briefing.focusAreas` in `briefed.config.json` as selection requirements, not only synthesis instructions.
 
 Pipeline:
 
@@ -76,8 +76,8 @@ DIGEST_FOCUS_AREA_MAX_ENTRIES=4
 
 Selection buckets:
 
-- Required topic buckets: one bucket per `DIGEST_REQUIRED_TOPICS` item.
-- Focus area buckets: one bucket per `DIGEST_FOCUS_AREAS` item.
+- Required topic buckets: one bucket per `briefing.requiredTopics` item.
+- Focus area buckets: one bucket per `briefing.focusAreas` item.
 - General bucket: source-balanced newest/high-signal entries.
 
 An entry can satisfy more than one bucket but should only be included once in the final source list. Focus areas that overlap required topics, such as `MCP` when `MCP Discovery` is already required, should be skipped to avoid repeating the same source cluster in two sections.

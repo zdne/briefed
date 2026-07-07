@@ -28,14 +28,14 @@ Feedbin API ───────┘
                                       └─ LLM enrichment and synthesis
 ```
 
-Briefed supports multiple optional collectors: direct RSS/Atom feed polling from `feeds.json`, Gmail newsletter sync, TwitterAPI.io list timelines, and Feedbin sync through `sync-feedbin`. Enable whichever inputs you want to use. Entries are deduplicated by source identity and canonicalized URL.
+Briefed supports multiple optional collectors: direct RSS/Atom feed polling, Gmail newsletter sync, TwitterAPI.io list timelines, and Feedbin sync through `sync-feedbin`. Enable collectors and selectors in `briefed.config.json`; keep `.env` for secrets, infrastructure, provider choices, and operational limits. Entries are deduplicated by source identity and canonicalized URL.
 
 ## Prerequisites
 
 - Node.js 22+
 - Docker with Compose
 - Colima, if using Docker through Colima on macOS
-- At least one configured input: `feeds.json`, Gmail credentials, TwitterAPI.io credentials, or Feedbin credentials
+- At least one configured collector in `briefed.config.json` plus any required provider credentials in `.env`
 - OpenAI API key for embeddings
 - OpenAI or Anthropic API key for enrichment and answer synthesis
 
@@ -43,14 +43,14 @@ Briefed supports multiple optional collectors: direct RSS/Atom feed polling from
 
 ```bash
 cp .env.example .env
-# Fill in model-provider credentials and at least one collector.
-# For RSS, copy feeds.example.json to feeds.json and tune it.
+# Fill in model-provider credentials and operational settings.
+# Edit briefed.config.json, or copy briefed.config.example.json to briefed.config.json.
 
 colima start # If using Colima on macOS.
 docker compose up -d postgres
 npm install
 npm run db:migrate
-npm run cli -- sync-rss --hours 48
+npm run sync -- --hours 48
 ```
 
 After a system restart, start Colima before bringing Postgres back up:
@@ -89,8 +89,9 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | Command | Purpose |
 | --- | --- |
 | `npm run db:migrate` | Apply SQL migrations |
-| `npm run cli -- sync-rss --hours 48` | Sync direct RSS/Atom feeds from `feeds.json` with a lookback |
-| `npm run cli -- sync-rss --feeds feeds.example.json` | Sync direct RSS/Atom feeds from a specific feed config |
+| `npm run sync` | Sync every enabled collector from `briefed.config.json` |
+| `npm run sync -- --hours 48` | Sync enabled collectors with a lookback where supported |
+| `npm run cli -- sync-rss --hours 48` | Sync direct RSS/Atom feeds from `briefed.config.json` with a lookback |
 | `npm run gmail-auth` | Run one-time Gmail OAuth setup and print `GMAIL_REFRESH_TOKEN` |
 | `npm run cli -- sync-gmail --hours 48` | Sync Gmail newsletters using the configured query or label |
 | `npm run sync-twitter` | Sync configured Twitter/X lists through TwitterAPI.io |
@@ -126,25 +127,26 @@ The response contains an answer with `[1]`-style inline citations and a matching
 Run sync and briefing generation from cron, a systemd timer, or a scheduler:
 
 ```cron
-*/15 * * * * cd /path/to/brief && /usr/bin/npm run sync-rss >> /var/log/brief-rss-sync.log 2>&1
+*/15 * * * * cd /path/to/brief && /usr/bin/npm run sync >> /var/log/brief-sync.log 2>&1
 0 7 * * * cd /path/to/brief && /usr/bin/npm run digest >> /var/log/briefing.log 2>&1
 ```
 
 ## Configuration
 
-See [`.env.example`](.env.example). Important values:
+User-managed preferences live in [`briefed.config.json`](briefed.config.json): collector enablement, RSS feeds, Gmail selector, Twitter/X list IDs, Feedbin enablement, and briefing topics. Agents should inspect and update this file through MCP tools; humans can edit the JSON directly. Set `USER_CONFIG_PATH` or `BRIEFED_CONFIG_PATH` in `.env` only when the file lives somewhere else.
 
-- `RSS_FEEDS_PATH`: JSON feed-list path for direct RSS/Atom sync; defaults to `feeds.json`.
+This is a hard cutover from the old split preference fields. Existing installations should copy feeds from the old feed-list file into `collectors.rss.feeds`, copy Gmail label/query into `collectors.gmail`, copy Twitter/X list IDs into `collectors.twitter.listIds`, and copy previous briefing topics into `briefing.requiredTopics` and `briefing.focusAreas`. The old preference env vars and separate feed-list path are not read as fallbacks.
+
+Secrets, infrastructure, provider choices, output locations, and operational limits live in [`.env.example`](.env.example). Important values:
+
 - `RSS_FETCH_DELAY_MS`, `RSS_REDDIT_FETCH_DELAY_MS`, `RSS_MAX_ITEMS_PER_FEED`, `RSS_USER_AGENT`, `RSS_REQUEST_TIMEOUT_MS`: direct RSS fetch safety limits. `RSS_REDDIT_FETCH_DELAY_MS` is the delay before Reddit feed fetches; `RSS_REQUEST_TIMEOUT_MS` is the HTTP request timeout.
 - `REDDIT_RSS_USER`, `REDDIT_RSS_FEED`: recommended for Reddit feeds. These Reddit RSS preference parameters come from an authenticated Reddit RSS URL and are appended only to outbound Reddit RSS requests. Without them, Reddit RSS is likely to hit rate limits. You can get the credentials at https://www.reddit.com/prefs/feeds
 - `REDDIT_RSS_DEBUG`: when true, logs redacted Reddit RSS request URLs, request headers, cookie names, status, content type, and rate-limit headers.
 - `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`: Gmail OAuth credentials for newsletter sync. Create a Google OAuth Desktop client, set the client ID/secret, then run `npm run gmail-auth` to generate the refresh token.
-- `GMAIL_QUERY` or `GMAIL_LABEL`: Gmail search query or label used to select newsletters. `GMAIL_LABEL` defaults to `newsletter`; use `GMAIL_QUERY=label:newsletters` when you need a full Gmail search expression.
 - `GMAIL_MAX_MESSAGES`: maximum Gmail messages to fetch per sync; defaults to `50`.
 - `DATABASE_URL`: Postgres connection string. For shared prototype storage, use a Neon Postgres pooled connection string; local Docker Postgres remains the dev/offline default.
 - `PG_POOL_MAX`: maximum Postgres pool connections per process; defaults to `3` for long-running MCP sessions.
 - `TWITTERAPI_IO_API_KEY`: TwitterAPI.io key for `sync-twitter`.
-- `TWITTERAPI_LIST_IDS`: comma-separated Twitter/X list IDs to sync.
 - `TWITTERAPI_LIST_MAX_PAGES`, `TWITTERAPI_LIST_MAX_TWEETS`: bounded sync limits; defaults to `3` and `200`.
 - `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: optional Feedbin HTTP Basic Auth credentials for `sync-feedbin`.
 - `OPENAI_API_KEY`: always required because embeddings use OpenAI.
@@ -164,8 +166,6 @@ See [`.env.example`](.env.example). Important values:
 - `DIGEST_MAX_ENTRIES_PER_AUTHOR`: cap per normalized author for one briefing; defaults to `4`.
 - `DIGEST_REPEAT_LOOKBACK_HOURS`: recent stored briefing history used to suppress stale repeat coverage; defaults to `72`.
 - `DIGEST_MAX_FOLLOWUPS_PER_EVENT`: max material follow-up sources allowed for a recently briefed event; defaults to `1`.
-- `DIGEST_REQUIRED_TOPICS`: comma-separated durable watchlist topics that always appear in briefings, even with no new signal.
-- `DIGEST_FOCUS_AREAS`: comma-separated softer interests that are highlighted only when relevant source-backed signal exists.
 - `DIGEST_OUTPUT_DIR`: directory for generated briefing Markdown; defaults to `output/briefings`.
 - `QUERY_OUTPUT_DIR`: directory for generated query Markdown and JSON sidecars; defaults to `output/queries`.
 
@@ -190,6 +190,10 @@ Available tools:
 - `brief`: asks ad hoc questions over the synced archive, including articles, newsletters, Reddit, Hacker News, and Twitter/X, with citations.
 - `create_briefing`: creates and stores a new time-window briefing with optional `hours` and `daysAgo`; this calls the LLM and may take 30-60 seconds.
 - `briefing`: renders the latest stored briefing, or a specific stored briefing by `id`.
+- `get_user_config`: returns the full non-secret user config.
+- `update_user_config`: replaces the full user config after validation.
+- `update_collectors`: replaces the collectors section after validation.
+- `update_briefing_preferences`: replaces required topics and focus areas after validation.
 
 Example prompts that map naturally to the MCP tools:
 
@@ -218,11 +222,24 @@ Failed enrichments remain stored with `enrichment_status = 'failed'` and an erro
 ```env
 GMAIL_CLIENT_ID=...
 GMAIL_CLIENT_SECRET=...
-GMAIL_LABEL=newsletter
 GMAIL_MAX_MESSAGES=1
 ```
 
-6. Run the one-time helper:
+6. Put the Gmail selector in `briefed.config.json`:
+
+```json
+{
+  "collectors": {
+    "gmail": {
+      "enabled": true,
+      "label": "newsletter",
+      "query": null
+    }
+  }
+}
+```
+
+7. Run the one-time helper:
 
 ```bash
 npm run gmail-auth
@@ -256,16 +273,20 @@ Twitter/X list sync uses TwitterAPI.io:
 npm run sync-twitter
 ```
 
-It reads `TWITTERAPI_LIST_IDS`, fetches newest tweets first, stops when it reaches the stored latest tweet ID for each list, and otherwise stops at `TWITTERAPI_LIST_MAX_PAGES` or `TWITTERAPI_LIST_MAX_TWEETS`. Tweets use `source_key = twitterapi:list:<list_id>` and `source_type = twitter`.
+It reads `collectors.twitter.listIds` from `briefed.config.json`, fetches newest tweets first, stops when it reaches the stored latest tweet ID for each list, and otherwise stops at `TWITTERAPI_LIST_MAX_PAGES` or `TWITTERAPI_LIST_MAX_TWEETS`. Tweets use `source_key = twitterapi:list:<list_id>` and `source_type = twitter`.
 
 Briefing generation prints progress while loading sources, waiting for LLM synthesis, and storing the completed briefing.
 It loads up to `DIGEST_CANDIDATE_LIMIT` entries published during the briefing lookback window, uses vector search to reserve source buckets for configured required topics and focus areas, then fills the remaining prompt budget with newest-published general entries. `DIGEST_MAX_ENTRIES` remains the final hard cap.
 
 Use briefing topic config to protect important topics during source selection and shape the writeup:
 
-```env
-DIGEST_REQUIRED_TOPICS=agentic payments, agentic B2B, agentic commerce, personal memory
-DIGEST_FOCUS_AREAS=MCP, AI observability, agent frameworks
+```json
+{
+  "briefing": {
+    "requiredTopics": ["agentic payments", "agentic B2B", "agentic commerce", "personal memory"],
+    "focusAreas": ["MCP", "AI observability", "agent frameworks"]
+  }
+}
 ```
 
 Required topics always get a watchlist subsection. If there is no source-backed update, the briefing says so. Focus areas are included only when the selected entries contain meaningful signal.

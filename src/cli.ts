@@ -24,6 +24,7 @@ import {
 import { enrichStoredContent, lookbackSince, syncFeedbin, syncGmail, syncRssFeeds, syncTwitterLists } from "./pipeline.js";
 import { queryArchive, queryFollowUp } from "./query.js";
 import { TwitterApiClient } from "./twitterapi.js";
+import { enabledRssFeeds, gmailQueryFromUserConfig, loadUserConfig } from "./user-config.js";
 import type { SourceType } from "./enrichment-policy.js";
 import type { FriendlyDigestStyle, QuerySession } from "./types.js";
 
@@ -34,12 +35,160 @@ program.command("migrate").description("Apply database migrations").action(async
   console.log("Migrations applied.");
 });
 
+program.command("sync")
+  .description("Sync all enabled collectors from briefed.config.json")
+  .option("-H, --hours <number>", "sync lookback for collectors that support it")
+  .option("-D, --days <number>", "sync lookback in days for collectors that support it")
+  .action(async (options: { hours?: string; days?: string }) => {
+    if (options.hours !== undefined && options.days !== undefined) {
+      throw new Error("Use only one of --hours or --days");
+    }
+    const lookbackHours = options.hours !== undefined
+      ? positiveInteger(options.hours, "--hours")
+      : options.days !== undefined
+        ? positiveInteger(options.days, "--days") * 24
+        : undefined;
+    const userConfig = await loadUserConfig();
+    const log = timestampLogger;
+    const results: Record<string, unknown> = {};
+    const failures: Record<string, string> = {};
+    let enabledCount = 0;
+
+    if (userConfig.collectors.rss.enabled) {
+      enabledCount++;
+      try {
+        const feeds = enabledRssFeeds(userConfig);
+        if (feeds.length === 0) {
+          throw new Error("RSS collector has no enabled feeds in briefed.config.json");
+        }
+        log(`Starting RSS sync for ${feeds.length} feed(s)`);
+        results.rss = await syncRssFeeds(
+          {
+            feeds,
+            hours: lookbackHours,
+            fetchDelayMs: config.RSS_FETCH_DELAY_MS,
+            redditFetchDelayMs: config.RSS_REDDIT_FETCH_DELAY_MS,
+            redditUser: config.REDDIT_RSS_USER,
+            redditFeed: config.REDDIT_RSS_FEED,
+            redditDebug: config.REDDIT_RSS_DEBUG,
+            maxItemsPerFeed: config.RSS_MAX_ITEMS_PER_FEED,
+            userAgent: config.RSS_USER_AGENT,
+            requestTimeoutMs: config.RSS_REQUEST_TIMEOUT_MS
+          },
+          new AnalystAI(),
+          log
+        );
+      } catch (error) {
+        failures.rss = errorMessage(error);
+        log(`RSS sync failed: ${failures.rss}`);
+      }
+    }
+
+    if (userConfig.collectors.gmail.enabled) {
+      enabledCount++;
+      try {
+        requireConfig(["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"]);
+        const query = gmailQueryFromUserConfig(userConfig);
+        if (!query) {
+          throw new Error("Gmail collector needs query or label in briefed.config.json");
+        }
+        log("Starting Gmail sync");
+        results.gmail = await syncGmail(
+          new GmailClient({
+            clientId: config.GMAIL_CLIENT_ID!,
+            clientSecret: config.GMAIL_CLIENT_SECRET!,
+            refreshToken: config.GMAIL_REFRESH_TOKEN!
+          }),
+          {
+            query,
+            hours: lookbackHours,
+            maxMessages: config.GMAIL_MAX_MESSAGES
+          },
+          new AnalystAI(),
+          log
+        );
+      } catch (error) {
+        failures.gmail = errorMessage(error);
+        log(`Gmail sync failed: ${failures.gmail}`);
+      }
+    }
+
+    if (userConfig.collectors.twitter.enabled) {
+      enabledCount++;
+      try {
+        requireConfig(["TWITTERAPI_IO_API_KEY"]);
+        const listIds = userConfig.collectors.twitter.listIds;
+        if (listIds.length === 0) {
+          throw new Error("Twitter collector has no listIds in briefed.config.json");
+        }
+        log(`Starting Twitter/X sync for ${listIds.length} list(s)`);
+        results.twitter = await syncTwitterLists(
+          new TwitterApiClient({
+            apiKey: config.TWITTERAPI_IO_API_KEY!,
+            baseUrl: config.TWITTERAPI_IO_BASE_URL
+          }),
+          new AnalystAI(),
+          {
+            listIds,
+            maxPages: config.TWITTERAPI_LIST_MAX_PAGES,
+            maxTweets: config.TWITTERAPI_LIST_MAX_TWEETS
+          },
+          log
+        );
+      } catch (error) {
+        failures.twitter = errorMessage(error);
+        log(`Twitter/X sync failed: ${failures.twitter}`);
+      }
+    }
+
+    if (userConfig.collectors.feedbin.enabled) {
+      enabledCount++;
+      try {
+        requireConfig(["FEEDBIN_EMAIL", "FEEDBIN_PASSWORD"]);
+        const since = lookbackHours === undefined ? undefined : lookbackSince(new Date(), lookbackHours);
+        if (since) log(`Overriding Feedbin cursor to sync since ${since}`);
+        log("Starting Feedbin sync");
+        results.feedbin = await syncFeedbin(
+          new FeedbinClient({
+            email: config.FEEDBIN_EMAIL!,
+            password: config.FEEDBIN_PASSWORD!,
+            baseUrl: config.FEEDBIN_BASE_URL
+          }),
+          new AnalystAI(),
+          log,
+          { since }
+        );
+      } catch (error) {
+        failures.feedbin = errorMessage(error);
+        log(`Feedbin sync failed: ${failures.feedbin}`);
+      }
+    }
+
+    if (enabledCount === 0) {
+      throw new Error("No collectors are enabled in briefed.config.json");
+    }
+
+    const failed = Object.keys(failures).length;
+    if (failed > 0) process.exitCode = 1;
+    console.log(JSON.stringify({
+      ok: failed === 0,
+      enabledCollectors: enabledCount,
+      lookbackHours,
+      results,
+      failures
+    }, null, 2));
+  });
+
 program.command("sync-feedbin")
   .description("Incrementally sync and enrich Feedbin entries")
   .option("--reset-cursor", "clear the Feedbin cursor before syncing the full archive")
   .option("-H, --hours <number>", "sync entries created within the last N hours")
   .option("-D, --days <number>", "sync entries created within the last N days")
   .action(async (options: { resetCursor?: boolean; hours?: string; days?: string }) => {
+    const userConfig = await loadUserConfig();
+    if (!userConfig.collectors.feedbin.enabled) {
+      throw new Error("Feedbin collector is disabled in briefed.config.json");
+    }
     requireConfig(["FEEDBIN_EMAIL", "FEEDBIN_PASSWORD"]);
     const selectedModes = [options.resetCursor, options.hours !== undefined, options.days !== undefined]
       .filter(Boolean).length;
@@ -76,12 +225,17 @@ program.command("sync-feedbin")
 program.command("sync-twitter")
   .description("Sync configured Twitter/X lists from TwitterAPI.io")
   .action(async () => {
+    const userConfig = await loadUserConfig();
+    if (!userConfig.collectors.twitter.enabled) {
+      throw new Error("Twitter collector is disabled in briefed.config.json");
+    }
     requireConfig(["TWITTERAPI_IO_API_KEY"]);
-    if (config.TWITTERAPI_LIST_IDS.length === 0) {
-      throw new Error("Missing required configuration: TWITTERAPI_LIST_IDS");
+    const listIds = userConfig.collectors.twitter.listIds;
+    if (listIds.length === 0) {
+      throw new Error("Twitter collector has no listIds in briefed.config.json");
     }
     const log = timestampLogger;
-    log(`Initializing TwitterAPI and AI clients for ${config.TWITTERAPI_LIST_IDS.length} list(s)`);
+    log(`Initializing TwitterAPI and AI clients for ${listIds.length} list(s)`);
     const result = await syncTwitterLists(
       new TwitterApiClient({
         apiKey: config.TWITTERAPI_IO_API_KEY!,
@@ -89,7 +243,7 @@ program.command("sync-twitter")
       }),
       new AnalystAI(),
       {
-        listIds: config.TWITTERAPI_LIST_IDS,
+        listIds,
         maxPages: config.TWITTERAPI_LIST_MAX_PAGES,
         maxTweets: config.TWITTERAPI_LIST_MAX_TWEETS
       },
@@ -99,16 +253,23 @@ program.command("sync-twitter")
   });
 
 program.command("sync-rss")
-  .description("Sync configured RSS/Atom feeds from feeds.json")
-  .option("--feeds <path>", "path to feeds.json")
+  .description("Sync configured RSS/Atom feeds from briefed.config.json")
   .option("-H, --hours <number>", "sync entries published within the last N hours")
-  .action(async (options: { feeds?: string; hours?: string }) => {
+  .action(async (options: { hours?: string }) => {
+    const userConfig = await loadUserConfig();
+    if (!userConfig.collectors.rss.enabled) {
+      throw new Error("RSS collector is disabled in briefed.config.json");
+    }
+    const feeds = enabledRssFeeds(userConfig);
+    if (feeds.length === 0) {
+      throw new Error("RSS collector has no enabled feeds in briefed.config.json");
+    }
     const hours = options.hours === undefined ? undefined : positiveInteger(options.hours, "--hours");
     const log = timestampLogger;
     log("Initializing RSS and AI clients");
     const result = await syncRssFeeds(
       {
-        feedsPath: options.feeds ?? config.RSS_FEEDS_PATH,
+        feeds,
         hours,
         fetchDelayMs: config.RSS_FETCH_DELAY_MS,
         redditFetchDelayMs: config.RSS_REDDIT_FETCH_DELAY_MS,
@@ -129,10 +290,14 @@ program.command("sync-gmail")
   .description("Sync newsletters from a configured Gmail query or label")
   .option("-H, --hours <number>", "sync messages received within the last N hours")
   .action(async (options: { hours?: string }) => {
+    const userConfig = await loadUserConfig();
+    const query = gmailQueryFromUserConfig(userConfig);
+    if (!userConfig.collectors.gmail.enabled) {
+      throw new Error("Gmail collector is disabled in briefed.config.json");
+    }
     requireConfig(["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"]);
-    const query = config.GMAIL_QUERY ?? (config.GMAIL_LABEL ? `label:${config.GMAIL_LABEL}` : undefined);
     if (!query) {
-      throw new Error("Missing required configuration: GMAIL_QUERY or GMAIL_LABEL");
+      throw new Error("Gmail collector needs query or label in briefed.config.json");
     }
     const hours = options.hours === undefined ? undefined : positiveInteger(options.hours, "--hours");
     const log = timestampLogger;
@@ -354,6 +519,10 @@ function outputFormat(value: string): "markdown" | "json" {
 
 function timestampLogger(message: string): void {
   console.error(`[${new Date().toISOString()}] ${message}`);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function printFormattedOutput(

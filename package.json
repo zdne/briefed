@@ -10,6 +10,7 @@
     "cli": "tsx src/cli.ts",
     "mcp": "tsx src/mcp.ts",
     "db:migrate": "tsx src/cli.ts migrate",
+    "sync": "tsx src/cli.ts sync",
     "sync-feedbin": "tsx src/cli.ts sync-feedbin",
     "sync-rss": "tsx src/cli.ts sync-rss",
     "sync-gmail": "tsx src/cli.ts sync-gmail",

@@ -7,6 +7,15 @@ import { getDigestForRendering, pool } from "./db.js";
 import { createDigest } from "./digest.js";
 import { renderDigestMarkdown, renderQueryMarkdown } from "./markdown.js";
 import { queryArchive } from "./query.js";
+import {
+  briefingPreferencesSchema,
+  collectorsSchema,
+  loadUserConfig,
+  updateBriefingPreferences,
+  updateCollectors,
+  updateUserConfig,
+  userConfigSchema
+} from "./user-config.js";
 
 const server = new McpServer({
   name: "brief",
@@ -35,6 +44,18 @@ const latestDigestInput = {
   id: z.number().int().min(1).optional().describe(
     "Stored briefing id to render. Omit to return the latest stored briefing."
   )
+};
+
+const updateUserConfigInput = {
+  config: userConfigSchema.describe("Complete replacement briefed.config.json user configuration.")
+};
+
+const updateCollectorsInput = {
+  collectors: collectorsSchema.describe("Complete replacement collectors section.")
+};
+
+const updateBriefingPreferencesInput = {
+  briefing: briefingPreferencesSchema.describe("Complete replacement briefing preferences section.")
 };
 
 server.registerTool(
@@ -130,6 +151,49 @@ server.registerTool(
       markdown
     }, markdown);
   }
+);
+
+server.registerTool(
+  "get_user_config",
+  {
+    title: "Get User Config",
+    description:
+      "Returns the full non-secret Brief user configuration: collector enablement/selectors and briefing preferences."
+  },
+  async () => jsonToolResult(await loadUserConfig())
+);
+
+server.registerTool(
+  "update_user_config",
+  {
+    title: "Update User Config",
+    description:
+      "Replaces the full non-secret Brief user configuration after validation. Use this for agent-managed preferences, not secrets or infrastructure.",
+    inputSchema: updateUserConfigInput
+  },
+  async ({ config: nextConfig }) => jsonToolResult(await updateUserConfig(nextConfig))
+);
+
+server.registerTool(
+  "update_collectors",
+  {
+    title: "Update Collectors",
+    description:
+      "Replaces the collectors section of briefed.config.json after validation.",
+    inputSchema: updateCollectorsInput
+  },
+  async ({ collectors }) => jsonToolResult(await updateCollectors(collectors))
+);
+
+server.registerTool(
+  "update_briefing_preferences",
+  {
+    title: "Update Briefing Preferences",
+    description:
+      "Replaces briefing requiredTopics and focusAreas in briefed.config.json after validation.",
+    inputSchema: updateBriefingPreferencesInput
+  },
+  async ({ briefing }) => jsonToolResult(await updateBriefingPreferences(briefing))
 );
 
 function jsonToolResult(data: Record<string, unknown>, text = JSON.stringify(data, null, 2), isError = false) {

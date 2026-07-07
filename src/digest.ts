@@ -11,6 +11,7 @@ import {
   type DigestTopicMatches,
   selectDigestSources
 } from "./digest-selection.js";
+import { loadUserConfig } from "./user-config.js";
 
 export type DigestLogger = (message: string) => void;
 
@@ -45,8 +46,9 @@ export async function createDigest(
     };
   }
 
+  const userConfig = await loadUserConfig();
   const requiredTopicMatches = await vectorMatchesForTopics(
-    config.DIGEST_REQUIRED_TOPICS,
+    userConfig.briefing.requiredTopics,
     config.DIGEST_REQUIRED_TOPIC_MAX_ENTRIES,
     hours,
     referenceTime,
@@ -54,7 +56,7 @@ export async function createDigest(
     log
   );
   const focusAreaMatches = await vectorMatchesForTopics(
-    config.DIGEST_FOCUS_AREAS,
+    userConfig.briefing.focusAreas,
     config.DIGEST_FOCUS_AREA_MAX_ENTRIES,
     hours,
     referenceTime,
@@ -104,8 +106,8 @@ export async function createDigest(
 
   log(`Generating briefing with ${sources.length} sources using the configured LLM`);
   const body = await ai.digest(sources, hours, {
-    requiredTopics: config.DIGEST_REQUIRED_TOPICS,
-    focusAreas: config.DIGEST_FOCUS_AREAS,
+    requiredTopics: userConfig.briefing.requiredTopics,
+    focusAreas: userConfig.briefing.focusAreas,
     sourceContexts: selection.selectedSources.map((selectedSource) => ({
       bucket: selectedSource.bucket,
       topic: selectedSource.topic,

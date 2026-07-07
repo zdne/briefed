@@ -18,7 +18,7 @@ import {
   type SourceType
 } from "./enrichment-policy.js";
 import { FeedbinClient } from "./feedbin.js";
-import { loadRssFeeds, type RssFeedConfig } from "./rss-feeds.js";
+import type { UserRssFeedConfig } from "./user-config.js";
 import {
   filterNewRssItems,
   nextRssFeedState,
@@ -84,7 +84,7 @@ export interface TwitterListSyncSummary {
 }
 
 export interface RssSyncOptions {
-  feedsPath: string;
+  feeds: UserRssFeedConfig[];
   hours?: number;
   fetchDelayMs: number;
   redditFetchDelayMs: number;
@@ -241,7 +241,7 @@ export async function syncRssFeeds(
   ai: AnalystAI,
   log: SyncLogger = () => {}
 ): Promise<SyncResult> {
-  const feeds = await loadRssFeeds(options.feedsPath);
+  const feeds = options.feeds;
   const client = new RssClient({
     userAgent: options.userAgent,
     timeoutMs: options.requestTimeoutMs,
@@ -259,9 +259,9 @@ export async function syncRssFeeds(
     rssFeeds: []
   };
   let successfulFeeds = 0;
-  log(`Loaded ${feeds.length} RSS feed(s) from ${options.feedsPath}`);
+  log(`Loaded ${feeds.length} RSS feed(s) from user config`);
 
-  let previousFetchedFeed: RssFeedConfig | undefined;
+  let previousFetchedFeed: UserRssFeedConfig | undefined;
   for (const feed of feeds) {
     const summary: RssFeedSyncSummary = {
       title: feed.title,
@@ -615,22 +615,22 @@ function laterTimestamp(current: string | undefined, entry: FeedbinEntry): strin
   return Date.parse(entry.created_at) > Date.parse(current) ? entry.created_at : current;
 }
 
-function rssFeedStateKey(feed: RssFeedConfig): string {
+function rssFeedStateKey(feed: UserRssFeedConfig): string {
   return `rss:feed:${rssFeedHash(feed.normalizedUrl)}:state`;
 }
 
-function rssDomainStateKey(feed: RssFeedConfig): string | undefined {
+function rssDomainStateKey(feed: UserRssFeedConfig): string | undefined {
   const domain = rssRetryDomain(feed);
   return domain ? `rss:domain:${domain}:state` : undefined;
 }
 
-function rssDelayForFeed(feed: RssFeedConfig, options: RssSyncOptions): number {
+function rssDelayForFeed(feed: UserRssFeedConfig, options: RssSyncOptions): number {
   return rssRetryDomain(feed) === "reddit.com"
     ? Math.max(options.fetchDelayMs, options.redditFetchDelayMs)
     : options.fetchDelayMs;
 }
 
-function rssRetryDomain(feed: RssFeedConfig): string | undefined {
+function rssRetryDomain(feed: UserRssFeedConfig): string | undefined {
   try {
     const hostname = new URL(feed.normalizedUrl).hostname.toLowerCase();
     if (hostname === "reddit.com" || hostname.endsWith(".reddit.com")) return "reddit.com";
@@ -641,7 +641,7 @@ function rssRetryDomain(feed: RssFeedConfig): string | undefined {
 }
 
 function logRssRetryDebug(
-  feed: RssFeedConfig,
+  feed: UserRssFeedConfig,
   stateKey: string,
   state: RssFeedState,
   options: RssSyncOptions,

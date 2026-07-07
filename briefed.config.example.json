@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "collectors": {
+    "rss": {
+      "enabled": true,
+      "feeds": [
+        {
+          "title": "Hacker News",
+          "url": "https://news.ycombinator.com/rss",
+          "category": "general",
+          "enabled": true
+        },
+        {
+          "title": "OpenAI News",
+          "url": "https://openai.com/news/rss.xml",
+          "category": "ai",
+          "enabled": true
+        }
+      ]
+    },
+    "gmail": {
+      "enabled": false,
+      "label": "newsletter",
+      "query": null
+    },
+    "twitter": {
+      "enabled": false,
+      "listIds": []
+    },
+    "feedbin": {
+      "enabled": false
+    }
+  },
+  "briefing": {
+    "requiredTopics": [
+      "agentic payments",
+      "agentic commerce"
+    ],
+    "focusAreas": [
+      "MCP",
+      "AI observability"
+    ]
+  }
+}

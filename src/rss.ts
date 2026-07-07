@@ -9,7 +9,9 @@ import {
 } from "./reddit-rss.js";
 import { stableHash } from "./source-utils.js";
 import type { SourceEntry } from "./types.js";
-import type { RssFeedConfig } from "./rss-feeds.js";
+import type { UserRssFeedConfig } from "./user-config.js";
+
+type RssFeedConfig = UserRssFeedConfig;
 
 export interface RssClientOptions {
   userAgent: string;

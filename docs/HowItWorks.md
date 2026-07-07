@@ -20,29 +20,40 @@ Feedbin API ───────┘
                                       └─ LLM enrichment and synthesis
 ```
 
+`npm run sync` reads `briefed.config.json` and runs every enabled collector. `--hours` and `--days` apply as lookbacks to RSS, Gmail, and Feedbin; Twitter/X list sync uses its stored latest-tweet cursor. The aggregate sync reports per-collector results as JSON, records individual collector failures, continues to later enabled collectors, and exits nonzero if any enabled collector failed.
+
 ## Direct RSS/Atom Sync
 
-`npm run cli -- sync-rss` imports feeds from `feeds.json`, or from a path supplied with `--feeds`.
+`npm run cli -- sync-rss` imports feeds from `collectors.rss.feeds` in `briefed.config.json`. There is no `--feeds` override; use `USER_CONFIG_PATH` or `BRIEFED_CONFIG_PATH` only when the entire user config file lives elsewhere.
 
-The feed config is JSON so agents can manage it deterministically:
+The user config is JSON so agents can manage it deterministically:
 
 ```json
 {
   "version": 1,
-  "feeds": [
-    {
-      "title": "AI Agents",
-      "url": "https://www.reddit.com/r/AI_Agents.rss",
-      "category": "reddit",
-      "enabled": true
+  "collectors": {
+    "rss": {
+      "enabled": true,
+      "feeds": [
+        {
+          "title": "AI Agents",
+          "url": "https://www.reddit.com/r/AI_Agents.rss",
+          "category": "reddit",
+          "enabled": true
+        }
+      ]
     }
-  ]
+  },
+  "briefing": {
+    "requiredTopics": ["agentic payments"],
+    "focusAreas": ["MCP"]
+  }
 }
 ```
 
 RSS sync fetches enabled feeds sequentially, sends a configured user agent, applies per-request timeouts, and waits `RSS_FETCH_DELAY_MS` between feeds. Reddit feeds use the larger `RSS_REDDIT_FETCH_DELAY_MS` inter-feed delay, which defaults to 10 seconds. This is separate from `RSS_REQUEST_TIMEOUT_MS`, which is the HTTP request timeout.
 
-`REDDIT_RSS_USER` and `REDDIT_RSS_FEED` are recommended for Reddit feeds. Get these account-scoped values from an authenticated Reddit RSS URL such as `https://www.reddit.com/r/example.rss?user=<user>&feed=<feed>`. Briefed.sh appends them only to outbound Reddit RSS requests. They are not stored in `feeds.json`, source keys, canonical URLs, or logs. Without them, Reddit RSS is likely to hit rate limits. Before fetching Reddit RSS, the client also bootstraps cookies from `https://www.reddit.com/` and sends the resulting cookie names only to Reddit requests.
+`REDDIT_RSS_USER` and `REDDIT_RSS_FEED` are recommended for Reddit feeds. Get these account-scoped values from an authenticated Reddit RSS URL such as `https://www.reddit.com/r/example.rss?user=<user>&feed=<feed>`. Briefed.sh appends them only to outbound Reddit RSS requests. They are not stored in `briefed.config.json`, source keys, canonical URLs, or logs. Without them, Reddit RSS is likely to hit rate limits. Before fetching Reddit RSS, the client also bootstraps cookies from `https://www.reddit.com/` and sends the resulting cookie names only to Reddit requests.
 
 When `REDDIT_RSS_DEBUG=true`, debug logs include redacted request URLs, `has_user`, `has_feed`, feed token length, request headers with cookie values redacted, Reddit cookie names, response status, content type, `retry-after`, and Reddit `x-ratelimit-*` headers. If a stale Reddit domain retry blocks testing, remove the `sync_state` row for `rss:domain:reddit.com:state`.
 
@@ -119,11 +130,22 @@ Configure OAuth refresh-token credentials plus one message selector:
 GMAIL_CLIENT_ID=...
 GMAIL_CLIENT_SECRET=...
 GMAIL_REFRESH_TOKEN=...
-GMAIL_LABEL=newsletter
 GMAIL_MAX_MESSAGES=1
 ```
 
-`GMAIL_LABEL` defaults to `newsletter` and is converted to a Gmail query like `label:newsletter`. Use `GMAIL_QUERY=label:newsletters` when you need a full Gmail search expression instead.
+Configure the message selector in `briefed.config.json`. `query` takes precedence; blank or `null` query values fall back to `label:<label>`.
+
+```json
+{
+  "collectors": {
+    "gmail": {
+      "enabled": true,
+      "label": "newsletter",
+      "query": null
+    }
+  }
+}
+```
 
 The `gmail-auth` helper is intentionally separate from Gmail sync: it starts a temporary `127.0.0.1` callback server, prints a Google OAuth URL with the readonly Gmail scope and PKCE challenge, waits for the browser loopback callback, exchanges the code, prints `GMAIL_REFRESH_TOKEN=...`, and exits. No tunnel is needed when the browser and CLI run on the same machine.
 
@@ -137,9 +159,21 @@ Configure:
 
 ```env
 TWITTERAPI_IO_API_KEY=...
-TWITTERAPI_LIST_IDS=2062878395029983324
 TWITTERAPI_LIST_MAX_PAGES=3
 TWITTERAPI_LIST_MAX_TWEETS=200
+```
+
+Configure the list IDs in `briefed.config.json`:
+
+```json
+{
+  "collectors": {
+    "twitter": {
+      "enabled": true,
+      "listIds": ["2062878395029983324"]
+    }
+  }
+}
 ```
 
 For each list, Briefed.sh stores the newest successfully processed tweet ID in `sync_state` under `twitterapi:list:<list_id>:latest_id`. A normal run fetches newest tweets first and stops when it reaches that stored tweet. If the stored tweet is not reached, sync continues only up to the configured page and tweet limits. The sync summary records pages fetched, tweets returned and processed, whether a next cursor was present, and the reason the list stopped.
@@ -298,9 +332,13 @@ To prevent unexpectedly large or expensive LLM requests, Briefed.sh sends at mos
 
 Briefing topic config protects important topics during selection and shapes the synthesis prompt:
 
-```env
-DIGEST_REQUIRED_TOPICS=agentic payments, agentic B2B, agentic commerce, personal memory
-DIGEST_FOCUS_AREAS=MCP, AI observability, agent frameworks
+```json
+{
+  "briefing": {
+    "requiredTopics": ["agentic payments", "agentic B2B", "agentic commerce", "personal memory"],
+    "focusAreas": ["MCP", "AI observability", "agent frameworks"]
+  }
+}
 ```
 
 Required topics always appear under a required watchlist section. If the selected sources have no meaningful update for one of those topics, the briefing explicitly says there was no signal in the window. Focus areas are softer interests; the briefing highlights them only when there is meaningful source-backed signal.

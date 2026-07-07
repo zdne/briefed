@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { parseRssFeeds } from "../src/rss-feeds.js";
 import {
   filterNewRssItems,
   nextRssFeedState,
@@ -9,17 +8,27 @@ import {
   rssSourceKey,
   shouldSkipFeedForRetry
 } from "../src/rss.js";
+import { enabledRssFeeds, parseUserConfig } from "../src/user-config.js";
 
-describe("parseRssFeeds", () => {
-  it("validates, defaults, filters disabled feeds, and dedupes URLs", () => {
-    const feeds = parseRssFeeds(JSON.stringify({
+describe("enabledRssFeeds", () => {
+  it("normalizes, filters disabled feeds, and dedupes URLs from user config", () => {
+    const feeds = enabledRssFeeds(parseUserConfig(JSON.stringify({
       version: 1,
-      feeds: [
-        { title: "One", url: "https://EXAMPLE.com/feed/" },
-        { title: "Duplicate", url: "https://example.com/feed" },
-        { title: "Disabled", url: "https://example.com/disabled.xml", enabled: false }
-      ]
-    }));
+      collectors: {
+        rss: {
+          enabled: true,
+          feeds: [
+            { title: "One", url: "https://EXAMPLE.com/feed/" },
+            { title: "Duplicate", url: "https://example.com/feed" },
+            { title: "Disabled", url: "https://example.com/disabled.xml", enabled: false }
+          ]
+        }
+      },
+      briefing: {
+        requiredTopics: [],
+        focusAreas: []
+      }
+    })));
 
     expect(feeds).toHaveLength(1);
     expect(feeds[0]).toMatchObject({
@@ -31,10 +40,19 @@ describe("parseRssFeeds", () => {
 });
 
 describe("parseRssXml", () => {
-  const feed = parseRssFeeds(JSON.stringify({
+  const feed = enabledRssFeeds(parseUserConfig(JSON.stringify({
     version: 1,
-    feeds: [{ title: "Example", url: "https://example.com/feed.xml", category: "test" }]
-  }))[0]!;
+    collectors: {
+      rss: {
+        enabled: true,
+        feeds: [{ title: "Example", url: "https://example.com/feed.xml", category: "test" }]
+      }
+    },
+    briefing: {
+      requiredTopics: [],
+      focusAreas: []
+    }
+  })))[0]!;
 
   it("normalizes RSS items into source entries", () => {
     const parsed = parseRssXml(`<?xml version="1.0"?>
