@@ -5,6 +5,8 @@ import { config, requireConfig } from "./config.js";
 import { getDigestForRendering, migrate, pool, resetSyncCursor } from "./db.js";
 import { createDigest } from "./digest.js";
 import { FeedbinClient } from "./feedbin.js";
+import { formatGmailRefreshTokenEnv, runGmailAuthFlow } from "./gmail-auth.js";
+import { GmailClient } from "./gmail.js";
 import { cleanFriendlyDigestMarkdown, friendlyDigestStyle } from "./friendly-digest.js";
 import { renderDigestMarkdown, renderQueryMarkdown, type DigestMarkdownResult } from "./markdown.js";
 import {
@@ -19,7 +21,7 @@ import {
   writeJsonFile,
   writeMarkdownFile
 } from "./output.js";
-import { enrichStoredContent, lookbackSince, syncFeedbin, syncTwitterLists } from "./pipeline.js";
+import { enrichStoredContent, lookbackSince, syncFeedbin, syncGmail, syncRssFeeds, syncTwitterLists } from "./pipeline.js";
 import { queryArchive, queryFollowUp } from "./query.js";
 import { TwitterApiClient } from "./twitterapi.js";
 import type { SourceType } from "./enrichment-policy.js";
@@ -32,43 +34,43 @@ program.command("migrate").description("Apply database migrations").action(async
   console.log("Migrations applied.");
 });
 
-program.command("sync")
+program.command("sync-feedbin")
   .description("Incrementally sync and enrich Feedbin entries")
   .option("--reset-cursor", "clear the Feedbin cursor before syncing the full archive")
   .option("-H, --hours <number>", "sync entries created within the last N hours")
   .option("-D, --days <number>", "sync entries created within the last N days")
   .action(async (options: { resetCursor?: boolean; hours?: string; days?: string }) => {
-  requireConfig(["FEEDBIN_EMAIL", "FEEDBIN_PASSWORD"]);
-  const selectedModes = [options.resetCursor, options.hours !== undefined, options.days !== undefined]
-    .filter(Boolean).length;
-  if (selectedModes > 1) {
-    throw new Error("Use only one of --reset-cursor, --hours, or --days");
-  }
-  const log = timestampLogger;
-  let since: string | undefined;
-  if (options.resetCursor) {
-    await resetSyncCursor();
-    log("Cleared Feedbin cursor; syncing the full archive");
-  } else if (options.hours !== undefined) {
-    since = lookbackSince(new Date(), positiveInteger(options.hours, "--hours"));
-    log(`Overriding cursor to sync the last ${options.hours} hours`);
-  } else if (options.days !== undefined) {
-    const days = positiveInteger(options.days, "--days");
-    since = lookbackSince(new Date(), days * 24);
-    log(`Overriding cursor to sync the last ${days} days`);
-  }
-  log("Initializing Feedbin and AI clients");
-  const result = await syncFeedbin(
-    new FeedbinClient({
-      email: config.FEEDBIN_EMAIL!,
-      password: config.FEEDBIN_PASSWORD!,
-      baseUrl: config.FEEDBIN_BASE_URL
-    }),
-    new AnalystAI(),
-    log,
-    { since }
-  );
-  console.log(JSON.stringify(result, null, 2));
+    requireConfig(["FEEDBIN_EMAIL", "FEEDBIN_PASSWORD"]);
+    const selectedModes = [options.resetCursor, options.hours !== undefined, options.days !== undefined]
+      .filter(Boolean).length;
+    if (selectedModes > 1) {
+      throw new Error("Use only one of --reset-cursor, --hours, or --days");
+    }
+    const log = timestampLogger;
+    let since: string | undefined;
+    if (options.resetCursor) {
+      await resetSyncCursor();
+      log("Cleared Feedbin cursor; syncing the full archive");
+    } else if (options.hours !== undefined) {
+      since = lookbackSince(new Date(), positiveInteger(options.hours, "--hours"));
+      log(`Overriding cursor to sync the last ${options.hours} hours`);
+    } else if (options.days !== undefined) {
+      const days = positiveInteger(options.days, "--days");
+      since = lookbackSince(new Date(), days * 24);
+      log(`Overriding cursor to sync the last ${days} days`);
+    }
+    log("Initializing Feedbin and AI clients");
+    const result = await syncFeedbin(
+      new FeedbinClient({
+        email: config.FEEDBIN_EMAIL!,
+        password: config.FEEDBIN_PASSWORD!,
+        baseUrl: config.FEEDBIN_BASE_URL
+      }),
+      new AnalystAI(),
+      log,
+      { since }
+    );
+    console.log(JSON.stringify(result, null, 2));
   });
 
 program.command("sync-twitter")
@@ -94,6 +96,79 @@ program.command("sync-twitter")
       log
     );
     console.log(JSON.stringify(result, null, 2));
+  });
+
+program.command("sync-rss")
+  .description("Sync configured RSS/Atom feeds from feeds.json")
+  .option("--feeds <path>", "path to feeds.json")
+  .option("-H, --hours <number>", "sync entries published within the last N hours")
+  .action(async (options: { feeds?: string; hours?: string }) => {
+    const hours = options.hours === undefined ? undefined : positiveInteger(options.hours, "--hours");
+    const log = timestampLogger;
+    log("Initializing RSS and AI clients");
+    const result = await syncRssFeeds(
+      {
+        feedsPath: options.feeds ?? config.RSS_FEEDS_PATH,
+        hours,
+        fetchDelayMs: config.RSS_FETCH_DELAY_MS,
+        redditFetchDelayMs: config.RSS_REDDIT_FETCH_DELAY_MS,
+        redditUser: config.REDDIT_RSS_USER,
+        redditFeed: config.REDDIT_RSS_FEED,
+        redditDebug: config.REDDIT_RSS_DEBUG,
+        maxItemsPerFeed: config.RSS_MAX_ITEMS_PER_FEED,
+        userAgent: config.RSS_USER_AGENT,
+        requestTimeoutMs: config.RSS_REQUEST_TIMEOUT_MS
+      },
+      new AnalystAI(),
+      log
+    );
+    console.log(JSON.stringify(result, null, 2));
+  });
+
+program.command("sync-gmail")
+  .description("Sync newsletters from a configured Gmail query or label")
+  .option("-H, --hours <number>", "sync messages received within the last N hours")
+  .action(async (options: { hours?: string }) => {
+    requireConfig(["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"]);
+    const query = config.GMAIL_QUERY ?? (config.GMAIL_LABEL ? `label:${config.GMAIL_LABEL}` : undefined);
+    if (!query) {
+      throw new Error("Missing required configuration: GMAIL_QUERY or GMAIL_LABEL");
+    }
+    const hours = options.hours === undefined ? undefined : positiveInteger(options.hours, "--hours");
+    const log = timestampLogger;
+    log("Initializing Gmail and AI clients");
+    const result = await syncGmail(
+      new GmailClient({
+        clientId: config.GMAIL_CLIENT_ID!,
+        clientSecret: config.GMAIL_CLIENT_SECRET!,
+        refreshToken: config.GMAIL_REFRESH_TOKEN!
+      }),
+      {
+        query,
+        hours,
+        maxMessages: config.GMAIL_MAX_MESSAGES
+      },
+      new AnalystAI(),
+      log
+    );
+    console.log(JSON.stringify(result, null, 2));
+  });
+
+program.command("gmail-auth")
+  .description("Run one-time Gmail OAuth setup and print a refresh token")
+  .option("--port <number>", "localhost callback port; defaults to a random free port")
+  .option("--timeout-seconds <number>", "seconds to wait for the browser callback", "300")
+  .action(async (options: { port?: string; timeoutSeconds: string }) => {
+    requireConfig(["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET"]);
+    const result = await runGmailAuthFlow({
+      clientId: config.GMAIL_CLIENT_ID!,
+      clientSecret: config.GMAIL_CLIENT_SECRET!,
+      port: options.port === undefined ? undefined : positiveInteger(options.port, "--port"),
+      timeoutMs: positiveInteger(options.timeoutSeconds, "--timeout-seconds") * 1000,
+      log: timestampLogger
+    });
+    console.log("\nAdd this to .env:");
+    console.log(formatGmailRefreshTokenEnv(result.refreshToken));
   });
 
 program

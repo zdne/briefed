@@ -1,27 +1,65 @@
 # How Briefed.sh Works
 
-Briefed.sh uses Feedbin and TwitterAPI.io as collectors, Postgres and pgvector as its local archive, OpenAI for embeddings, and OpenAI or Anthropic for language-model synthesis.
+Briefed.sh supports multiple optional collectors: direct RSS/Atom polling, Gmail newsletter sync, TwitterAPI.io list sync, and Feedbin sync. Postgres and pgvector provide the local archive, OpenAI provides embeddings, and OpenAI or Anthropic provide language-model synthesis.
 
-Feedbin entries and Twitter/X list tweets are normalized into the same `content` table. Source identity fields keep collectors separate while shared embeddings make both collectors searchable through queries and eligible for briefings.
+Direct RSS/Atom items, Gmail newsletters, Twitter/X list tweets, and Feedbin entries are normalized into the same `content` table. Source identity fields keep collectors separate while shared embeddings make every collector searchable through queries and eligible for briefings.
 
 ```text
-Feedbin API ───────┐
-                   ├─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector ─┬─ CLI query/digest render
-TwitterAPI.io ─────┘                                      │                  ├─ HTTP API query
-                                                          │                  └─ local MCP tools
-                                                          │                     ├─ brief: vector query archive
-                                                          │                     ├─ briefing: read stored digest
-                                                          │                     └─ create_briefing: query PG + synthesize + store
-                                                          ├─ OpenAI embeddings
-                                                          └─ LLM enrichment and synthesis
+RSS/Atom feeds ────┐
+Gmail newsletters ─┤
+TwitterAPI.io ─────┤
+Feedbin API ───────┘
+        │
+        └─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector ─┬─ CLI query/digest render
+                                      │                          ├─ HTTP API query
+                                      │                          └─ local MCP tools
+                                      │                             ├─ brief: vector query archive
+                                      │                             ├─ briefing: read stored digest
+                                      │                             └─ create_briefing: query PG + synthesize + store
+                                      ├─ OpenAI embeddings
+                                      └─ LLM enrichment and synthesis
 ```
 
+## Direct RSS/Atom Sync
+
+`npm run cli -- sync-rss` imports feeds from `feeds.json`, or from a path supplied with `--feeds`.
+
+The feed config is JSON so agents can manage it deterministically:
+
+```json
+{
+  "version": 1,
+  "feeds": [
+    {
+      "title": "AI Agents",
+      "url": "https://www.reddit.com/r/AI_Agents.rss",
+      "category": "reddit",
+      "enabled": true
+    }
+  ]
+}
+```
+
+RSS sync fetches enabled feeds sequentially, sends a configured user agent, applies per-request timeouts, and waits `RSS_FETCH_DELAY_MS` between feeds. Reddit feeds use the larger `RSS_REDDIT_FETCH_DELAY_MS` inter-feed delay, which defaults to 10 seconds. This is separate from `RSS_REQUEST_TIMEOUT_MS`, which is the HTTP request timeout.
+
+`REDDIT_RSS_USER` and `REDDIT_RSS_FEED` are recommended for Reddit feeds. Get these account-scoped values from an authenticated Reddit RSS URL such as `https://www.reddit.com/r/example.rss?user=<user>&feed=<feed>`. Briefed.sh appends them only to outbound Reddit RSS requests. They are not stored in `feeds.json`, source keys, canonical URLs, or logs. Without them, Reddit RSS is likely to hit rate limits. Before fetching Reddit RSS, the client also bootstraps cookies from `https://www.reddit.com/` and sends the resulting cookie names only to Reddit requests.
+
+When `REDDIT_RSS_DEBUG=true`, debug logs include redacted request URLs, `has_user`, `has_feed`, feed token length, request headers with cookie values redacted, Reddit cookie names, response status, content type, `retry-after`, and Reddit `x-ratelimit-*` headers. If a stale Reddit domain retry blocks testing, remove the `sync_state` row for `rss:domain:reddit.com:state`.
+
+RSS stores items with `source_key = 'rss:feed:<feed_hash>'`. Each feed has JSON state in `sync_state` under `rss:feed:<feed_hash>:state`, including recent item IDs, newest published timestamp, last success, last error, retry-after, auth mode, and overflow count.
+
+The collector uses feed-provided content only. It does not fetch original article pages in v1. It processes at most `RSS_MAX_ITEMS_PER_FEED` newest matching items per feed per run. Use `npm run cli -- sync-rss --hours 48` for the first run to avoid importing large historical feeds.
+
+HTTP 429 is treated as a soft per-feed failure. Briefed.sh records retry-after state, skips that feed while retry-after is active, and continues syncing other feeds. Reddit 429s also set a shared `rss:domain:reddit.com:state` retry window so the same run does not hammer the next subreddit feed immediately.
+
 ## Feedbin Sync Pipeline
+
+Feedbin is one optional collector. Use it when you want Feedbin as an input source; use direct RSS and Gmail when you want Briefed to collect feeds and newsletters directly.
 
 Run:
 
 ```bash
-npm run sync
+npm run sync-feedbin
 ```
 
 The sync command:
@@ -46,7 +84,7 @@ Feedbin limits pages to 100 entries. Briefed.sh follows Feedbin's pagination lin
 To clear a bad cursor and safely rescan the full Feedbin archive:
 
 ```bash
-npm run cli -- sync --reset-cursor
+npm run cli -- sync-feedbin --reset-cursor
 ```
 
 Existing entries are deduplicated during the rescan.
@@ -54,13 +92,42 @@ Existing entries are deduplicated during the rescan.
 For a recent-only initial sync or backfill:
 
 ```bash
-npm run cli -- sync --hours 48
-npm run cli -- sync --days 7
+npm run cli -- sync-feedbin --hours 48
+npm run cli -- sync-feedbin --days 7
 ```
 
 These options temporarily override the starting cursor without changing the stored cursor before processing. After all matching pages finish successfully, Briefed.sh stores the newest fetched Feedbin timestamp as the next incremental cursor. This is normally close to the present, but deliberately uses Feedbin's timestamp rather than the local clock to avoid skipping entries.
 
 If a recent-only sync is interrupted, the previous stored cursor remains unchanged. Resume using the same lookback option. If Feedbin returns no matching entries, Briefed.sh also leaves the existing cursor unchanged.
+
+## Gmail Newsletter Sync
+
+`npm run cli -- sync-gmail` imports newsletters from a configured Gmail query or label.
+
+Gmail setup uses a Google OAuth Desktop client:
+
+1. Create/select a Google Cloud project.
+2. Enable the Gmail API.
+3. Configure OAuth consent, add your account as a test user, and include `https://www.googleapis.com/auth/gmail.readonly`.
+4. Create an OAuth client with application type `Desktop app`.
+5. Put the client values in `.env`.
+6. Run `npm run gmail-auth` to generate `GMAIL_REFRESH_TOKEN`.
+
+Configure OAuth refresh-token credentials plus one message selector:
+
+```env
+GMAIL_CLIENT_ID=...
+GMAIL_CLIENT_SECRET=...
+GMAIL_REFRESH_TOKEN=...
+GMAIL_LABEL=newsletter
+GMAIL_MAX_MESSAGES=1
+```
+
+`GMAIL_LABEL` defaults to `newsletter` and is converted to a Gmail query like `label:newsletter`. Use `GMAIL_QUERY=label:newsletters` when you need a full Gmail search expression instead.
+
+The `gmail-auth` helper is intentionally separate from Gmail sync: it starts a temporary `127.0.0.1` callback server, prints a Google OAuth URL with the readonly Gmail scope and PKCE challenge, waits for the browser loopback callback, exchanges the code, prints `GMAIL_REFRESH_TOKEN=...`, and exits. No tunnel is needed when the browser and CLI run on the same machine.
+
+Gmail sync lists matching messages, fetches full payloads, parses the subject, sender, snippet, internal date, and text body, then stores each message with `source_key = 'gmail:query:<query_hash>'`. It uses Gmail internal date as the v1 cursor in `sync_state` and advances the cursor only after selected messages are processed. HTML bodies are converted to text when no plain-text body is available.
 
 ## Twitter/X List Sync
 
@@ -125,12 +192,12 @@ LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews,twitter
 
 For each lightweight item, Briefed.sh stores:
 
-- Source identity and original JSON. Every entry uses `source_key` and `source_item_id`; for example, Feedbin entries use `source_key = 'feedbin:feed:<feed_id>'`, while Twitter/X list entries can use `source_key = 'twitterapi:list:<list_id>'`.
+- Source identity and original JSON. Every entry uses `source_key` and `source_item_id`; for example, Feedbin entries use `source_key = 'feedbin:feed:<feed_id>'`, RSS entries use `source_key = 'rss:feed:<feed_hash>'`, Gmail entries use `source_key = 'gmail:query:<query_hash>'`, and Twitter/X list entries can use `source_key = 'twitterapi:list:<list_id>'`.
 - Canonical URL, title, author, and timestamps.
 - Original HTML and normalized full post text.
-- Feedbin-provided summary.
+- Source-provided summary when available.
 - An OpenAI embedding generated from the title and full post text.
-- `analyst_summary` copied from Feedbin's summary.
+- `analyst_summary` copied from the source-provided summary.
 - Empty generated topic tags and entities.
 - `source_type = 'reddit'`, `source_type = 'hackernews'`, or `source_type = 'twitter'`.
 - `enrichment_mode = 'embedded_only'`.
@@ -138,13 +205,13 @@ For each lightweight item, Briefed.sh stores:
 
 This keeps lightweight entries semantically searchable and eligible for briefings while avoiding one LLM analysis call per item.
 
-Feedbin's Reddit content generally contains the original post body, but it does not contain comments, discussion summaries, scores, or reliable engagement signals.
+RSS/Feedbin Reddit content generally contains the original post body, but it does not contain comments, discussion summaries, scores, or reliable engagement signals.
 
-Feedbin's Hacker News content is normally the HN item or discussion wrapper, not the full linked article.
+RSS/Feedbin Hacker News content is normally the HN item or discussion wrapper, not the full linked article.
 
 ## Upgrading Lightweight Enrichment
 
-The lightweight policy is reversible. Stored embedding-only entries can be upgraded to full enrichment without fetching them from Feedbin again.
+The lightweight policy is reversible. Stored embedding-only entries can be upgraded to full enrichment without fetching them from the original collector again.
 
 ```bash
 # Fully enrich the newest 20 eligible Reddit entries
@@ -250,7 +317,9 @@ The normalized archive, generated enrichment, embeddings, cursors, and briefings
 
 External requests still occur:
 
-- Feedbin supplies entries.
+- Feedbin supplies entries when Feedbin sync is used.
+- RSS/Atom feed hosts supply entries when direct RSS sync is used.
+- Gmail supplies messages when newsletter sync is used.
 - TwitterAPI.io supplies configured Twitter/X list timelines.
 - OpenAI receives text for embeddings.
 - The configured LLM provider receives text for full enrichment, queries, and briefings.

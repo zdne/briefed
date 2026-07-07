@@ -2,6 +2,9 @@
 
 Tracker of potential features to add to brief:
 
+## Interim TODO
+- [ ] check why "Square launches agentic commerce integrations with ChatGPT, Claude - Digital Commerce 360" PG: 7356 is not in the digest
+
 ## Current
 
 - [x] Better markdown reports 
@@ -16,7 +19,7 @@ Tracker of potential features to add to brief:
 ## Later / TBD
 
 - [ ] Twitter engagement scoring: Further improvement to briefing pre-qualification (see below)
-- [ ] TBD: Hook Apify to read linked in posts
+- [ ] TBD: Hook Apify to read LinkedIn posts
 - [ ] Run sync / briefing periodically
 - [ ] TBD: Remote MCP
 - [ ] TBD: Turn this into a service

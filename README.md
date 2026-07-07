@@ -13,25 +13,29 @@ Example MCP prompt:
 ## Architecture
 
 ```text
-Feedbin API ───────┐
-                   ├─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector ─┬─ CLI query/digest render
-TwitterAPI.io ─────┘                                      │                  ├─ HTTP API query
-                                                          │                  └─ local MCP tools
-                                                          │                     ├─ brief: vector query archive
-                                                          │                     ├─ briefing: read stored digest
-                                                          │                     └─ create_briefing: query PG + synthesize + store
-                                                          ├─ OpenAI embeddings
-                                                          └─ LLM enrichment and synthesis
+RSS/Atom feeds ────┐
+Gmail newsletters ─┤
+TwitterAPI.io ─────┤
+Feedbin API ───────┘
+        │
+        └─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector ─┬─ CLI query/digest render
+                                      │                          ├─ HTTP API query
+                                      │                          └─ local MCP tools
+                                      │                             ├─ brief: vector query archive
+                                      │                             ├─ briefing: read stored digest
+                                      │                             └─ create_briefing: query PG + synthesize + store
+                                      ├─ OpenAI embeddings
+                                      └─ LLM enrichment and synthesis
 ```
 
-The MVP uses Feedbin's `GET /v2/entries.json?since=...` endpoint and TwitterAPI.io list timelines as collectors. Feedbin sync preserves the exact newest `created_at` timestamp as its next cursor; Twitter/X sync stores the newest processed tweet ID per configured list. Entries are deduplicated by source identity and canonicalized URL.
+Briefed supports multiple optional collectors: direct RSS/Atom feed polling from `feeds.json`, Gmail newsletter sync, TwitterAPI.io list timelines, and Feedbin sync through `sync-feedbin`. Enable whichever inputs you want to use. Entries are deduplicated by source identity and canonicalized URL.
 
 ## Prerequisites
 
 - Node.js 22+
 - Docker with Compose
 - Colima, if using Docker through Colima on macOS
-- Feedbin account
+- At least one configured input: `feeds.json`, Gmail credentials, TwitterAPI.io credentials, or Feedbin credentials
 - OpenAI API key for embeddings
 - OpenAI or Anthropic API key for enrichment and answer synthesis
 
@@ -39,13 +43,14 @@ The MVP uses Feedbin's `GET /v2/entries.json?since=...` endpoint and TwitterAPI.
 
 ```bash
 cp .env.example .env
-# Fill in Feedbin and model-provider credentials.
+# Fill in model-provider credentials and at least one collector.
+# For RSS, copy feeds.example.json to feeds.json and tune it.
 
 colima start # If using Colima on macOS.
 docker compose up -d postgres
 npm install
 npm run db:migrate
-npm run sync
+npm run cli -- sync-rss --hours 48
 ```
 
 After a system restart, start Colima before bringing Postgres back up:
@@ -84,11 +89,15 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | Command | Purpose |
 | --- | --- |
 | `npm run db:migrate` | Apply SQL migrations |
-| `npm run sync` | Incrementally fetch, normalize, enrich, and embed entries |
-| `npm run cli -- sync --hours 48` | Sync only entries created within the last 48 hours |
-| `npm run cli -- sync --days 7` | Sync only entries created within the last seven days |
-| `npm run cli -- sync --reset-cursor` | Clear the cursor and safely rescan the complete Feedbin archive |
+| `npm run cli -- sync-rss --hours 48` | Sync direct RSS/Atom feeds from `feeds.json` with a lookback |
+| `npm run cli -- sync-rss --feeds feeds.example.json` | Sync direct RSS/Atom feeds from a specific feed config |
+| `npm run gmail-auth` | Run one-time Gmail OAuth setup and print `GMAIL_REFRESH_TOKEN` |
+| `npm run cli -- sync-gmail --hours 48` | Sync Gmail newsletters using the configured query or label |
 | `npm run sync-twitter` | Sync configured Twitter/X lists through TwitterAPI.io |
+| `npm run sync-feedbin` | Sync Feedbin entries |
+| `npm run cli -- sync-feedbin --hours 48` | Feedbin sync only entries created within the last 48 hours |
+| `npm run cli -- sync-feedbin --days 7` | Feedbin sync only entries created within the last seven days |
+| `npm run cli -- sync-feedbin --reset-cursor` | Clear the Feedbin cursor and safely rescan the complete Feedbin archive |
 | `npm run cli -- enrich --source reddit --limit 20` | Fully enrich the newest 20 eligible Reddit entries |
 | `npm run cli -- enrich --source hackernews --limit 20` | Fully enrich the newest 20 eligible Hacker News entries |
 | `npm run cli -- enrich --source twitter --limit 20` | Fully enrich the newest 20 eligible Twitter/X entries |
@@ -117,7 +126,7 @@ The response contains an answer with `[1]`-style inline citations and a matching
 Run sync and briefing generation from cron, a systemd timer, or a scheduler:
 
 ```cron
-*/15 * * * * cd /path/to/brief && /usr/bin/npm run sync >> /var/log/brief-sync.log 2>&1
+*/15 * * * * cd /path/to/brief && /usr/bin/npm run sync-rss >> /var/log/brief-rss-sync.log 2>&1
 0 7 * * * cd /path/to/brief && /usr/bin/npm run digest >> /var/log/briefing.log 2>&1
 ```
 
@@ -125,12 +134,19 @@ Run sync and briefing generation from cron, a systemd timer, or a scheduler:
 
 See [`.env.example`](.env.example). Important values:
 
-- `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: Feedbin HTTP Basic Auth credentials.
+- `RSS_FEEDS_PATH`: JSON feed-list path for direct RSS/Atom sync; defaults to `feeds.json`.
+- `RSS_FETCH_DELAY_MS`, `RSS_REDDIT_FETCH_DELAY_MS`, `RSS_MAX_ITEMS_PER_FEED`, `RSS_USER_AGENT`, `RSS_REQUEST_TIMEOUT_MS`: direct RSS fetch safety limits. `RSS_REDDIT_FETCH_DELAY_MS` is the delay before Reddit feed fetches; `RSS_REQUEST_TIMEOUT_MS` is the HTTP request timeout.
+- `REDDIT_RSS_USER`, `REDDIT_RSS_FEED`: recommended for Reddit feeds. These Reddit RSS preference parameters come from an authenticated Reddit RSS URL and are appended only to outbound Reddit RSS requests. Without them, Reddit RSS is likely to hit rate limits. You can get the credentials at https://www.reddit.com/prefs/feeds
+- `REDDIT_RSS_DEBUG`: when true, logs redacted Reddit RSS request URLs, request headers, cookie names, status, content type, and rate-limit headers.
+- `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`: Gmail OAuth credentials for newsletter sync. Create a Google OAuth Desktop client, set the client ID/secret, then run `npm run gmail-auth` to generate the refresh token.
+- `GMAIL_QUERY` or `GMAIL_LABEL`: Gmail search query or label used to select newsletters. `GMAIL_LABEL` defaults to `newsletter`; use `GMAIL_QUERY=label:newsletters` when you need a full Gmail search expression.
+- `GMAIL_MAX_MESSAGES`: maximum Gmail messages to fetch per sync; defaults to `50`.
 - `DATABASE_URL`: Postgres connection string. For shared prototype storage, use a Neon Postgres pooled connection string; local Docker Postgres remains the dev/offline default.
 - `PG_POOL_MAX`: maximum Postgres pool connections per process; defaults to `3` for long-running MCP sessions.
 - `TWITTERAPI_IO_API_KEY`: TwitterAPI.io key for `sync-twitter`.
 - `TWITTERAPI_LIST_IDS`: comma-separated Twitter/X list IDs to sync.
 - `TWITTERAPI_LIST_MAX_PAGES`, `TWITTERAPI_LIST_MAX_TWEETS`: bounded sync limits; defaults to `3` and `200`.
+- `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: optional Feedbin HTTP Basic Auth credentials for `sync-feedbin`.
 - `OPENAI_API_KEY`: always required because embeddings use OpenAI.
 - `LLM_PROVIDER`: `openai` or `anthropic`.
 - `LIGHTWEIGHT_SOURCE_TYPES`: comma-separated source types that use embedding-only sync by default; defaults to `reddit,hackernews,twitter`.
@@ -185,23 +201,51 @@ Example prompts that map naturally to the MCP tools:
 ## Data Model
 
 - `content`: normalized source content, enrichment output, and vector embedding.
-- `sync_state`: exact Feedbin incremental-sync cursor.
+- `sync_state`: collector cursors and per-feed state for Feedbin, RSS, Gmail, and Twitter/X.
 - `digests`: generated briefing history and referenced content IDs.
 
 Failed enrichments remain stored with `enrichment_status = 'failed'` and an error message for operational inspection and a future retry worker.
 
-Sync prints Feedbin's total matching entry count plus per-entry counts and percentages while fetching and enriching. It is safe to interrupt with `Ctrl-C`: persisted entries remain stored, the cursor advances only after a complete run, and deduplication makes the next run idempotent.
+## Gmail setup
 
-If a cursor must be rebuilt, run `npm run cli -- sync --reset-cursor`. Existing entries are deduplicated, but missing older entries are fetched and processed. Sync refuses to advance the cursor if Feedbin reports more records than pagination returned.
+1. In Google Cloud Console, create/select a project.
+2. Enable the Gmail API.
+3. Configure the OAuth consent screen, add your Google account as a test user, and include the Gmail readonly scope:
+   `https://www.googleapis.com/auth/gmail.readonly`
+4. Create an OAuth client with application type `Desktop app`.
+5. Put the client values in `.env`:
 
-For an MVP focused on recent briefings, avoid a complete historical backfill:
+```env
+GMAIL_CLIENT_ID=...
+GMAIL_CLIENT_SECRET=...
+GMAIL_LABEL=newsletter
+GMAIL_MAX_MESSAGES=1
+```
+
+6. Run the one-time helper:
+
+```bash
+npm run gmail-auth
+```
+
+Open the printed Google URL in your local browser. The command listens on `127.0.0.1`, receives the loopback callback, exchanges the code, and prints `GMAIL_REFRESH_TOKEN=...` for `.env`. No tunnel is needed for local setup. Add the printed refresh token to `.env`, then test with:
+
+```bash
+npm run cli -- sync-gmail --hours 24
+```
+
+Sync commands print per-source progress while fetching and enriching. It is safe to interrupt with `Ctrl-C`: persisted entries remain stored, cursors advance only after a complete collector run, and deduplication makes the next run idempotent.
+
+If the Feedbin cursor must be rebuilt, run `npm run cli -- sync-feedbin --reset-cursor`. Existing entries are deduplicated, but missing older entries are fetched and processed. Feedbin sync refuses to advance the cursor if Feedbin reports more records than pagination returned.
+
+For a Feedbin sync focused on recent briefings, avoid a complete historical backfill:
 
 ```bash
 # Fetch the last 48 hours, then continue incrementally on later normal syncs
-npm run cli -- sync --hours 48
+npm run cli -- sync-feedbin --hours 48
 
 # Fetch the last seven days
-npm run cli -- sync --days 7
+npm run cli -- sync-feedbin --days 7
 ```
 
 After a successful lookback sync, the stored cursor advances to the newest Feedbin entry fetched, which is normally close to the present. If interrupted, the existing stored cursor remains unchanged; resume with the same `--hours` or `--days` option. If no matching entries are returned, the existing cursor is left unchanged.
@@ -295,7 +339,7 @@ Reddit, Hacker News, and Twitter/X feeds can produce many entries whose records 
 
 - Store the original source JSON, normalized post text, title, author, URL, and source summary.
 - Generate and store an OpenAI embedding from the title and full post text.
-- Copy the Feedbin summary into `analyst_summary`.
+- Copy the source-provided summary into `analyst_summary`.
 - Leave generated topic tags and entities empty.
 - Keep the post available to semantic queries and daily briefings.
 
@@ -333,6 +377,6 @@ See [`docs/HowItWorks.md`](docs/HowItWorks.md) for the processing and lightweigh
 ## Current MVP Boundaries
 
 - Enrichment runs serially during sync to keep rate-limit behavior predictable.
-- Feedbin content is used as delivered; external full-text extraction is not fetched.
+- RSS and Feedbin content are used as delivered; external full-text extraction is not fetched.
 - The pgvector column is fixed to 1536 dimensions.
 - Digests are stored and printed; delivery to email or chat is not included.

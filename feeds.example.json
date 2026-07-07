@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "feeds": [
+    {
+      "title": "Hacker News",
+      "url": "https://news.ycombinator.com/rss",
+      "category": "general"
+    },
+    {
+      "title": "Stratechery by Ben Thompson",
+      "url": "http://stratechery.com/feed/",
+      "category": "general"
+    },
+    {
+      "title": "On my Om",
+      "url": "https://om.co/feed/",
+      "category": "general"
+    },
+    {
+      "title": "OpenAI YouTube",
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCXZCJLdBC09xxGZ6gcdrc6A",
+      "category": "video"
+    },
+    {
+      "title": "Simon Willison",
+      "url": "https://fedi.simonwillison.net/@simon.rss",
+      "category": "general"
+    },
+    {
+      "title": "OpenAI News",
+      "url": "https://openai.com/news/rss.xml",
+      "category": "ai"
+    },
+    {
+      "title": "Anthropic News",
+      "url": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml",
+      "category": "ai"
+    },
+    {
+      "title": "Paul Graham Essays",
+      "url": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_paulgraham.xml",
+      "category": "essays"
+    },
+    {
+      "title": "Claude Blog",
+      "url": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_claude.xml",
+      "category": "ai"
+    },
+    {
+      "title": "xAI News",
+      "url": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_xainews.xml",
+      "category": "ai"
+    },
+    {
+      "title": "Reddit eCommerce",
+      "url": "https://www.reddit.com/r/ecommerce.rss",
+      "category": "reddit"
+    },
+    {
+      "title": "ClaudeAI",
+      "url": "https://www.reddit.com/r/ClaudeAI.rss",
+      "category": "reddit"
+    },
+    {
+      "title": "AI Agents",
+      "url": "https://www.reddit.com/r/AI_Agents.rss",
+      "category": "reddit"
+    },
+    {
+      "title": "Model Context Protocol (MCP)",
+      "url": "https://www.reddit.com/r/mcp.rss",
+      "category": "reddit"
+    },
+    {
+      "title": "openclaw",
+      "url": "https://www.reddit.com/r/openclaw.rss",
+      "category": "reddit"
+    },
+    {
+      "title": "hermesagent",
+      "url": "https://www.reddit.com/r/hermesagent.rss",
+      "category": "reddit"
+    },
+    {
+      "title": "\"agentic commerce and payments\" - Google News",
+      "url": "https://news.google.com/rss/search?q=agentic%20commerce%20and%20payments&hl=en-US&gl=US&ceid=US%3Aen",
+      "category": "google-news"
+    },
+    {
+      "title": "\"mcp tool design\" - Google News",
+      "url": "https://news.google.com/rss/search?q=mcp%20tool%20design&hl=en-US&gl=US&ceid=US%3Aen",
+      "category": "google-news"
+    }
+  ]
+}
