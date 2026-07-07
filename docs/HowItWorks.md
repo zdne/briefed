@@ -1,8 +1,8 @@
 # How Briefed.sh Works
 
-Briefed.sh primarily uses direct RSS/Atom polling, optional Gmail newsletter sync, and optional TwitterAPI.io list sync as collectors. Feedbin remains available as a secondary/fallback collector. Postgres and pgvector provide the local archive, OpenAI provides embeddings, and OpenAI or Anthropic provide language-model synthesis.
+Briefed.sh supports multiple optional collectors: direct RSS/Atom polling, Gmail newsletter sync, TwitterAPI.io list sync, and Feedbin sync. Postgres and pgvector provide the local archive, OpenAI provides embeddings, and OpenAI or Anthropic provide language-model synthesis.
 
-Direct RSS/Atom items, Gmail newsletters, Twitter/X list tweets, and optional Feedbin entries are normalized into the same `content` table. Source identity fields keep collectors separate while shared embeddings make every collector searchable through queries and eligible for briefings.
+Direct RSS/Atom items, Gmail newsletters, Twitter/X list tweets, and Feedbin entries are normalized into the same `content` table. Source identity fields keep collectors separate while shared embeddings make every collector searchable through queries and eligible for briefings.
 
 ```text
 RSS/Atom feeds ────┐
@@ -54,7 +54,7 @@ HTTP 429 is treated as a soft per-feed failure. Briefed.sh records retry-after s
 
 ## Feedbin Sync Pipeline
 
-Feedbin is a secondary/fallback collector. New RSS and newsletter setups should prefer direct RSS plus Gmail.
+Feedbin is one optional collector. Use it when you want Feedbin as an input source; use direct RSS and Gmail when you want Briefed to collect feeds and newsletters directly.
 
 Run:
 

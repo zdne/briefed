@@ -28,15 +28,14 @@ Feedbin API ───────┘
                                       └─ LLM enrichment and synthesis
 ```
 
-The primary collectors are direct RSS/Atom feed polling from `feeds.json`, optional Gmail newsletter sync, and optional TwitterAPI.io list timelines. Feedbin sync remains available as a secondary/fallback collector through `sync-feedbin`. Entries are deduplicated by source identity and canonicalized URL.
+Briefed supports multiple optional collectors: direct RSS/Atom feed polling from `feeds.json`, Gmail newsletter sync, TwitterAPI.io list timelines, and Feedbin sync through `sync-feedbin`. Enable whichever inputs you want to use. Entries are deduplicated by source identity and canonicalized URL.
 
 ## Prerequisites
 
 - Node.js 22+
 - Docker with Compose
 - Colima, if using Docker through Colima on macOS
-- `feeds.json` for direct RSS/Atom sync, plus optional Gmail or TwitterAPI.io credentials
-- Optional Feedbin account if using the secondary Feedbin collector
+- At least one configured input: `feeds.json`, Gmail credentials, TwitterAPI.io credentials, or Feedbin credentials
 - OpenAI API key for embeddings
 - OpenAI or Anthropic API key for enrichment and answer synthesis
 
@@ -95,7 +94,7 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run gmail-auth` | Run one-time Gmail OAuth setup and print `GMAIL_REFRESH_TOKEN` |
 | `npm run cli -- sync-gmail --hours 48` | Sync Gmail newsletters using the configured query or label |
 | `npm run sync-twitter` | Sync configured Twitter/X lists through TwitterAPI.io |
-| `npm run sync-feedbin` | Secondary/fallback Feedbin sync |
+| `npm run sync-feedbin` | Sync Feedbin entries |
 | `npm run cli -- sync-feedbin --hours 48` | Feedbin sync only entries created within the last 48 hours |
 | `npm run cli -- sync-feedbin --days 7` | Feedbin sync only entries created within the last seven days |
 | `npm run cli -- sync-feedbin --reset-cursor` | Clear the Feedbin cursor and safely rescan the complete Feedbin archive |
@@ -147,7 +146,7 @@ See [`.env.example`](.env.example). Important values:
 - `TWITTERAPI_IO_API_KEY`: TwitterAPI.io key for `sync-twitter`.
 - `TWITTERAPI_LIST_IDS`: comma-separated Twitter/X list IDs to sync.
 - `TWITTERAPI_LIST_MAX_PAGES`, `TWITTERAPI_LIST_MAX_TWEETS`: bounded sync limits; defaults to `3` and `200`.
-- `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: optional Feedbin HTTP Basic Auth credentials for the secondary `sync-feedbin` collector.
+- `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: optional Feedbin HTTP Basic Auth credentials for `sync-feedbin`.
 - `OPENAI_API_KEY`: always required because embeddings use OpenAI.
 - `LLM_PROVIDER`: `openai` or `anthropic`.
 - `LIGHTWEIGHT_SOURCE_TYPES`: comma-separated source types that use embedding-only sync by default; defaults to `reddit,hackernews,twitter`.
@@ -237,9 +236,9 @@ npm run cli -- sync-gmail --hours 24
 
 Sync commands print per-source progress while fetching and enriching. It is safe to interrupt with `Ctrl-C`: persisted entries remain stored, cursors advance only after a complete collector run, and deduplication makes the next run idempotent.
 
-If the secondary Feedbin cursor must be rebuilt, run `npm run cli -- sync-feedbin --reset-cursor`. Existing entries are deduplicated, but missing older entries are fetched and processed. Feedbin sync refuses to advance the cursor if Feedbin reports more records than pagination returned.
+If the Feedbin cursor must be rebuilt, run `npm run cli -- sync-feedbin --reset-cursor`. Existing entries are deduplicated, but missing older entries are fetched and processed. Feedbin sync refuses to advance the cursor if Feedbin reports more records than pagination returned.
 
-For a Feedbin fallback sync focused on recent briefings, avoid a complete historical backfill:
+For a Feedbin sync focused on recent briefings, avoid a complete historical backfill:
 
 ```bash
 # Fetch the last 48 hours, then continue incrementally on later normal syncs
