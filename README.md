@@ -95,6 +95,7 @@ The response contains an answer with `[1]`-style inline citations and a matching
 | `npm run cli -- sync --reset-cursor` | Clear the cursor and safely rescan the complete Feedbin archive |
 | `npm run cli -- sync-rss --hours 48` | Sync direct RSS/Atom feeds from `feeds.json` with a lookback |
 | `npm run cli -- sync-rss --feeds feeds.example.json` | Sync direct RSS/Atom feeds from a specific feed config |
+| `npm run gmail-auth` | Run one-time Gmail OAuth setup and print `GMAIL_REFRESH_TOKEN` |
 | `npm run cli -- sync-gmail --hours 48` | Sync Gmail newsletters using the configured query or label |
 | `npm run sync-twitter` | Sync configured Twitter/X lists through TwitterAPI.io |
 | `npm run cli -- enrich --source reddit --limit 20` | Fully enrich the newest 20 eligible Reddit entries |
@@ -136,10 +137,10 @@ See [`.env.example`](.env.example). Important values:
 - `FEEDBIN_EMAIL`, `FEEDBIN_PASSWORD`: Feedbin HTTP Basic Auth credentials.
 - `RSS_FEEDS_PATH`: JSON feed-list path for direct RSS/Atom sync; defaults to `feeds.json`.
 - `RSS_FETCH_DELAY_MS`, `RSS_REDDIT_FETCH_DELAY_MS`, `RSS_MAX_ITEMS_PER_FEED`, `RSS_USER_AGENT`, `RSS_REQUEST_TIMEOUT_MS`: direct RSS fetch safety limits. `RSS_REDDIT_FETCH_DELAY_MS` is the delay before Reddit feed fetches; `RSS_REQUEST_TIMEOUT_MS` is the HTTP request timeout.
-- `REDDIT_RSS_USER`, `REDDIT_RSS_FEED`: recommended for Reddit feeds. These Reddit RSS preference parameters come from an authenticated Reddit RSS URL and are appended only to outbound Reddit RSS requests. Without them, Reddit RSS is likely to hit rate limits.
+- `REDDIT_RSS_USER`, `REDDIT_RSS_FEED`: recommended for Reddit feeds. These Reddit RSS preference parameters come from an authenticated Reddit RSS URL and are appended only to outbound Reddit RSS requests. Without them, Reddit RSS is likely to hit rate limits. You can get the credentials at https://www.reddit.com/prefs/feeds
 - `REDDIT_RSS_DEBUG`: when true, logs redacted Reddit RSS request URLs, request headers, cookie names, status, content type, and rate-limit headers.
-- `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`: Gmail OAuth credentials for newsletter sync.
-- `GMAIL_QUERY` or `GMAIL_LABEL`: Gmail search query or label used to select newsletters.
+- `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`: Gmail OAuth credentials for newsletter sync. Create a Google OAuth Desktop client, set the client ID/secret, then run `npm run gmail-auth` to generate the refresh token.
+- `GMAIL_QUERY` or `GMAIL_LABEL`: Gmail search query or label used to select newsletters. `GMAIL_LABEL` defaults to `newsletter`; use `GMAIL_QUERY=label:newsletters` when you need a full Gmail search expression.
 - `GMAIL_MAX_MESSAGES`: maximum Gmail messages to fetch per sync; defaults to `50`.
 - `DATABASE_URL`: Postgres connection string. For shared prototype storage, use a Neon Postgres pooled connection string; local Docker Postgres remains the dev/offline default.
 - `PG_POOL_MAX`: maximum Postgres pool connections per process; defaults to `3` for long-running MCP sessions.
@@ -204,6 +205,34 @@ Example prompts that map naturally to the MCP tools:
 - `digests`: generated briefing history and referenced content IDs.
 
 Failed enrichments remain stored with `enrichment_status = 'failed'` and an error message for operational inspection and a future retry worker.
+
+## Gmail setup
+
+1. In Google Cloud Console, create/select a project.
+2. Enable the Gmail API.
+3. Configure the OAuth consent screen, add your Google account as a test user, and include the Gmail readonly scope:
+   `https://www.googleapis.com/auth/gmail.readonly`
+4. Create an OAuth client with application type `Desktop app`.
+5. Put the client values in `.env`:
+
+```env
+GMAIL_CLIENT_ID=...
+GMAIL_CLIENT_SECRET=...
+GMAIL_LABEL=newsletter
+GMAIL_MAX_MESSAGES=1
+```
+
+6. Run the one-time helper:
+
+```bash
+npm run gmail-auth
+```
+
+Open the printed Google URL in your local browser. The command listens on `127.0.0.1`, receives the loopback callback, exchanges the code, and prints `GMAIL_REFRESH_TOKEN=...` for `.env`. No tunnel is needed for local setup. Add the printed refresh token to `.env`, then test with:
+
+```bash
+npm run cli -- sync-gmail --hours 24
+```
 
 Sync prints Feedbin's total matching entry count plus per-entry counts and percentages while fetching and enriching. It is safe to interrupt with `Ctrl-C`: persisted entries remain stored, the cursor advances only after a complete run, and deduplication makes the next run idempotent.
 

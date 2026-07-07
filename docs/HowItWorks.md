@@ -102,14 +102,28 @@ HTTP 429 is treated as a soft per-feed failure. Briefed.sh records retry-after s
 
 `npm run cli -- sync-gmail` imports newsletters from a configured Gmail query or label.
 
-Configure OAuth refresh-token credentials plus one selector:
+Gmail setup uses a Google OAuth Desktop client:
+
+1. Create/select a Google Cloud project.
+2. Enable the Gmail API.
+3. Configure OAuth consent, add your account as a test user, and include `https://www.googleapis.com/auth/gmail.readonly`.
+4. Create an OAuth client with application type `Desktop app`.
+5. Put the client values in `.env`.
+6. Run `npm run gmail-auth` to generate `GMAIL_REFRESH_TOKEN`.
+
+Configure OAuth refresh-token credentials plus one message selector:
 
 ```env
 GMAIL_CLIENT_ID=...
 GMAIL_CLIENT_SECRET=...
 GMAIL_REFRESH_TOKEN=...
-GMAIL_QUERY=label:newsletters
+GMAIL_LABEL=newsletter
+GMAIL_MAX_MESSAGES=1
 ```
+
+`GMAIL_LABEL` defaults to `newsletter` and is converted to a Gmail query like `label:newsletter`. Use `GMAIL_QUERY=label:newsletters` when you need a full Gmail search expression instead.
+
+The `gmail-auth` helper is intentionally separate from Gmail sync: it starts a temporary `127.0.0.1` callback server, prints a Google OAuth URL with the readonly Gmail scope and PKCE challenge, waits for the browser loopback callback, exchanges the code, prints `GMAIL_REFRESH_TOKEN=...`, and exits. No tunnel is needed when the browser and CLI run on the same machine.
 
 Gmail sync lists matching messages, fetches full payloads, parses the subject, sender, snippet, internal date, and text body, then stores each message with `source_key = 'gmail:query:<query_hash>'`. It uses Gmail internal date as the v1 cursor in `sync_state` and advances the cursor only after selected messages are processed. HTML bodies are converted to text when no plain-text body is available.
 

@@ -5,6 +5,7 @@ import { config, requireConfig } from "./config.js";
 import { getDigestForRendering, migrate, pool, resetSyncCursor } from "./db.js";
 import { createDigest } from "./digest.js";
 import { FeedbinClient } from "./feedbin.js";
+import { formatGmailRefreshTokenEnv, runGmailAuthFlow } from "./gmail-auth.js";
 import { GmailClient } from "./gmail.js";
 import { cleanFriendlyDigestMarkdown, friendlyDigestStyle } from "./friendly-digest.js";
 import { renderDigestMarkdown, renderQueryMarkdown, type DigestMarkdownResult } from "./markdown.js";
@@ -151,6 +152,23 @@ program.command("sync-gmail")
       log
     );
     console.log(JSON.stringify(result, null, 2));
+  });
+
+program.command("gmail-auth")
+  .description("Run one-time Gmail OAuth setup and print a refresh token")
+  .option("--port <number>", "localhost callback port; defaults to a random free port")
+  .option("--timeout-seconds <number>", "seconds to wait for the browser callback", "300")
+  .action(async (options: { port?: string; timeoutSeconds: string }) => {
+    requireConfig(["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET"]);
+    const result = await runGmailAuthFlow({
+      clientId: config.GMAIL_CLIENT_ID!,
+      clientSecret: config.GMAIL_CLIENT_SECRET!,
+      port: options.port === undefined ? undefined : positiveInteger(options.port, "--port"),
+      timeoutMs: positiveInteger(options.timeoutSeconds, "--timeout-seconds") * 1000,
+      log: timestampLogger
+    });
+    console.log("\nAdd this to .env:");
+    console.log(formatGmailRefreshTokenEnv(result.refreshToken));
   });
 
 program
