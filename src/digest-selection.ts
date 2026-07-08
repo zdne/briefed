@@ -86,7 +86,7 @@ export function selectDigestSources(
     authorCounts: new Map<string, number>()
   };
 
-  const requiredCount = addTopicBuckets(state, buildBuckets(
+  addTopicBuckets(state, buildBuckets(
     recentCandidates,
     requiredTopicMatches,
     "required",
@@ -98,7 +98,7 @@ export function selectDigestSources(
   const focusMatchesWithoutRequiredOverlap = focusAreaMatches.filter((focusArea) =>
     !requiredTopicMatches.some((requiredTopic) => topicsOverlap(focusArea.topic, requiredTopic.topic))
   );
-  const focusCount = addTopicBuckets(state, buildBuckets(
+  addTopicBuckets(state, buildBuckets(
     recentCandidates,
     focusMatchesWithoutRequiredOverlap,
     "focus",
@@ -136,14 +136,101 @@ export function selectDigestSources(
     generalCount += 1;
   }
 
+  const selectedSources = assignMostSpecificTopics(
+    state.selected,
+    requiredTopicMatches.map((match) => match.topic),
+    focusAreaMatches.map((match) => match.topic)
+  );
+
   return {
-    sources: state.selected.map((selection) => selection.source),
-    selectedSources: state.selected,
-    requiredCount,
-    focusCount,
-    importantGeneralCount,
-    generalCount
+    sources: selectedSources.map((selection) => selection.source),
+    selectedSources,
+    requiredCount: selectedSources.filter((selection) => selection.bucket === "required").length,
+    focusCount: selectedSources.filter((selection) => selection.bucket === "focus").length,
+    importantGeneralCount: selectedSources.filter((selection) => selection.bucket === "important_general").length,
+    generalCount: selectedSources.filter((selection) => selection.bucket === "general").length
   };
+}
+
+function assignMostSpecificTopics(
+  selected: SelectedDigestSource[],
+  requiredTopics: string[],
+  focusAreas: string[]
+): SelectedDigestSource[] {
+  return selected.map((selection) => {
+    if (selection.bucket !== "focus" && selection.bucket !== "important_general" && selection.bucket !== "general") {
+      return selection;
+    }
+
+    const required = bestTopicAssignment(selection.source, requiredTopics);
+    if (required && required.score >= 5) {
+      return { ...selection, bucket: "required", topic: required.topic };
+    }
+
+    if (selection.bucket === "important_general" || selection.bucket === "general") {
+      const focus = bestTopicAssignment(selection.source, focusAreas);
+      if (focus && focus.score >= 5) return { ...selection, bucket: "focus", topic: focus.topic };
+    }
+
+    return selection;
+  });
+}
+
+function bestTopicAssignment(
+  candidate: DigestCandidate,
+  topics: string[]
+): { topic: string; score: number } | null {
+  return topics
+    .map((topic, index) => ({ topic, score: candidateTopicAssignmentScore(candidate, topic), index }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || topicSpecificity(b.topic) - topicSpecificity(a.topic) || a.index - b.index)
+    .at(0) ?? null;
+}
+
+function candidateTopicAssignmentScore(candidate: DigestCandidate, topic: string): number {
+  const normalizedTopic = normalizeText(topic);
+  const text = exactSearchableText(candidate);
+  if (normalizedTopic.includes("payment") && !hasPaymentTopicAnchor(text)) return 0;
+  const anchors = topicAnchorTerms(normalizedTopic);
+  let score = text.includes(normalizedTopic) ? 8 : 0;
+
+  score += anchors.filter((anchor) => text.includes(anchor)).length * 2;
+  if (normalizedTopic.includes("agentic") && hasAgenticConcept(text)) score += 2;
+  score += specialTopicScore(text, normalizedTopic);
+
+  return score;
+}
+
+function topicSpecificity(topic: string): number {
+  return topicAnchorTerms(topic).length;
+}
+
+function specialTopicScore(text: string, topic: string): number {
+  if (topic.includes("payment")) {
+    return scoreMatches(text, [
+      /\b(payments?|checkout|wallet|wallets|signer|signers|credential|credentials|stablecoin|settlement)\b/g
+    ]) * 2;
+  }
+  if (topic.includes("commerce")) {
+    return scoreMatches(text, [
+      /\b(commerce|shopping|checkout|retail|marketplace|merchant|purchase|buying)\b/g
+    ]) * 2;
+  }
+  if (topic.includes("memory")) {
+    return scoreMatches(text, [
+      /\b(memory|recall|deletion|retention|remember|notes?|simplenote)\b/g
+    ]) * 2;
+  }
+  if (topic.includes("procurement")) {
+    return scoreMatches(text, [
+      /\b(procurement|buyers?|vendor|vendors?|sourcing|purchasing|rfp|evaluation)\b/g
+    ]) * 2;
+  }
+  return 0;
+}
+
+function hasPaymentTopicAnchor(text: string): boolean {
+  return /\b(payments?|checkout|wallet|wallets|signer|signers|stablecoin|settlement|merchant|merchants)\b/g.test(text);
 }
 
 function buildBuckets(
@@ -545,7 +632,7 @@ function importantGeneralScore(candidate: DigestCandidate): number {
 
   score += scoreMatches(text, [
     /\b(standard|standards|protocol|specification|framework|alliance|fido)\b/g,
-    /\b(security|authentication|authorization|fraud|token|tokens|identity|trust|permission|permissions)\b/g,
+    /\b(security|authentication|authorization|fraud|token|tokens|identity|trust|permission|permissions|vulnerability|vulnerabilities|backdoor|cve|cert)\b/g,
     /\b(regulation|regulatory|governance|compliance|policy)\b/g,
     /\b(launch|launched|release|released|introduced|published|donated|open sourced|open-source)\b/g,
     /\b(integration|integrated|partnered|partnership|collaboration|collaborates)\b/g
@@ -562,6 +649,8 @@ function importantGeneralScore(candidate: DigestCandidate): number {
   ]);
 
   if (candidate.sourceType === "twitter" && twitterEngagement(candidate.rawEntry) >= 100) score += 2;
+  if (isSecurityAdvisory(candidate)) score += 5;
+  score -= communityMetaPenalty(candidate);
 
   return score;
 }
@@ -630,6 +719,7 @@ function generalQualityScore(candidate: DigestCandidate): number {
   score += scoreMatches(text, [
     /\b(strategy|strategic|market structure|newsletter|analysis|economics|business model|buyer|buyers)\b/g
   ]);
+  if (isSecurityAdvisory(candidate)) score += 6;
 
   score -= scoreMatches(text, [
     /\b(is hiring|hiring|job|jobs)\b/g
@@ -640,8 +730,40 @@ function generalQualityScore(candidate: DigestCandidate): number {
     /\bno further analysis\b/g,
     /\blikely discusses\b/g
   ]) * 3;
+  score -= communityMetaPenalty(candidate);
 
   return score;
+}
+
+function isSecurityAdvisory(candidate: DigestCandidate): boolean {
+  const text = searchableText(candidate);
+  return /\b(vulnerability|vulnerabilities|backdoor|cve|cert|security advisory|unauthorized remote access)\b/g.test(text) ||
+    isOfficialSecurityDomain(candidate.canonicalUrl);
+}
+
+function isOfficialSecurityDomain(input: string | null): boolean {
+  if (!input) return false;
+  try {
+    const hostname = new URL(input).hostname.replace(/^www\./u, "");
+    return hostname === "kb.cert.org" || hostname.endsWith(".cert.org") || hostname === "cisa.gov";
+  } catch {
+    return false;
+  }
+}
+
+function communityMetaPenalty(candidate: DigestCandidate): number {
+  const text = searchableText(candidate);
+  return scoreMatches(text, [
+    /\bhall of fame\b/g,
+    /\bmodel civil war\b/g,
+    /\bcommunity drama\b/g,
+    /\brate limits?\b/g,
+    /\bbypass(?:ed|ing)?\b/g,
+    /\bab test\b/g,
+    /\ba\/b\b/g,
+    /\bcomplaint\b/g,
+    /\boverrode my settings\b/g
+  ]) * 2;
 }
 
 function importantGeneralLabel(candidate: DigestCandidate): SelectedDigestSource["signalLabel"] {

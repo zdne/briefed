@@ -128,6 +128,23 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).not.toContain("### Source 3");
   });
 
+  it("renders candidate count separately from cited source count", () => {
+    const markdown = renderDigestMarkdown({
+      id: "5",
+      periodStart: "2026-06-04T10:00:00.000Z",
+      periodEnd: "2026-06-05T10:00:00.000Z",
+      candidateCount: 67,
+      body: "## Top Items\n\n- Reported item [2].",
+      sources: [
+        { citation: 1, title: "Uncited", url: "https://example.com/1" },
+        { citation: 2, title: "Cited", url: "https://example.com/2" }
+      ]
+    });
+
+    expect(markdown).toContain("candidate_count: 67");
+    expect(markdown).toContain("source_count: 1");
+  });
+
   it("collapses social digest bullets to source-title labels", () => {
     const markdown = renderDigestMarkdown({
       id: "6",
@@ -176,7 +193,7 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).not.toContain("Reddit contributors shared");
   });
 
-  it("renames required watchlist and capitalizes watchlist subheadings", () => {
+  it("renames digest sections and capitalizes digest subheadings", () => {
     const markdown = renderDigestMarkdown({
       id: "7",
       periodStart: "2026-06-04T10:00:00.000Z",
@@ -190,10 +207,16 @@ describe("renderDigestMarkdown", () => {
         "### agentic B2B",
         "No meaningful new signal found in this window.",
         "",
+        "### ai procurement",
+        "No meaningful new signal found in this window.",
+        "",
         "## Highlighted Focus Areas",
         "",
         "### agentic marketplace",
-        "- Focus item [1]."
+        "- Focus item [1].",
+        "",
+        "### agent frameworks",
+        "- Framework item [1]."
       ].join("\n"),
       sources: [{ citation: 1, title: "Source", url: "https://example.com" }]
     });
@@ -204,7 +227,11 @@ describe("renderDigestMarkdown", () => {
     expect(markdown).not.toContain("## Highlighted Focus Areas");
     expect(markdown).toContain("### Agentic Payments");
     expect(markdown).toContain("### Agentic B2B");
-    expect(markdown).toContain("### agentic marketplace");
+    expect(markdown).toContain("### AI Procurement");
+    expect(markdown).toContain("### Agentic Marketplace");
+    expect(markdown).toContain("### Agent Frameworks");
+    expect(markdown).not.toContain("### Ai Procurement");
+    expect(markdown).not.toContain("### agent frameworks");
   });
 
   it("drops an empty Other Items section and trims model-emitted trailing spaces", () => {

@@ -123,6 +123,7 @@ export async function createDigest(
     id,
     periodStart: start.toISOString(),
     periodEnd: end.toISOString(),
+    candidateCount: candidates.length,
     body,
     sources: sources.map((source, index) => ({
       citation: index + 1,

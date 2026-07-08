@@ -285,6 +285,67 @@ describe("selectDigestSources", () => {
     expect(result.selectedSources.map((selection) => selection.topic)).toEqual(["agentic payments"]);
   });
 
+  it("reassigns payment authorization signals from broad agent frameworks to agentic payments", () => {
+    const paymentAuth = candidate("payment-auth", {
+      title: "How should an AI agent prove a payment is allowed before it reaches the signer?",
+      summary: "Discussion about agent payment authorization before a signer approves a transaction."
+    });
+
+    const result = selectDigestSources(
+      [],
+      [{ topic: "Agentic Payments", matches: [] }],
+      [{ topic: "agent frameworks", matches: [paymentAuth] }],
+      { ...defaults, focusAreaMaxEntries: 2 }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["payment-auth"]);
+    expect(result.selectedSources[0]).toMatchObject({
+      bucket: "required",
+      topic: "Agentic Payments"
+    });
+    expect(result.requiredCount).toBe(1);
+    expect(result.focusCount).toBe(0);
+  });
+
+  it("does not reassign generic agent authorization to agentic payments", () => {
+    const agentAuthz = candidate("agent-authz", {
+      title: "A2A solved how agents talk. It didn’t solve what a stranger agent is allowed to do - how are you handling authz?",
+      summary: "Discussion about authorization for stranger agents."
+    });
+
+    const result = selectDigestSources(
+      [],
+      [{ topic: "Agentic Payments", matches: [] }],
+      [{ topic: "agent frameworks", matches: [agentAuthz] }],
+      { ...defaults, focusAreaMaxEntries: 2 }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["agent-authz"]);
+    expect(result.selectedSources[0]).toMatchObject({
+      bucket: "focus",
+      topic: "agent frameworks"
+    });
+  });
+
+  it("does not reassign generic transaction-coordination analysis to agentic payments", () => {
+    const xbox = candidate("xbox-transaction-coordination", {
+      title: "XBOX Cuts; Bundling and the Internet Solvent; Transaction, Coordination, and Sunk Costs",
+      author: "Ben Thompson",
+      summary: "Microsoft's Xbox division layoffs amid failed Game Pass strategy, bundling, transaction coordination, and sunk costs."
+    });
+
+    const result = selectDigestSources(
+      [xbox],
+      [{ topic: "Agentic Payments", matches: [] }],
+      [],
+      { ...defaults, importantGeneralMaxEntries: 0, generalMaxEntries: 1 }
+    );
+
+    expect(result.sources.map((source) => source.id)).toEqual(["xbox-transaction-coordination"]);
+    expect(result.selectedSources[0]?.bucket).toBe("general");
+    expect(result.selectedSources[0]?.topic).toBeUndefined();
+  });
+
   it("allows a second same-event source only when it adds a distinct material fact", () => {
     const result = selectDigestSources(
       [
@@ -592,6 +653,35 @@ describe("selectDigestSources", () => {
       bucket: "general",
       signalLabel: "strategic_analysis"
     });
+  });
+
+  it("ranks security advisories above community meta items", () => {
+    const result = selectDigestSources(
+      [
+        candidate("model-civil-war", {
+          title: "SPECIAL REPORT: The r/hermesagent Model Civil War",
+          summary: "Community debate and model civil war discussion."
+        }),
+        candidate("hall-of-fame", {
+          title: "r/hermesagent Hall of Fame: Top Posts of All Time",
+          summary: "Community hall of fame list."
+        }),
+        candidate("tenda-backdoor", {
+          title: "Tenda firmware contains hidden authentication backdoor",
+          canonicalUrl: "https://kb.cert.org/vuls/id/213560",
+          summary: "CERT reported a vulnerability and hidden authentication backdoor enabling unauthorized remote access."
+        })
+      ],
+      [],
+      [],
+      {
+        ...defaults,
+        importantGeneralMaxEntries: 0,
+        generalMaxEntries: 3
+      }
+    );
+
+    expect(result.sources[0]?.id).toBe("tenda-backdoor");
   });
 
   it("limits selected entries by source type", () => {

@@ -69,6 +69,7 @@ export interface DigestSourceContext {
   topic?: string;
   signalLabel?: "important_general" | "strategic_analysis" | "general";
   freshnessLabel?: "fresh" | "follow_up";
+  sourceConfidence?: "primary" | "reported" | "social_signal" | "link_wrapper";
 }
 
 export interface DigestForRendering {

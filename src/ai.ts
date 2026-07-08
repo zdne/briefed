@@ -219,6 +219,8 @@ Rules for each section:
 Use only the exact required watchlist subsection headings listed below.
 For each topic, write 0-5 bullets with citations if there is meaningful source-backed signal.
 If there is no meaningful signal for a topic, write exactly: No meaningful new signal found in this window.
+Use only sources whose Selection line starts with "required watchlist / <that exact topic>" in required watchlist subsections.
+Do not move focus-area, important-general, strategic-analysis, or general sources into a required watchlist subsection merely because they mention a broad related word.
 
 ## Focus Areas
 Use only the exact focus-area subsection headings listed below.
@@ -245,6 +247,7 @@ Allowed bullet forms:
 Rules:
 - Do not summarize every source.
 - Report only what the cited source says.
+- Use the supplied source confidence. Primary and reported sources can support factual reporting. Social-signal and link-wrapper sources can support only a weak signal, discussion topic, claim, or artifact label.
 - Attribute claims to the source, publication, named actor, or author. For social sources, attribute only to Reddit, Twitter, or Hacker News; never to usernames or handles.
 - Use reporting language, not opinion, analyst filler, or judgements.
 - Do not write trend adjectives.
@@ -267,6 +270,7 @@ Rules:
 - Do not repeat the same source and same claim across sections.
 - Do not repeat the same source in multiple required watchlist or focus-area subsections.
 - If one source matches multiple configured topics, place it under the most specific matching topic and leave the other topic empty unless there is a separate source for that other topic.
+- Required watchlist sections are stricter than focus and Other Items: include only sources explicitly labeled as required watchlist for that exact subsection.
 - Forbidden phrases: "rapidly mature", "rapidly maturing", "rapidly moved", "foundational technology", "foundational", "broad ecosystem shift", "ecosystem shift", "commercial transformation", "transformative effect", "key operational challenge", "critical enabler", "highlights accelerating convergence", and "notable signal".
 - If a sentence would use one of the forbidden phrases, rewrite it as a concrete observation from the sources.
 - Every factual claim must be grounded in the supplied sources.
@@ -280,6 +284,8 @@ Rules:
 - Use inline citations like [1] or [2].
 - Cite every bullet that makes a factual claim.
 - Treat social, discussion, and link-wrapper sources as signals, not confirmed primary reporting, unless the source text itself supports the claim.
+- If Source confidence is social_signal, do not state the source title as established fact; use the allowed social label form or explicitly say the source claimed/discussed it.
+- If Source confidence is link_wrapper, attribute to the named publication or keep the claim narrow; do not treat the wrapper as primary reporting.
 - For Reddit sources, start the bullet exactly with "Reddit:" unless citing a named external source in the post. Do not cite the author of the post.
 - For Twitter sources, start the bullet exactly with "Twitter:" unless citing a named external source in the post.
 - For Hacker News sources, start the bullet exactly with "Hacker News:" unless citing a named external source in the post.
@@ -346,8 +352,9 @@ Use only the supplied canonical briefing body and source metadata. Do not use ou
 Required output:
 - Return only Markdown.
 - Preserve this date range exactly: ${digest.periodStart} to ${digest.periodEnd}.
-- Preserve this selected source count exactly: ${digest.sources.length}.
-- Label that count as "Sources reviewed for briefing" or "Selected sources reviewed", not as total archive size or surfaced item count.
+- Preserve this candidate count exactly when shown: ${digest.candidateCount ?? digest.sources.length}.
+- Preserve this cited source count exactly: ${digest.sources.length}.
+- Label counts as "Candidates reviewed" and "Sources cited"; do not collapse them into one ambiguous source count.
 - Preserve the canonical briefing's Watchlist / Focus Areas / Other Items hierarchy when present.
 - Preserve explicit "no meaningful signal" watchlist lines. Do not omit absence reporting for required watchlist topics.
 - Do not replace watchlist or focus sections with generic categories such as "Industry Trends", "Community and Collaboration", "Security and Ethics", or "Additional Notable Mentions".
@@ -357,6 +364,9 @@ Required output:
 - Do not include a source appendix, source list, bibliography, "Sources" section, "Source Appendix" section, or short URL section.
 - Include the date range and selected source count near the top.
 - Include a short closing "Honest Read" section that identifies the strongest signals and notes when the window is thin, using only claims supported by the canonical briefing.
+- In "Honest Read", separate high-confidence selected signals from low-confidence social signals when both appear.
+- Do not turn one social-source complaint, claim, or discussion into a generalized industry practice.
+- Prefer phrases such as "Strongest selected signals", "Low-confidence social signals", and "Thin window" over broad trend claims.
 - Do not add facts, claims, interpretations, or links that are not supported by the supplied canonical briefing body and source metadata.
 - Do not promote weakly related general-news items above watchlist or focus-area items.
 - Deduplicate repeated claims across sections; keep the strongest placement and source link.
@@ -389,12 +399,26 @@ function formatFriendlyDigestSources(digest: DigestMarkdownResult): string {
       `Citation: ${source.citation}`,
       `Title: ${source.title ?? "Untitled"}`,
       `URL: ${source.url ?? "unavailable"}`,
+      `Source confidence: ${classifySourceConfidence({ canonicalUrl: source.url ?? null, sourceType: sourceTypeFromUrl(source.url ?? null) })}`,
       `Published: ${source.publishedAt ?? "unknown"}`,
       `Author: ${source.author ?? "unknown"}`,
       `Summary: ${source.summary ?? "unavailable"}`
     ];
     return metadata.join("\n");
   }).join("\n\n");
+}
+
+function sourceTypeFromUrl(input: string | null): DigestCandidate["sourceType"] | undefined {
+  if (!input) return undefined;
+  try {
+    const hostname = new URL(input).hostname;
+    if (hostname.includes("reddit.com")) return "reddit";
+    if (hostname.includes("x.com") || hostname.includes("twitter.com")) return "twitter";
+    if (hostname.includes("news.ycombinator.com")) return "hackernews";
+    return "article";
+  } catch {
+    return undefined;
+  }
 }
 
 function formatDigestSources(sources: RetrievedContent[], contexts: DigestSourceContext[]): string {
@@ -428,9 +452,11 @@ ${group.sources.map((item) => formatDigestSource(item.source, item.index, item.c
 
 function formatDigestSource(source: RetrievedContent, index: number, context: DigestSourceContext): string {
   const candidate = source as Partial<DigestCandidate>;
+  const sourceConfidence = classifySourceConfidence(candidate);
   const metadata = [
     `Selection: ${selectionLabel(context)}`,
     `Source type: ${candidate.sourceType ?? "unknown"}`,
+    `Source confidence: ${sourceConfidence}`,
     shouldIncludeDigestAuthor(candidate.sourceType) && source.author ? `Author: ${source.author}` : null,
     `Published: ${source.publishedAt ?? "unknown"}`,
     `URL: ${source.canonicalUrl ?? "unavailable"}`
@@ -439,6 +465,49 @@ function formatDigestSource(source: RetrievedContent, index: number, context: Di
   return `[${index + 1}] ${source.title ?? "Untitled"}
 ${metadata.join("\n")}
 Summary: ${source.summary ?? source.contentText.slice(0, 1200)}`;
+}
+
+function classifySourceConfidence(source: Partial<DigestCandidate>): DigestSourceContext["sourceConfidence"] {
+  if (source.sourceType && ["reddit", "twitter", "hackernews"].includes(source.sourceType)) {
+    return "social_signal";
+  }
+  if (isLinkWrapperUrl(source.canonicalUrl ?? null)) return "link_wrapper";
+  if (isPrimarySourceUrl(source.canonicalUrl ?? null)) return "primary";
+  return "reported";
+}
+
+function isLinkWrapperUrl(input: string | null): boolean {
+  if (!input) return false;
+  try {
+    const hostname = new URL(input).hostname.replace(/^www\./u, "");
+    return hostname === "news.google.com" || hostname === "newsletters.feedbinusercontent.com";
+  } catch {
+    return false;
+  }
+}
+
+function isPrimarySourceUrl(input: string | null): boolean {
+  if (!input) return false;
+  try {
+    const hostname = new URL(input).hostname.replace(/^www\./u, "");
+    return [
+      "openai.com",
+      "anthropic.com",
+      "microsoft.com",
+      "googleblog.com",
+      "blog.google",
+      "aws.amazon.com",
+      "kb.cert.org",
+      "cisa.gov",
+      "visa.com",
+      "mastercard.com",
+      "stripe.com",
+      "paypal.com",
+      "worldpay.com"
+    ].some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
 }
 
 function shouldIncludeDigestAuthor(sourceType: DigestCandidate["sourceType"] | undefined): boolean {

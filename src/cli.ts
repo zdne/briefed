@@ -586,6 +586,7 @@ function friendlyDigestJson(
     periodStart: result.periodStart,
     periodEnd: result.periodEnd,
     style,
+    candidateCount: result.candidateCount ?? result.sources.length,
     sourceCount: result.sources.length,
     markdown
   };

@@ -18,6 +18,7 @@ export interface DigestMarkdownResult {
   id: string | null;
   periodStart: string | null;
   periodEnd: string | null;
+  candidateCount?: number;
   body: string;
   sources: MarkdownSource[];
 }
@@ -58,12 +59,14 @@ export function renderDigestMarkdown(result: DigestMarkdownResult, createdAt = n
     result.sources
   );
   const citedSources = filterCitedSources(result.sources, body);
+  const candidateCount = result.candidateCount ?? result.sources.length;
   const frontmatter = [
     "---",
     "type: briefing",
     `created: ${createdAt.toISOString()}`,
     `period_start: ${result.periodStart ?? ""}`,
     `period_end: ${result.periodEnd ?? ""}`,
+    `candidate_count: ${candidateCount}`,
     `source_count: ${citedSources.length}`,
     "tags:",
     "  - brief",
@@ -197,18 +200,21 @@ function normalizeDigestHeadings(text: string): string {
 
 function normalizeDigestSectionHeading(section: string): string {
   if (/^## Required Watchlist\b/.test(section)) {
-    return normalizeWatchlistSubheadings(section.replace(/^## Required Watchlist\b/u, "## Watchlist"));
+    return normalizeDigestSubheadings(section.replace(/^## Required Watchlist\b/u, "## Watchlist"));
   }
   if (/^## Watchlist\b/.test(section)) {
-    return normalizeWatchlistSubheadings(section);
+    return normalizeDigestSubheadings(section);
   }
   if (/^## Highlighted Focus Areas\b/.test(section)) {
-    return section.replace(/^## Highlighted Focus Areas\b/u, "## Focus Areas");
+    return normalizeDigestSubheadings(section.replace(/^## Highlighted Focus Areas\b/u, "## Focus Areas"));
+  }
+  if (/^## Focus Areas\b/.test(section)) {
+    return normalizeDigestSubheadings(section);
   }
   return section;
 }
 
-function normalizeWatchlistSubheadings(section: string): string {
+function normalizeDigestSubheadings(section: string): string {
   return section.replace(/^### (.+)$/gmu, (_match, heading: string) => `### ${capitalizeHeading(heading)}`);
 }
 
@@ -221,6 +227,7 @@ function capitalizeHeading(heading: string): string {
 
 function capitalizeWord(word: string): string {
   if (word.length === 0) return word;
+  if (word.toLocaleLowerCase("en-US") === "ai") return "AI";
   return word[0]!.toLocaleUpperCase("en-US") + word.slice(1);
 }
 

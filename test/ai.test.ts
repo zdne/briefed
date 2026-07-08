@@ -74,6 +74,8 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("## Watchlist");
     expect(prompt).toContain("Allowed bullet forms:");
     expect(prompt).toContain("Report only what the cited source says");
+    expect(prompt).toContain("Use the supplied source confidence");
+    expect(prompt).toContain("Social-signal and link-wrapper sources can support only a weak signal");
     expect(prompt).toContain("Attribute claims to the source");
     expect(prompt).toContain("Use reporting language, not opinion, analyst filler, or judgements");
     expect(prompt).toContain("Do not write trend adjectives");
@@ -105,6 +107,7 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Do not repeat the same source and same claim across sections.");
     expect(prompt).toContain("Do not repeat the same source in multiple required watchlist or focus-area subsections.");
     expect(prompt).toContain("place it under the most specific matching topic");
+    expect(prompt).toContain("Required watchlist sections are stricter than focus and Other Items");
     expect(prompt).toContain("Allowed bullet forms:");
     expect(prompt).toContain("<Publication> reported <one concrete claim> [n].");
     expect(prompt).toContain("<Named company, project, or person> launched|published|added|tested|integrated|reported|warned|criticized");
@@ -175,6 +178,8 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Use only the exact required watchlist subsection headings listed below.");
     expect(prompt).toContain("Use only the exact focus-area subsection headings listed below.");
     expect(prompt).toContain("For each topic, write 0-5 bullets");
+    expect(prompt).toContain("Use only sources whose Selection line starts with \"required watchlist / <that exact topic>\"");
+    expect(prompt).toContain("Do not move focus-area, important-general, strategic-analysis, or general sources into a required watchlist subsection");
     expect(prompt).toContain("If a focus area overlaps a required watchlist topic already covered above");
     expect(prompt).toContain("Include at most 5 focus areas and 1-4 bullets per focus area.");
     expect(prompt).toContain("For every Watchlist subsection, use at most 5 bullets.");
@@ -185,9 +190,12 @@ describe("buildDigestPrompt", () => {
     expect(prompt).toContain("Do not create focus-area subsections with any other heading text.");
     expect(prompt).toContain("Required watchlist source candidates:");
     expect(prompt).toContain("Selection: required watchlist / agentic payments");
+    expect(prompt).toContain("Source confidence: reported");
     expect(prompt).toContain("Important general source candidates:");
     expect(prompt).toContain("Selection: important general");
     expect(prompt).toContain("Treat social, discussion, and link-wrapper sources as signals");
+    expect(prompt).toContain("If Source confidence is social_signal");
+    expect(prompt).toContain("If Source confidence is link_wrapper");
     expect(prompt).toContain("Do not include URL reference sections");
   });
 
@@ -227,9 +235,11 @@ describe("buildDigestPrompt", () => {
     const prompt = buildDigestPrompt(sources, 24);
 
     expect(prompt).toContain("Source type: reddit");
+    expect(prompt).toContain("Source confidence: social_signal");
     expect(prompt).not.toContain("Author: /u/ePaint");
     expect(prompt).not.toContain("/u/ePaint");
     expect(prompt).toContain("Source type: article");
+    expect(prompt).toContain("Source confidence: reported");
     expect(prompt).toContain("Author: Reporter");
   });
 
@@ -303,13 +313,16 @@ describe("buildFriendlyDigestPrompt", () => {
     expect(prompt).toContain("[Source title](https://example.com)");
     expect(prompt).toContain("Do not include a source appendix");
     expect(prompt).toContain("Preserve this date range exactly: 2026-06-04T00:00:00.000Z to 2026-06-05T00:00:00.000Z");
-    expect(prompt).toContain("Preserve this selected source count exactly: 1");
-    expect(prompt).toContain("Label that count as \"Sources reviewed for briefing\"");
+    expect(prompt).toContain("Preserve this candidate count exactly when shown: 1");
+    expect(prompt).toContain("Preserve this cited source count exactly: 1");
+    expect(prompt).toContain("Label counts as \"Candidates reviewed\" and \"Sources cited\"");
     expect(prompt).toContain("Preserve the canonical briefing's Watchlist / Focus Areas / Other Items hierarchy when present.");
     expect(prompt).toContain("Preserve explicit \"no meaningful signal\" watchlist lines.");
     expect(prompt).toContain("Do not replace watchlist or focus sections with generic categories");
     expect(prompt).toContain("Rank and group by relevance to the canonical watchlist and focus areas");
     expect(prompt).toContain("Include a short closing \"Honest Read\" section");
+    expect(prompt).toContain("separate high-confidence selected signals from low-confidence social signals");
+    expect(prompt).toContain("Do not turn one social-source complaint");
     expect(prompt).toContain("Do not promote weakly related general-news items above watchlist or focus-area items.");
     expect(prompt).toContain("Deduplicate repeated claims across sections");
   });
