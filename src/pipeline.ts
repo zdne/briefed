@@ -122,6 +122,26 @@ export interface GmailSyncSummary {
   cursor?: string;
 }
 
+export async function ingestClip(
+  entry: SourceEntry,
+  ai: AnalystAI,
+  log: SyncLogger = () => {}
+): Promise<{ id: string; isNew: boolean }> {
+  const stored = await upsertSourceContent(entry, "clip", "full");
+  const label = entry.title ?? entry.canonicalUrl ?? `clip:${entry.sourceItemId}`;
+  log(`${stored.isNew ? "Stored new clip" : "Updated existing clip"}: ${label}`);
+  if (stored.needsEnrichment && entry.contentText) {
+    log(`Enriching clip ${stored.id}`);
+    await fullyEnrichContent(stored.id, entry.title, entry.contentText, ai);
+    log("Clip enrichment complete");
+  } else if (!entry.contentText) {
+    log("Clip stored without content — URL preserved, no enrichment");
+  } else {
+    log("Clip already enriched; skipped");
+  }
+  return { id: stored.id, isNew: stored.isNew };
+}
+
 export async function enrichContent(id: string, entry: SourceEntry, ai: AnalystAI): Promise<void> {
   return fullyEnrichContent(id, entry.title, entry.contentText, ai);
 }

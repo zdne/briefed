@@ -1,8 +1,8 @@
 import type { SourceEntry } from "./types.js";
 
-export type SourceType = "article" | "reddit" | "hackernews" | "twitter";
+export type SourceType = "article" | "reddit" | "hackernews" | "twitter" | "clip";
 export type EnrichmentMode = "full" | "embedded_only";
-export type LightweightSourceType = Exclude<SourceType, "article">;
+export type LightweightSourceType = "reddit" | "hackernews" | "twitter";
 
 export function detectSourceType(entry: Pick<SourceEntry, "canonicalUrl">): SourceType {
   if (!entry.canonicalUrl) return "article";
@@ -28,6 +28,6 @@ export function desiredEnrichmentMode(
   sourceType: SourceType,
   lightweightSourceTypes: readonly LightweightSourceType[]
 ): EnrichmentMode {
-  if (sourceType === "article") return "full";
-  return lightweightSourceTypes.includes(sourceType) ? "embedded_only" : "full";
+  if (sourceType === "article" || sourceType === "clip") return "full";
+  return lightweightSourceTypes.includes(sourceType as LightweightSourceType) ? "embedded_only" : "full";
 }

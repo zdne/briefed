@@ -2,10 +2,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { AnalystAI } from "./ai.js";
+import { normalizeClip } from "./clip.js";
 import { config } from "./config.js";
-import { getDigestForRendering, pool } from "./db.js";
+import { getDigestForRendering, listClips, pool, retrieveRelevantClips } from "./db.js";
 import { createDigest } from "./digest.js";
 import { renderDigestMarkdown, renderQueryMarkdown } from "./markdown.js";
+import { ingestClip } from "./pipeline.js";
 import { queryArchive } from "./query.js";
 import {
   briefingPreferencesSchema,
@@ -150,6 +152,58 @@ server.registerTool(
       sources: result.sources,
       markdown
     }, markdown);
+  }
+);
+
+server.registerTool(
+  "clip",
+  {
+    title: "Clip",
+    description:
+      "Save a URL or text to the Brief archive for later retrieval and briefing. Use for prompts like \"clip this for me: https://...\", \"save this page to my archive\", \"clip this and note it's relevant to agentic payments: https://...\", or \"save this note: [pasted text]\". One of url or text is required. The note is appended to the content before enrichment.",
+    inputSchema: {
+      url: z.string().url().optional().describe("URL to fetch and store."),
+      text: z.string().min(1).optional().describe("Raw text to store directly."),
+      title: z.string().optional().describe("Optional title override."),
+      note: z.string().optional().describe("Optional note appended to the content before enrichment.")
+    }
+  },
+  async ({ url, text, title, note }) => {
+    if (!url && !text) {
+      return jsonToolResult({ error: "clip requires url or text" }, "clip requires url or text", true);
+    }
+    const collectedAt = new Date().toISOString();
+    const { entry, fetchBlocked } = await normalizeClip({ url, text, title, note }, collectedAt);
+    const result = await ingestClip(entry, new AnalystAI(), stderrLogger);
+    const label = entry.title ?? url ?? "text clip";
+    const warning = fetchBlocked
+      ? ` The page was blocked by a bot-challenge (e.g. Cloudflare) — the URL is stored but no content was fetched. Try re-clipping with the article text, or use web_search to find the content and re-clip with text.`
+      : "";
+    const message = `${result.isNew ? "Clipped" : "Updated clip"}: ${label}.${warning}`;
+    return jsonToolResult({ id: result.id, isNew: result.isNew, title: entry.title, url: entry.canonicalUrl, fetchBlocked, message }, message);
+  }
+);
+
+server.registerTool(
+  "clips",
+  {
+    title: "Clips",
+    description:
+      "List or search saved clips. Use for prompts like \"what have I clipped recently?\", \"show me my last 10 clips\", \"find what I clipped about MCP\", or \"have I saved anything on Stripe?\". Omit query for a chronological list; supply query for semantic search over clips.",
+    inputSchema: {
+      query: z.string().optional().describe("Semantic search query. Omit to list most recent clips."),
+      limit: z.number().int().min(1).max(50).optional().describe("Maximum clips to return. Defaults to 10.")
+    }
+  },
+  async ({ query, limit = 10 }) => {
+    if (query) {
+      const ai = new AnalystAI();
+      const embedding = await ai.embed(query);
+      const results = await retrieveRelevantClips(embedding, limit);
+      return jsonToolResult({ query, clips: results });
+    }
+    const clips = await listClips(limit);
+    return jsonToolResult({ clips });
   }
 );
 

@@ -21,8 +21,10 @@ import {
   writeJsonFile,
   writeMarkdownFile
 } from "./output.js";
+import { normalizeClip } from "./clip.js";
 import {
   enrichStoredContent,
+  ingestClip,
   lookbackSince,
   syncFeedbin,
   syncGmail,
@@ -33,6 +35,7 @@ import {
 import { queryArchive, queryFollowUp } from "./query.js";
 import { TwitterApiClient } from "./twitterapi.js";
 import { enabledRssFeeds, gmailQueryFromUserConfig, loadUserConfig } from "./user-config.js";
+import { listClips, retrieveRelevantClips } from "./db.js";
 import type { SourceType } from "./enrichment-policy.js";
 import type { FriendlyDigestStyle, QuerySession } from "./types.js";
 
@@ -376,7 +379,7 @@ program
   });
 
 function isSourceType(value: string): value is SourceType {
-  return value === "reddit" || value === "hackernews" || value === "twitter" || value === "article";
+  return value === "reddit" || value === "hackernews" || value === "twitter" || value === "article" || value === "clip";
 }
 
 program
@@ -510,6 +513,45 @@ digestCommand
     const path = await writeMarkdownFile(outputPath, markdown);
     log(`Wrote friendly briefing Markdown to ${path}`);
     printFormattedOutput(format, friendlyDigestJson(result, createdAt, style, markdown), markdown, true);
+  });
+
+program
+  .command("clip")
+  .description("Save a URL or text to the archive")
+  .option("--url <url>", "URL to fetch and store")
+  .option("--text <text>", "raw text to store directly")
+  .option("--title <title>", "optional title override")
+  .option("--note <note>", "optional note appended to the content before enrichment")
+  .action(async (options: { url?: string; text?: string; title?: string; note?: string }) => {
+    if (!options.url && !options.text) {
+      throw new Error("clip requires --url or --text");
+    }
+    const collectedAt = new Date().toISOString();
+    const log = timestampLogger;
+    log("Normalizing clip");
+    const { entry, fetchBlocked } = await normalizeClip(options, collectedAt);
+    if (fetchBlocked) log("Fetch blocked by bot-challenge — URL stored, no content fetched");
+    log("Initializing AI client");
+    const result = await ingestClip(entry, new AnalystAI(), log);
+    console.log(JSON.stringify({ id: result.id, isNew: result.isNew, title: entry.title, url: entry.canonicalUrl, fetchBlocked }, null, 2));
+  });
+
+program
+  .command("clips")
+  .description("List or search saved clips")
+  .argument("[query]", "semantic search query; omit to list most recent clips")
+  .option("-l, --limit <number>", "maximum clips to return", "10")
+  .action(async (query: string | undefined, options: { limit: string }) => {
+    const limit = positiveInteger(options.limit, "--limit");
+    if (query) {
+      const ai = new AnalystAI();
+      const embedding = await ai.embed(query);
+      const results = await retrieveRelevantClips(embedding, limit);
+      console.log(JSON.stringify(results, null, 2));
+    } else {
+      const clips = await listClips(limit);
+      console.log(JSON.stringify(clips, null, 2));
+    }
   });
 
 program.parseAsync().catch((error) => {

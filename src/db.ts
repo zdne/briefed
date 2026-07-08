@@ -83,7 +83,7 @@ export async function upsertSourceContent(
   entry: SourceEntry,
   sourceType: SourceType,
   desiredMode: EnrichmentMode
-): Promise<{ id: string; needsEnrichment: boolean }> {
+): Promise<{ id: string; needsEnrichment: boolean; isNew: boolean }> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -138,7 +138,7 @@ export async function upsertSourceContent(
       id = inserted.rows[0]!.id;
     }
     await client.query("COMMIT");
-    return { id, needsEnrichment };
+    return { id, needsEnrichment, isNew: !existing.rows[0] };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -218,6 +218,56 @@ export async function enrichmentCandidates(
     [filters.sourceType ?? null, filters.hours ?? null, filters.limit]
   );
   return result.rows;
+}
+
+export interface ClipRow {
+  id: string;
+  title: string | null;
+  canonicalUrl: string | null;
+  summary: string | null;
+  collectedAt: string;
+  note: string | null;
+}
+
+export async function listClips(limit: number): Promise<ClipRow[]> {
+  const result = await pool.query<{ id: string; title: string | null; canonicalUrl: string | null; summary: string | null; collectedAt: string; rawEntry: unknown }>(
+    `SELECT id::text, title, canonical_url AS "canonicalUrl",
+      analyst_summary AS summary, collected_at::text AS "collectedAt", raw_entry AS "rawEntry"
+     FROM content
+     WHERE source_key LIKE 'clip:%'
+     ORDER BY collected_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    canonicalUrl: row.canonicalUrl,
+    summary: row.summary,
+    collectedAt: row.collectedAt,
+    note: rawEntryNote(row.rawEntry)
+  }));
+}
+
+export async function retrieveRelevantClips(embedding: number[], limit: number): Promise<RetrievedContent[]> {
+  const result = await pool.query<RetrievedContent>(
+    `SELECT id::text, title, canonical_url AS "canonicalUrl", author,
+      published_at::text AS "publishedAt", analyst_summary AS summary, content_text AS "contentText",
+      1 - (embedding <=> $1::vector) AS score
+     FROM content
+     WHERE embedding IS NOT NULL AND enrichment_status = 'complete'
+       AND source_key LIKE 'clip:%'
+     ORDER BY embedding <=> $1::vector
+     LIMIT $2`,
+    [vectorLiteral(embedding), limit]
+  );
+  return result.rows;
+}
+
+function rawEntryNote(rawEntry: unknown): string | null {
+  if (!rawEntry || typeof rawEntry !== "object") return null;
+  const entry = rawEntry as Record<string, unknown>;
+  return typeof entry.note === "string" ? entry.note : null;
 }
 
 export async function retrieveRelevant(embedding: number[], limit: number): Promise<RetrievedContent[]> {

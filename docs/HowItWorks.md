@@ -65,18 +65,57 @@ Safe to interrupt with Ctrl-C — stored entries remain, cursor is not advanced,
 npm run cli -- sync-feedbin --reset-cursor
 ```
 
+### Manual clipping
+
+`npm run cli -- clip` and the `clip` MCP tool save a URL or text directly to the archive, bypassing the collector schedule.
+
+**URL clips** — Briefed fetches the page, extracts the title, and converts the HTML body to plain text (15s timeout). Deduplicated by a hash of the URL: re-clipping the same URL upserts the existing entry.
+
+**Text clips** — Text is stored directly with no fetch. Deduplicated by a hash of the content.
+
+Both accept an optional `--title` override and an optional `--note`. The note is appended to the content before enrichment and also stored in `source_summary`.
+
+```bash
+npm run cli -- clip --url https://example.com/article
+npm run cli -- clip --url https://example.com/article --note "relevant to agentic payments"
+npm run cli -- clip --text "interesting finding..." --title "My note"
+```
+
+**Cloudflare and bot-challenge pages**
+
+Some sites return HTTP 200 with a Cloudflare or bot-challenge page rather than a real error. Briefed detects this by inspecting the response body for known patterns (`cf-browser-verification`, `cf_chl_` tokens, cookies-required messages, "Attention Required! | Blocked"). When detected:
+
+- The fetched content is discarded — the challenge page is not stored or enriched.
+- The canonical URL is preserved — the clip exists in the archive and is findable.
+- `fetchBlocked: true` is returned. Via MCP, the agent receives a message suggesting it use `web_search` to retrieve the content and re-clip with `--text`. Via CLI, a warning is printed.
+
+**Priority in briefings**
+
+Clips have `source_type = 'clip'` and are always fully enriched. They receive a fixed priority in digest selection — regardless of keyword score, clips are placed in the `important_general` bucket before any keyword-scored entries.
+
+**Retrieval**
+
+```bash
+npm run cli -- clips                    # list 10 most recent clips
+npm run cli -- clips --limit 20         # list more
+npm run cli -- clips "agentic payments" # semantic search over clips
+```
+
+Via MCP: the `clips` tool accepts an optional `query` for semantic search or returns a chronological list when omitted.
+
 ---
 
 ## Source Types and Enrichment
 
 ### Source types
 
-Each entry is assigned one of four `source_type` values:
+Each entry is assigned one of five `source_type` values:
 
 - `article` — entries not classified as a known lightweight source
 - `reddit` — canonical URLs on a Reddit hostname with a path beginning with `/r/`
 - `hackernews` — canonical URLs on `news.ycombinator.com/item` with an `id` query parameter
 - `twitter` — posts imported from Twitter/X list APIs
+- `clip` — manually saved URLs or text via the `clip` command or MCP tool
 
 Source type controls the default enrichment policy.
 
@@ -88,7 +127,7 @@ Each entry records an `enrichment_mode`:
 1. LLM receives title + normalized text and returns `summary`, `topics` (3-8 lowercase tags, capped at 10), and `entities` (up to 30 named entities with types).
 2. OpenAI creates a 1,536-dimension embedding from the title, generated summary, topics, and full text.
 
-Default for `article` entries.
+Default for `article` and `clip` entries. Clips always use full enrichment regardless of `LIGHTWEIGHT_SOURCE_TYPES`.
 
 **`embedded_only`** — One AI call per entry:
 1. OpenAI creates a 1,536-dimension embedding from title + full text.

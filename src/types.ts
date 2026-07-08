@@ -41,7 +41,7 @@ export interface ContentForEnrichment {
   title: string | null;
   sourceSummary: string | null;
   contentText: string;
-  sourceType: "article" | "reddit" | "hackernews" | "twitter";
+  sourceType: "article" | "reddit" | "hackernews" | "twitter" | "clip";
   enrichmentMode: "full" | "embedded_only";
 }
 
@@ -57,7 +57,7 @@ export interface RetrievedContent {
 }
 
 export interface DigestCandidate extends RetrievedContent {
-  sourceType: "article" | "reddit" | "hackernews" | "twitter";
+  sourceType: "article" | "reddit" | "hackernews" | "twitter" | "clip";
   sourceKey: string;
   topicTags: string[];
   entities: unknown;

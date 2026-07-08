@@ -65,6 +65,11 @@ Example prompts:
 > - "Create a briefing for the last 48 hours"
 > - "Brief me on recent topics from Twitter"
 > - "Add 'agent memory' to my required topics"
+> - "Clip this for me: https://..."
+> - "Clip this and note it's relevant to my agentic payments watchlist: https://..."
+> - "Save this to my archive: [pasted text]"
+> - "What have I clipped recently?"
+> - "Find what I clipped about MCP"
 
 **MCP tools:**
 
@@ -73,6 +78,8 @@ Example prompts:
 | `brief` | Ad hoc question over the archive with citations |
 | `briefing` | Show the latest (or a specific) stored briefing |
 | `create_briefing` | Generate a new briefing — calls the LLM, takes 30-60s |
+| `clip` | Save a URL or text to the archive immediately |
+| `clips` | List or search saved clips |
 | `get_user_config` | Read current collector and topic config |
 | `update_user_config` | Replace full config |
 | `update_collectors` | Replace collectors section |
@@ -179,6 +186,11 @@ Add `FEEDBIN_EMAIL` and `FEEDBIN_PASSWORD` to `.env`, set `"feedbin": { "enabled
 | `npm run cli -- sync-rss --hours 48` | Sync RSS feeds only |
 | `npm run cli -- sync-gmail --hours 48` | Sync Gmail newsletters only |
 | `npm run sync-twitter` | Sync Twitter/X lists only |
+| `npm run cli -- clip --url <url>` | Clip a URL to the archive |
+| `npm run cli -- clip --url <url> --note "..."` | Clip a URL with a note |
+| `npm run cli -- clip --text "..."` | Clip raw text to the archive |
+| `npm run cli -- clips` | List 10 most recent clips |
+| `npm run cli -- clips "<query>"` | Search clips semantically |
 | `npm run cli -- enrich --source reddit --limit 20` | Upgrade embedded-only entries to full enrichment |
 | `npm run sync-feedbin` | Sync Feedbin |
 | `npm run cli -- sync-feedbin --hours 48` | Feedbin sync with lookback |

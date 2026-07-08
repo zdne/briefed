@@ -626,6 +626,7 @@ function rankedImportantGeneralCandidates(candidates: DigestCandidate[], minScor
 }
 
 function importantGeneralScore(candidate: DigestCandidate): number {
+  if (candidate.sourceType === "clip") return 1000;
   const text = searchableText(candidate);
   const rawText = rawEntrySearchText(candidate.rawEntry);
   let score = 0;
