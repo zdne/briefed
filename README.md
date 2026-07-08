@@ -56,13 +56,15 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 Use absolute paths throughout — MCP hosts don't inherit your shell environment or `PATH`.
 
-Restart Claude Desktop. Example prompts:
+Restart Claude Desktop. 
 
-- "What's my latest briefing?"
-- "Give me a brief on agentic payments"
-- "Create a briefing for the last 48 hours"
-- "Brief me on recent topics from Twitter"
-- "Add 'agent memory' to my required topics"
+Example prompts:
+
+> - "What's my latest briefing?"
+> - "Give me a brief on agentic payments"
+> - "Create a briefing for the last 48 hours"
+> - "Brief me on recent topics from Twitter"
+> - "Add 'agent memory' to my required topics"
 
 **MCP tools:**
 
@@ -191,7 +193,7 @@ Add `FEEDBIN_EMAIL` and `FEEDBIN_PASSWORD` to `.env`, set `"feedbin": { "enabled
 
 ## Author
 
-[Zdenek Z Nemec](https://zdne.org) · [@zdne](https://x.com/zdne)
+[Zdenek "Z" Nemec](https://zdne.org) · [@zdne](https://x.com/zdne)
 
 ## License
 
