@@ -188,3 +188,11 @@ Add `FEEDBIN_EMAIL` and `FEEDBIN_PASSWORD` to `.env`, set `"feedbin": { "enabled
 ## Reference
 
 [`docs/HowItWorks.md`](docs/HowItWorks.md) covers enrichment modes, source types, source selection strategy, all CLI flags, all `.env` variables, and operational details.
+
+## Author
+
+[Zdenek Z Nemec](https://zdne.org) · [@zdne](https://x.com/zdne)
+
+## License
+
+MIT — see [LICENSE](LICENSE).
