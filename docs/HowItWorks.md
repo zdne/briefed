@@ -1,363 +1,272 @@
-# How Briefed.sh Works
+# How Briefed Works
 
-Briefed.sh supports multiple optional collectors: direct RSS/Atom polling, Gmail newsletter sync, TwitterAPI.io list sync, and Feedbin sync. Postgres and pgvector provide the local archive, OpenAI provides embeddings, and OpenAI or Anthropic provide language-model synthesis.
-
-Direct RSS/Atom items, Gmail newsletters, Twitter/X list tweets, and Feedbin entries are normalized into the same `content` table. Source identity fields keep collectors separate while shared embeddings make every collector searchable through queries and eligible for briefings.
+Briefed collects content from optional sources — RSS/Atom feeds, Gmail newsletters, Twitter/X lists, and Feedbin — normalizes everything into a shared Postgres archive, enriches entries with OpenAI embeddings and LLM summaries, and generates briefings grounded in your configured topics.
 
 ```text
 RSS/Atom feeds ────┐
 Gmail newsletters ─┤
-TwitterAPI.io ─────┤
-Feedbin API ───────┘
-        │
-        └─ sync CLIs ─> normalize/dedupe ─> Postgres + pgvector ─┬─ CLI query/digest render
-                                      │                          ├─ HTTP API query
-                                      │                          └─ local MCP tools
-                                      │                             ├─ brief: vector query archive
-                                      │                             ├─ briefing: read stored digest
-                                      │                             └─ create_briefing: query PG + synthesize + store
-                                      ├─ OpenAI embeddings
-                                      └─ LLM enrichment and synthesis
+TwitterAPI.io ─────┤  sync → normalize → Postgres + pgvector
+Feedbin API ───────┘                           │
+                                               ├─ MCP tools (brief / briefing / create_briefing)
+                                        OpenAI embeddings    ├─ CLI digest → Markdown
+                                        LLM enrichment       └─ CLI query → Markdown
 ```
 
-`npm run sync` reads `briefed.config.json` and runs every enabled collector. `--hours` and `--days` apply as lookbacks to RSS, Gmail, and Feedbin; Twitter/X list sync uses its stored latest-tweet cursor. The aggregate sync reports per-collector results as JSON, records individual collector failures, continues to later enabled collectors, and exits nonzero if any enabled collector failed.
+`npm run sync` reads `briefed.config.json` and runs every enabled collector. `--hours` and `--days` apply as lookbacks to RSS, Gmail, and Feedbin; Twitter/X uses a stored latest-tweet cursor. The aggregate sync reports per-collector results as JSON, records failures, continues to later collectors, and exits nonzero if any enabled collector failed.
 
-## Direct RSS/Atom Sync
+---
 
-`npm run cli -- sync-rss` imports feeds from `collectors.rss.feeds` in `briefed.config.json`. There is no `--feeds` override; use `USER_CONFIG_PATH` or `BRIEFED_CONFIG_PATH` only when the entire user config file lives elsewhere.
+## Collectors
 
-The user config is JSON so agents can manage it deterministically:
+### Direct RSS/Atom
 
-```json
-{
-  "version": 1,
-  "collectors": {
-    "rss": {
-      "enabled": true,
-      "feeds": [
-        {
-          "title": "AI Agents",
-          "url": "https://www.reddit.com/r/AI_Agents.rss",
-          "category": "reddit",
-          "enabled": true
-        }
-      ]
-    }
-  },
-  "briefing": {
-    "requiredTopics": ["agentic payments"],
-    "focusAreas": ["MCP"]
-  }
-}
-```
+`npm run cli -- sync-rss` polls feeds from `collectors.rss.feeds` in `briefed.config.json`. Feeds are fetched sequentially with a configurable inter-feed delay. Reddit feeds use the longer `RSS_REDDIT_FETCH_DELAY_MS` delay (default 10s).
 
-RSS sync fetches enabled feeds sequentially, sends a configured user agent, applies per-request timeouts, and waits `RSS_FETCH_DELAY_MS` between feeds. Reddit feeds use the larger `RSS_REDDIT_FETCH_DELAY_MS` inter-feed delay, which defaults to 10 seconds. This is separate from `RSS_REQUEST_TIMEOUT_MS`, which is the HTTP request timeout.
+The collector uses feed-provided content only — it does not fetch original article pages. It processes at most `RSS_MAX_ITEMS_PER_FEED` newest matching items per feed per run. For an initial sync of a large feed archive, use `--hours 48` to avoid importing everything at once.
 
-`REDDIT_RSS_USER` and `REDDIT_RSS_FEED` are recommended for Reddit feeds. Get these account-scoped values from an authenticated Reddit RSS URL such as `https://www.reddit.com/r/example.rss?user=<user>&feed=<feed>`. Briefed.sh appends them only to outbound Reddit RSS requests. They are not stored in `briefed.config.json`, source keys, canonical URLs, or logs. Without them, Reddit RSS is likely to hit rate limits. Before fetching Reddit RSS, the client also bootstraps cookies from `https://www.reddit.com/` and sends the resulting cookie names only to Reddit requests.
+HTTP 429 is a soft per-feed failure: Briefed records a retry-after, skips that feed while the retry window is active, and continues with remaining feeds. Reddit 429s also set a shared `rss:domain:reddit.com:state` retry window so consecutive subreddit feeds aren't hammered in the same run.
 
-When `REDDIT_RSS_DEBUG=true`, debug logs include redacted request URLs, `has_user`, `has_feed`, feed token length, request headers with cookie values redacted, Reddit cookie names, response status, content type, `retry-after`, and Reddit `x-ratelimit-*` headers. If a stale Reddit domain retry blocks testing, remove the `sync_state` row for `rss:domain:reddit.com:state`.
+**Reddit RSS credentials** are strongly recommended. Without `REDDIT_RSS_USER` and `REDDIT_RSS_FEED`, Reddit RSS frequently hits rate limits. Get them from an authenticated Reddit RSS URL at `https://www.reddit.com/prefs/feeds`. Briefed appends them only to outbound Reddit RSS requests — they are not stored in source keys, canonical URLs, or logs.
 
-RSS stores items with `source_key = 'rss:feed:<feed_hash>'`. Each feed has JSON state in `sync_state` under `rss:feed:<feed_hash>:state`, including recent item IDs, newest published timestamp, last success, last error, retry-after, auth mode, and overflow count.
+When `REDDIT_RSS_DEBUG=true`, logs include redacted request URLs, request headers, cookie names, response status, content-type, `retry-after`, and `x-ratelimit-*` headers. To clear a stale Reddit domain retry, delete the `sync_state` row for `rss:domain:reddit.com:state`.
 
-The collector uses feed-provided content only. It does not fetch original article pages in v1. It processes at most `RSS_MAX_ITEMS_PER_FEED` newest matching items per feed per run. Use `npm run cli -- sync-rss --hours 48` for the first run to avoid importing large historical feeds.
+RSS feed state is stored in `sync_state` under `rss:feed:<feed_hash>:state` as JSON, including recent item IDs, newest published timestamp, last success, last error, retry-after, and overflow count.
 
-HTTP 429 is treated as a soft per-feed failure. Briefed.sh records retry-after state, skips that feed while retry-after is active, and continues syncing other feeds. Reddit 429s also set a shared `rss:domain:reddit.com:state` retry window so the same run does not hammer the next subreddit feed immediately.
+### Feedbin
 
-## Feedbin Sync Pipeline
-
-Feedbin is one optional collector. Use it when you want Feedbin as an input source; use direct RSS and Gmail when you want Briefed to collect feeds and newsletters directly.
-
-Run:
-
-```bash
-npm run sync-feedbin
-```
-
-The sync command:
+`npm run sync-feedbin` syncs Feedbin entries using HTTP Basic Auth credentials.
 
 1. Reads the last successful Feedbin cursor from `sync_state`.
-2. Requests Feedbin entries created after that timestamp.
-3. Follows Feedbin pagination and reports total and per-entry progress.
-4. Normalizes each entry:
-   - Converts HTML into plain text.
-   - Removes common tracking parameters from canonical URLs.
-   - Preserves the original Feedbin JSON.
-5. Stores or updates the entry in `content`.
-6. Deduplicates entries using Feedbin entry ID and canonical URL.
-7. Selects the entry's enrichment strategy.
-8. Stores enrichment results and an embedding.
-9. Advances the Feedbin cursor only after the complete sync finishes.
+2. Requests Feedbin entries created after that timestamp, following pagination.
+3. Normalizes each entry: converts HTML to plain text, removes tracking parameters from canonical URLs, preserves original JSON.
+4. Upserts into `content`, deduplicating by Feedbin entry ID and canonical URL.
+5. Enriches or embeds each new entry.
+6. Advances the cursor only after the complete sync finishes.
 
-It is safe to interrupt sync with `Ctrl-C`. Already processed entries remain stored, but the cursor is not advanced. The next sync may revisit those entries, and deduplication prevents duplicate rows.
+Feedbin limits pages to 100 entries. Briefed refuses to advance the cursor if Feedbin reports more records than pagination returned.
 
-Feedbin limits pages to 100 entries. Briefed.sh follows Feedbin's pagination links and refuses to advance the cursor if Feedbin reports more matching records than were fetched.
-
-To clear a bad cursor and safely rescan the full Feedbin archive:
+Safe to interrupt with Ctrl-C — stored entries remain, cursor is not advanced, the next run deduplicates. To clear a bad cursor and rescan the full archive:
 
 ```bash
 npm run cli -- sync-feedbin --reset-cursor
 ```
 
-Existing entries are deduplicated during the rescan.
+### Gmail newsletters
 
-For a recent-only initial sync or backfill:
+`npm run cli -- sync-gmail` imports newsletters matching a configured Gmail query or label.
 
-```bash
-npm run cli -- sync-feedbin --hours 48
-npm run cli -- sync-feedbin --days 7
-```
+Gmail sync lists matching messages, fetches full payloads, parses subject/sender/snippet/internal-date/body, and stores each message with `source_key = 'gmail:query:<query_hash>'`. HTML bodies are converted to text when no plain-text body is available. The cursor is Gmail internal date, stored in `sync_state` and advanced only after all selected messages are processed.
 
-These options temporarily override the starting cursor without changing the stored cursor before processing. After all matching pages finish successfully, Briefed.sh stores the newest fetched Feedbin timestamp as the next incremental cursor. This is normally close to the present, but deliberately uses Feedbin's timestamp rather than the local clock to avoid skipping entries.
+The `gmail-auth` helper starts a temporary `127.0.0.1` callback server, prints an OAuth URL, waits for the browser loopback, exchanges the code, and prints `GMAIL_REFRESH_TOKEN`. No tunnel is needed when the browser and CLI are on the same machine.
 
-If a recent-only sync is interrupted, the previous stored cursor remains unchanged. Resume using the same lookback option. If Feedbin returns no matching entries, Briefed.sh also leaves the existing cursor unchanged.
+### Twitter/X lists
 
-## Gmail Newsletter Sync
+`npm run sync-twitter` imports configured Twitter/X lists through TwitterAPI.io.
 
-`npm run cli -- sync-gmail` imports newsletters from a configured Gmail query or label.
+For each list, Briefed stores the newest successfully processed tweet ID in `sync_state` under `twitterapi:list:<list_id>:latest_id`. A normal run fetches newest tweets first and stops when it reaches that stored tweet. If the stored tweet is not reached, sync stops at the configured page/tweet limits. Twitter/X entries use `source_key = 'twitterapi:list:<list_id>'` and `source_type = 'twitter'`.
 
-Gmail setup uses a Google OAuth Desktop client:
+---
 
-1. Create/select a Google Cloud project.
-2. Enable the Gmail API.
-3. Configure OAuth consent, add your account as a test user, and include `https://www.googleapis.com/auth/gmail.readonly`.
-4. Create an OAuth client with application type `Desktop app`.
-5. Put the client values in `.env`.
-6. Run `npm run gmail-auth` to generate `GMAIL_REFRESH_TOKEN`.
+## Source Types and Enrichment
 
-Configure OAuth refresh-token credentials plus one message selector:
+### Source types
 
-```env
-GMAIL_CLIENT_ID=...
-GMAIL_CLIENT_SECRET=...
-GMAIL_REFRESH_TOKEN=...
-GMAIL_MAX_MESSAGES=1
-```
+Each entry is assigned one of four `source_type` values:
 
-Configure the message selector in `briefed.config.json`. `query` takes precedence; blank or `null` query values fall back to `label:<label>`.
+- `article` — entries not classified as a known lightweight source
+- `reddit` — canonical URLs on a Reddit hostname with a path beginning with `/r/`
+- `hackernews` — canonical URLs on `news.ycombinator.com/item` with an `id` query parameter
+- `twitter` — posts imported from Twitter/X list APIs
 
-```json
-{
-  "collectors": {
-    "gmail": {
-      "enabled": true,
-      "label": "newsletter",
-      "query": null
-    }
-  }
-}
-```
+Source type controls the default enrichment policy.
 
-The `gmail-auth` helper is intentionally separate from Gmail sync: it starts a temporary `127.0.0.1` callback server, prints a Google OAuth URL with the readonly Gmail scope and PKCE challenge, waits for the browser loopback callback, exchanges the code, prints `GMAIL_REFRESH_TOKEN=...`, and exits. No tunnel is needed when the browser and CLI run on the same machine.
-
-Gmail sync lists matching messages, fetches full payloads, parses the subject, sender, snippet, internal date, and text body, then stores each message with `source_key = 'gmail:query:<query_hash>'`. It uses Gmail internal date as the v1 cursor in `sync_state` and advances the cursor only after selected messages are processed. HTML bodies are converted to text when no plain-text body is available.
-
-## Twitter/X List Sync
-
-`npm run sync-twitter` imports the configured Twitter/X lists through TwitterAPI.io.
-
-Configure:
-
-```env
-TWITTERAPI_IO_API_KEY=...
-TWITTERAPI_LIST_MAX_PAGES=3
-TWITTERAPI_LIST_MAX_TWEETS=200
-```
-
-Configure the list IDs in `briefed.config.json`:
-
-```json
-{
-  "collectors": {
-    "twitter": {
-      "enabled": true,
-      "listIds": ["2062878395029983324"]
-    }
-  }
-}
-```
-
-For each list, Briefed.sh stores the newest successfully processed tweet ID in `sync_state` under `twitterapi:list:<list_id>:latest_id`. A normal run fetches newest tweets first and stops when it reaches that stored tweet. If the stored tweet is not reached, sync continues only up to the configured page and tweet limits. The sync summary records pages fetched, tweets returned and processed, whether a next cursor was present, and the reason the list stopped.
-
-Twitter/X entries use `source_key = 'twitterapi:list:<list_id>'`, `source_item_id = '<tweet_id>'`, and `source_type = 'twitter'`. Normalization keeps the tweet author, URL, text, quoted or retweeted tweet text, and attached article title or preview when present. Twitter/X entries are embedding-only by default because `twitter` is included in `LIGHTWEIGHT_SOURCE_TYPES`.
-
-## Source Detection
-
-Briefed.sh currently assigns one of four `source_type` values:
-
-- `article`: entries that are not classified as a known lightweight source.
-- `reddit`: canonical URLs on a Reddit hostname with a path beginning with `/r/`.
-- `hackernews`: canonical URLs on `news.ycombinator.com/item` with an `id` query parameter.
-- `twitter`: posts imported from Twitter/X list APIs.
-
-This source type controls the default enrichment policy. It does not prevent an entry from appearing in queries or briefings.
-
-## Enrichment Modes
+### Enrichment modes
 
 Each entry records an `enrichment_mode`:
 
-- `full`: LLM analysis plus embedding.
-- `embedded_only`: embedding without individual LLM analysis.
+**`full`** — Two AI calls per entry:
+1. LLM receives title + normalized text and returns `summary`, `topics` (3-8 lowercase tags, capped at 10), and `entities` (up to 30 named entities with types).
+2. OpenAI creates a 1,536-dimension embedding from the title, generated summary, topics, and full text.
 
-### Full Enrichment
+Default for `article` entries.
 
-Full enrichment makes two AI requests per entry.
+**`embedded_only`** — One AI call per entry:
+1. OpenAI creates a 1,536-dimension embedding from title + full text.
+2. Source-provided summary is copied to `analyst_summary`; topic tags and entities are empty.
 
-First, the configured LLM receives the title and normalized text and returns:
+Default for `reddit`, `hackernews`, and `twitter` (controlled by `LIGHTWEIGHT_SOURCE_TYPES`). These sources are often high-volume post or discussion wrappers; skipping per-item LLM analysis keeps sync fast and cost predictable.
 
-- `summary`: a concise factual summary.
-- `topics`: short lowercase topic tags.
-- `entities`: important named entities and their types.
+Both modes participate in vector search and briefing source selection.
 
-Briefed.sh validates the response, normalizes and deduplicates tags/entities, and caps them at 10 topics and 30 entities. Excess valid items are trimmed instead of failing the complete enrichment.
+### Upgrading embedded-only entries
 
-Second, OpenAI creates a 1,536-dimension embedding from the title, generated summary, topics, and full text.
-
-Full enrichment is the default for article entries.
-
-### Lightweight Embedding-Only Strategy
-
-Reddit, Hacker News, and Twitter/X feeds can be high volume, and their entries are often post or discussion wrappers rather than complete source articles. Individually summarizing every item would increase LLM calls, token usage, and sync duration before the MVP has demonstrated that item-level analysis is valuable.
-
-By default:
-
-```env
-LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews,twitter
-```
-
-For each lightweight item, Briefed.sh stores:
-
-- Source identity and original JSON. Every entry uses `source_key` and `source_item_id`; for example, Feedbin entries use `source_key = 'feedbin:feed:<feed_id>'`, RSS entries use `source_key = 'rss:feed:<feed_hash>'`, Gmail entries use `source_key = 'gmail:query:<query_hash>'`, and Twitter/X list entries can use `source_key = 'twitterapi:list:<list_id>'`.
-- Canonical URL, title, author, and timestamps.
-- Original HTML and normalized full post text.
-- Source-provided summary when available.
-- An OpenAI embedding generated from the title and full post text.
-- `analyst_summary` copied from the source-provided summary.
-- Empty generated topic tags and entities.
-- `source_type = 'reddit'`, `source_type = 'hackernews'`, or `source_type = 'twitter'`.
-- `enrichment_mode = 'embedded_only'`.
-- `enrichment_status = 'complete'`.
-
-This keeps lightweight entries semantically searchable and eligible for briefings while avoiding one LLM analysis call per item.
-
-RSS/Feedbin Reddit content generally contains the original post body, but it does not contain comments, discussion summaries, scores, or reliable engagement signals.
-
-RSS/Feedbin Hacker News content is normally the HN item or discussion wrapper, not the full linked article.
-
-## Upgrading Lightweight Enrichment
-
-The lightweight policy is reversible. Stored embedding-only entries can be upgraded to full enrichment without fetching them from the original collector again.
+Stored `embedded_only` entries can be upgraded to full enrichment without re-fetching from the source:
 
 ```bash
-# Fully enrich the newest 20 eligible Reddit entries
 npm run cli -- enrich --source reddit --limit 20
-
-# Fully enrich the newest 20 eligible Hacker News entries
 npm run cli -- enrich --source hackernews --limit 20
-
-# Fully enrich the newest 20 eligible Twitter/X entries
 npm run cli -- enrich --source twitter --limit 20
-
-# Fully enrich up to 100 Reddit entries collected in the last seven days
 npm run cli -- enrich --source reddit --limit 100 --hours 168
-
-# Fully enrich every eligible stored Reddit entry
 npm run cli -- enrich --source reddit --all
 ```
 
-The command selects newest entries first. It upgrades `embedded_only` entries, retries pending or failed entries, and retries entries stuck in `processing` for more than 15 minutes.
+The command selects newest entries first, upgrades `embedded_only`, retries failed or pending entries, and recovers entries stuck in `processing` for more than 15 minutes.
 
-To change which non-article source types use embedding-only sync:
+To change which non-article source types use embedding-only sync, set `LIGHTWEIGHT_SOURCE_TYPES` in `.env` and remove a type from the list to fully enrich it during future syncs. Completed full-enrichment entries are never downgraded.
 
-```env
-LIGHTWEIGHT_SOURCE_TYPES=reddit,hackernews,twitter
+---
+
+## Source Selection for Briefings
+
+Briefing source selection runs before LLM synthesis to prevent high-volume sources from drowning out important topics.
+
+1. Load up to `DIGEST_CANDIDATE_LIMIT` enriched entries published in the briefing lookback window.
+2. For each `requiredTopic`, embed the topic phrase and vector-search recent entries to fill a protected bucket.
+3. For each `focusArea`, do the same with a smaller budget.
+4. Fill the remaining budget with newest general entries, subject to source-type and author caps.
+5. Deduplicate across buckets while preserving bucket priority (required → focus → general).
+
+Selection counts are logged: required-topic count, focus-area count, important-general count, general count.
+
+**Bucket controls:**
+
+| Variable | Default | Effect |
+|---|---|---|
+| `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES` | 6 | Minimum sources reserved per required topic |
+| `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES` | 16 | Maximum sources per required topic |
+| `DIGEST_FOCUS_AREA_MIN_ENTRIES` | 3 | Minimum sources reserved per focus area |
+| `DIGEST_FOCUS_AREA_MAX_ENTRIES` | 10 | Maximum sources per focus area |
+| `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | 0.25 | Minimum cosine similarity for required-topic matches |
+| `DIGEST_FOCUS_AREA_MIN_SCORE` | 0.35 | Minimum cosine similarity for focus-area matches |
+| `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | 3 | Minimum keyword score for important-general entries |
+| `DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES` | 12 | Cap on important-general entries |
+| `DIGEST_GENERAL_MAX_ENTRIES` | 120 | Cap on general fill entries |
+
+**Diversity caps:**
+
+| Variable | Default | Effect |
+|---|---|---|
+| `DIGEST_MAX_ARTICLE_ENTRIES` | 80 | Cap on article-type entries per briefing |
+| `DIGEST_MAX_REDDIT_ENTRIES` | 25 | Cap on Reddit entries per briefing |
+| `DIGEST_MAX_HACKERNEWS_ENTRIES` | 15 | Cap on Hacker News entries per briefing |
+| `DIGEST_MAX_TWITTER_ENTRIES` | 20 | Cap on Twitter entries per briefing |
+| `DIGEST_MAX_ENTRIES_PER_SOURCE_KEY` | 20 | Cap per feed/list/source key per briefing |
+| `DIGEST_MAX_ENTRIES_PER_AUTHOR` | 4 | Cap per normalized author per briefing |
+| `DIGEST_MAX_ENTRIES` | 200 | Hard cap on total entries sent to one briefing prompt |
+| `DIGEST_REPEAT_LOOKBACK_HOURS` | 72 | Hours of prior briefing history checked for repeat suppression |
+| `DIGEST_MAX_FOLLOWUPS_PER_EVENT` | 1 | Max follow-up sources allowed for a recently briefed event |
+
+---
+
+## Briefing Output
+
+The briefing command:
+
+1. Loads candidates and runs topic-aware selection.
+2. Sends selected entries to the configured LLM for a canonical source-grounded briefing.
+3. Stores the canonical briefing in the `digests` table.
+4. Generates a friendly Markdown rewrite (unless `--canonical-only`).
+5. Writes the Markdown file to `DIGEST_OUTPUT_DIR`.
+
+**Output modes:**
+
+```bash
+npm run digest                        # friendly Markdown
+npm run digest -- --style warm        # warmer newsletter tone
+npm run digest -- --emit-canonical    # friendly + canonical Markdown
+npm run digest -- --canonical-only    # canonical Markdown only (Obsidian-friendly)
+npm run cli -- digest canonical       # re-render latest stored briefing without LLM
+npm run cli -- digest canonical --id 4
+npm run cli -- digest friendly --id 4 --style warm
 ```
 
-Remove a source from this list to fully enrich it during future syncs.
+Point `DIGEST_OUTPUT_DIR` at an Obsidian vault folder for automatic Obsidian-compatible briefings. Canonical output uses Obsidian heading links (`[[#Source 32|32]]`) and frontmatter.
 
-Completed fully enriched entries are not downgraded if the setting later changes back to `embedded_only`.
+---
 
 ## Semantic Queries
-
-Run:
 
 ```bash
 npm run cli -- query "What changed in AI agent observability?"
 npm run cli -- query-followup "Which of these seem most important?"
 ```
 
-Or send a request to `POST /query`.
+Query flow:
+1. Embeds the question with OpenAI.
+2. Uses pgvector cosine similarity to retrieve up to `QUERY_LIMIT` relevant entries.
+3. Sends retrieved titles, summaries, URLs, and dates to the LLM.
+4. Returns a cited answer with `[1]`-style inline citations and a source list.
 
-Briefed.sh:
+Query output is saved as Markdown under `QUERY_OUTPUT_DIR` by default. Use `--no-save` to print to stdout instead. Use `--format json` for machine-readable output. Progress logs go to stderr.
 
-1. Creates an OpenAI embedding for the question.
-2. Uses pgvector cosine similarity to retrieve relevant archived entries.
-3. Sends the retrieved titles, summaries, URLs, and dates to the configured LLM.
-4. Returns a synthesized answer with `[1]`-style citations and a source list.
+`query-followup` uses the latest saved query session as context (stored in `.latest.json` in `QUERY_OUTPUT_DIR`). It reuses the prior answer and sources without running a new embedding search.
 
-Both fully enriched and embedding-only lightweight entries participate in semantic retrieval.
+---
 
-The CLI renders queries as Markdown by default, including clickable source links, authors, dates, summaries, and similarity scores. Query answers are prompted to stay brief: 3-5 cited bullets, with an optional short list of best sources to open. Query results are saved as Markdown under `QUERY_OUTPUT_DIR` unless `--no-save` is supplied. Saved Markdown is not echoed to stdout. Use `--format json` for machine-readable stdout, or `--save-json` to also write a visible JSON sidecar. CLI query progress logs are written to stderr so stdout remains usable for Markdown or JSON piping.
+## Data Model
 
-`npm run cli -- query-followup "<question>"` uses the latest saved query session as context. Briefed.sh stores that context in a hidden `.latest.json` state file in `QUERY_OUTPUT_DIR`. It reuses the previous answer and sources, calls the LLM for synthesis, and saves the follow-up as a new query session. It does not run a new embedding search.
+- **`content`** — normalized source content, enrichment output, and vector embedding.
+- **`sync_state`** — KV store for collector cursors and per-feed state.
+- **`digests`** — generated briefing body and referenced content IDs.
 
-## Daily Briefing
+Failed enrichments are stored with `enrichment_status = 'failed'` and an error message for inspection and future retry.
 
-Run:
+---
 
-```bash
-npm run digest
-npm run digest -- --style warm
-npm run digest -- --emit-canonical
-npm run digest -- --hours 48
-npm run digest -- --hours 24 --days-ago 3
-npm run digest -- --canonical-only
-npm run cli -- digest canonical
-```
+## All Environment Variables
 
-The briefing command:
-
-1. Loads completed entries published during the lookback period.
-2. Loads a broader recent candidate pool controlled by `DIGEST_CANDIDATE_LIMIT`.
-3. Uses vector search for each configured required topic and focus area.
-4. Selects protected topic buckets, then fills the remaining budget with newest-published general entries.
-5. Sends selected titles, stored summaries, URLs, and dates to the configured LLM.
-6. Asks the LLM to create a canonical source-grounded briefing.
-7. Stores the canonical briefing in the local `digests` table.
-8. Unless `--canonical-only` is set, asks the LLM for a friendly Markdown rewrite.
-9. Writes the briefing Markdown file. With `--emit-canonical`, it also writes the canonical Markdown; when `--output` is supplied, the canonical file is written beside that output path.
-
-Embedding-only lightweight entries remain eligible for the briefing. The briefing sees their source-provided summaries rather than individually generated LLM summaries. Their embeddings are still used for required-topic and focus-area source selection.
-
-To prevent unexpectedly large or expensive LLM requests, Briefed.sh sends at most `DIGEST_MAX_ENTRIES` selected entries. The default is `200`. Briefing logs report the total eligible count, candidate count, and final required-topic, focus-area, and general source counts.
-
-Briefing topic config protects important topics during selection and shapes the synthesis prompt:
-
-```json
-{
-  "briefing": {
-    "requiredTopics": ["agentic payments", "agentic B2B", "agentic commerce", "personal memory"],
-    "focusAreas": ["MCP", "AI observability", "agent frameworks"]
-  }
-}
-```
-
-Required topics always appear under a required watchlist section. If the selected sources have no meaningful update for one of those topics, the briefing explicitly says there was no signal in the window. Focus areas are softer interests; the briefing highlights them only when there is meaningful source-backed signal.
-
-Each briefing is stored in Postgres in canonical form and written as a timestamped Markdown file under `DIGEST_OUTPUT_DIR`. The default CLI output is a friendly briefing; `--emit-canonical` writes the canonical Markdown alongside the friendly output, while `--canonical-only` and `digest canonical` write only the canonical Markdown with Obsidian-compatible frontmatter, briefing body, and clickable sources. Inline canonical citations use Obsidian heading links such as `[[#Source 32|32]]`, and source titles link to original URLs. Point `DIGEST_OUTPUT_DIR` at an Obsidian vault folder to make generated briefings appear there without an additional integration.
-
-CLI Markdown is the default and is written to a file without echoing the document to stdout. `--format json` prints machine-readable output. Progress logs are written to stderr so JSON stdout remains parseable.
-
-`npm run cli -- digest canonical` re-renders the latest stored canonical briefing from Postgres without calling the LLM. Use `--id <briefing_id>` to render a specific stored briefing. MCP briefing tools continue to create and return canonical briefing Markdown, not the CLI-only friendly rewrite.
-
-## Local And External Data
-
-The normalized archive, generated enrichment, embeddings, cursors, and briefings are stored locally in Postgres.
-
-External requests still occur:
-
-- Feedbin supplies entries when Feedbin sync is used.
-- RSS/Atom feed hosts supply entries when direct RSS sync is used.
-- Gmail supplies messages when newsletter sync is used.
-- TwitterAPI.io supplies configured Twitter/X list timelines.
-- OpenAI receives text for embeddings.
-- The configured LLM provider receives text for full enrichment, queries, and briefings.
+| Variable | Default | Purpose |
+|---|---|---|
+| `DATABASE_URL` | `postgres://pnd:pnd@localhost:5432/pnd` | Postgres connection string |
+| `PG_POOL_MAX` | `3` | Max Postgres pool connections per process |
+| `PORT` | `3000` | HTTP server port |
+| `OPENAI_API_KEY` | — | Required for embeddings |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model (fixed at 1536 dimensions) |
+| `LLM_PROVIDER` | `openai` | `openai` or `anthropic` |
+| `OPENAI_LLM_MODEL` | `gpt-4.1-mini` | OpenAI model for enrichment and synthesis |
+| `ANTHROPIC_API_KEY` | — | Required when `LLM_PROVIDER=anthropic` |
+| `ANTHROPIC_LLM_MODEL` | `claude-3-5-haiku-latest` | Anthropic model for enrichment and synthesis |
+| `LIGHTWEIGHT_SOURCE_TYPES` | `reddit,hackernews,twitter` | Source types that use embedding-only enrichment |
+| `QUERY_LIMIT` | `8` | Default vector matches passed to query synthesis |
+| `DIGEST_HOURS` | `24` | Default briefing lookback window |
+| `DIGEST_CANDIDATE_LIMIT` | `1000` | Newest completed entries loaded before topic selection |
+| `DIGEST_MAX_ENTRIES` | `200` | Hard cap on entries sent to one briefing prompt |
+| `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES` | `6` | Minimum sources reserved per required topic |
+| `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES` | `16` | Maximum sources per required topic |
+| `DIGEST_FOCUS_AREA_MIN_ENTRIES` | `3` | Minimum sources reserved per focus area |
+| `DIGEST_FOCUS_AREA_MAX_ENTRIES` | `10` | Maximum sources per focus area |
+| `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | `0.25` | Minimum cosine similarity for required-topic matches |
+| `DIGEST_FOCUS_AREA_MIN_SCORE` | `0.35` | Minimum cosine similarity for focus-area matches |
+| `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | `3` | Minimum keyword score for important-general entries |
+| `DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES` | `12` | Cap on important-general entries per briefing |
+| `DIGEST_GENERAL_MAX_ENTRIES` | `120` | Cap on general fill entries per briefing |
+| `DIGEST_MAX_ARTICLE_ENTRIES` | `80` | Cap on article entries per briefing |
+| `DIGEST_MAX_REDDIT_ENTRIES` | `25` | Cap on Reddit entries per briefing |
+| `DIGEST_MAX_HACKERNEWS_ENTRIES` | `15` | Cap on Hacker News entries per briefing |
+| `DIGEST_MAX_TWITTER_ENTRIES` | `20` | Cap on Twitter entries per briefing |
+| `DIGEST_MAX_ENTRIES_PER_SOURCE_KEY` | `20` | Cap per source key (feed/list) per briefing |
+| `DIGEST_MAX_ENTRIES_PER_AUTHOR` | `4` | Cap per normalized author per briefing |
+| `DIGEST_REPEAT_LOOKBACK_HOURS` | `72` | Hours of prior briefing history for repeat suppression |
+| `DIGEST_MAX_FOLLOWUPS_PER_EVENT` | `1` | Max follow-up sources per recently briefed event |
+| `DIGEST_OUTPUT_DIR` | `output/briefings` | Directory for generated briefing Markdown |
+| `QUERY_OUTPUT_DIR` | `output/queries` | Directory for generated query Markdown |
+| `RSS_FETCH_DELAY_MS` | `1500` | Inter-feed delay for RSS (ms) |
+| `RSS_REDDIT_FETCH_DELAY_MS` | `10000` | Inter-feed delay for Reddit RSS (ms) |
+| `RSS_MAX_ITEMS_PER_FEED` | `50` | Max items processed per feed per run |
+| `RSS_USER_AGENT` | `briefed-rss/0.1` | User-Agent header for RSS requests |
+| `RSS_REQUEST_TIMEOUT_MS` | `15000` | HTTP request timeout for RSS fetches (ms) |
+| `REDDIT_RSS_USER` | — | Reddit RSS credential (from authenticated RSS URL) |
+| `REDDIT_RSS_FEED` | — | Reddit RSS credential (from authenticated RSS URL) |
+| `REDDIT_RSS_DEBUG` | `false` | Log redacted Reddit RSS request/response details |
+| `GMAIL_CLIENT_ID` | — | Google OAuth client ID |
+| `GMAIL_CLIENT_SECRET` | — | Google OAuth client secret |
+| `GMAIL_REFRESH_TOKEN` | — | Gmail OAuth refresh token (from `npm run gmail-auth`) |
+| `GMAIL_MAX_MESSAGES` | `50` | Max Gmail messages fetched per sync |
+| `TWITTERAPI_IO_API_KEY` | — | TwitterAPI.io API key |
+| `TWITTERAPI_IO_BASE_URL` | `https://api.twitterapi.io` | TwitterAPI.io base URL |
+| `TWITTERAPI_LIST_MAX_PAGES` | `3` | Max pages fetched per Twitter list per sync |
+| `TWITTERAPI_LIST_MAX_TWEETS` | `200` | Max tweets processed per Twitter list per sync |
+| `FEEDBIN_EMAIL` | — | Feedbin account email |
+| `FEEDBIN_PASSWORD` | — | Feedbin account password |
+| `FEEDBIN_BASE_URL` | `https://api.feedbin.com/v2` | Feedbin API base URL |
+| `USER_CONFIG_PATH` | `briefed.config.json` | Path to user config file |
