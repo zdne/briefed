@@ -43,8 +43,9 @@ Briefed supports multiple optional collectors: direct RSS/Atom feed polling, Gma
 
 ```bash
 cp .env.example .env
+cp briefed.config.example.json briefed.config.json
 # Fill in model-provider credentials and operational settings.
-# Edit briefed.config.json, or copy briefed.config.example.json to briefed.config.json.
+# Edit briefed.config.json for your collectors and briefing topics.
 
 colima start # If using Colima on macOS.
 docker compose up -d postgres
@@ -52,6 +53,8 @@ npm install
 npm run db:migrate
 npm run sync -- --hours 48
 ```
+
+`briefed.config.json` is local user configuration and is intentionally ignored by Git. Commit changes to `briefed.config.example.json` only when updating the starter template for new users.
 
 After a system restart, start Colima before bringing Postgres back up:
 
