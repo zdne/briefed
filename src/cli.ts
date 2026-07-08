@@ -21,7 +21,15 @@ import {
   writeJsonFile,
   writeMarkdownFile
 } from "./output.js";
-import { enrichStoredContent, lookbackSince, syncFeedbin, syncGmail, syncRssFeeds, syncTwitterLists } from "./pipeline.js";
+import {
+  enrichStoredContent,
+  lookbackSince,
+  syncFeedbin,
+  syncGmail,
+  syncRssFeeds,
+  syncTwitterLists,
+  type SyncResult
+} from "./pipeline.js";
 import { queryArchive, queryFollowUp } from "./query.js";
 import { TwitterApiClient } from "./twitterapi.js";
 import { enabledRssFeeds, gmailQueryFromUserConfig, loadUserConfig } from "./user-config.js";
@@ -29,6 +37,14 @@ import type { SourceType } from "./enrichment-policy.js";
 import type { FriendlyDigestStyle, QuerySession } from "./types.js";
 
 const program = new Command().name("brief").description("Briefed.sh personal news intelligence");
+const collectorOrder = ["rss", "gmail", "twitter", "feedbin"] as const;
+type CollectorName = typeof collectorOrder[number];
+const collectorLabels: Record<CollectorName, string> = {
+  rss: "RSS",
+  gmail: "Gmail",
+  twitter: "Twitter/X",
+  feedbin: "Feedbin"
+};
 
 program.command("migrate").description("Apply database migrations").action(async () => {
   await migrate();
@@ -50,8 +66,8 @@ program.command("sync")
         : undefined;
     const userConfig = await loadUserConfig();
     const log = timestampLogger;
-    const results: Record<string, unknown> = {};
-    const failures: Record<string, string> = {};
+    const results: Partial<Record<CollectorName, SyncResult>> = {};
+    const failures: Partial<Record<CollectorName, string>> = {};
     let enabledCount = 0;
 
     if (userConfig.collectors.rss.enabled) {
@@ -177,6 +193,7 @@ program.command("sync")
       results,
       failures
     }, null, 2));
+    log(formatFullSyncSummary(results, failures));
   });
 
 program.command("sync-feedbin")
@@ -523,6 +540,23 @@ function timestampLogger(message: string): void {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatFullSyncSummary(
+  results: Partial<Record<CollectorName, SyncResult>>,
+  failures: Partial<Record<CollectorName, string>>
+): string {
+  const syncedSources = collectorOrder
+    .filter((name) => results[name] !== undefined)
+    .map((name) => `${collectorLabels[name]} (${results[name]!.fetched})`);
+  const failedSources = collectorOrder
+    .filter((name) => failures[name] !== undefined)
+    .map((name) => collectorLabels[name]);
+  const total = collectorOrder.reduce((sum, name) => sum + (results[name]?.fetched ?? 0), 0);
+  const sources = syncedSources.length > 0 ? syncedSources.join(", ") : "none";
+  const failed = failedSources.length > 0 ? `; failed: ${failedSources.join(", ")}` : "";
+
+  return `Full sync complete: ${total} item${total === 1 ? "" : "s"} synced from ${sources}${failed}`;
 }
 
 function printFormattedOutput(
