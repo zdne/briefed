@@ -6,7 +6,7 @@ Briefed collects content from optional sources — RSS/Atom feeds, Gmail newslet
 RSS/Atom feeds ────┐
 Gmail newsletters ─┤
 TwitterAPI.io ─────┤  sync → normalize → Postgres + pgvector
-Feedbin API ───────┘                           │
+Feedbin API ───────┘  (optional)               │
                                                ├─ MCP tools (brief / briefing / create_briefing)
                                         OpenAI embeddings    ├─ CLI digest → Markdown
                                         LLM enrichment       └─ CLI query → Markdown
@@ -32,7 +32,21 @@ When `REDDIT_RSS_DEBUG=true`, logs include redacted request URLs, request header
 
 RSS feed state is stored in `sync_state` under `rss:feed:<feed_hash>:state` as JSON, including recent item IDs, newest published timestamp, last success, last error, retry-after, and overflow count.
 
-### Feedbin
+### Gmail newsletters
+
+`npm run cli -- sync-gmail` imports newsletters matching a configured Gmail query or label.
+
+Gmail sync lists matching messages, fetches full payloads, parses subject/sender/snippet/internal-date/body, and stores each message with `source_key = 'gmail:query:<query_hash>'`. HTML bodies are converted to text when no plain-text body is available. The cursor is Gmail internal date, stored in `sync_state` and advanced only after all selected messages are processed.
+
+The `gmail-auth` helper starts a temporary `127.0.0.1` callback server, prints an OAuth URL, waits for the browser loopback, exchanges the code, and prints `GMAIL_REFRESH_TOKEN`. No tunnel is needed when the browser and CLI are on the same machine.
+
+### Twitter/X lists
+
+`npm run sync-twitter` imports configured Twitter/X lists through TwitterAPI.io.
+
+For each list, Briefed stores the newest successfully processed tweet ID in `sync_state` under `twitterapi:list:<list_id>:latest_id`. A normal run fetches newest tweets first and stops when it reaches that stored tweet. If the stored tweet is not reached, sync stops at the configured page/tweet limits. Twitter/X entries use `source_key = 'twitterapi:list:<list_id>'` and `source_type = 'twitter'`.
+
+### Feedbin (optional)
 
 `npm run sync-feedbin` syncs Feedbin entries using HTTP Basic Auth credentials.
 
@@ -50,20 +64,6 @@ Safe to interrupt with Ctrl-C — stored entries remain, cursor is not advanced,
 ```bash
 npm run cli -- sync-feedbin --reset-cursor
 ```
-
-### Gmail newsletters
-
-`npm run cli -- sync-gmail` imports newsletters matching a configured Gmail query or label.
-
-Gmail sync lists matching messages, fetches full payloads, parses subject/sender/snippet/internal-date/body, and stores each message with `source_key = 'gmail:query:<query_hash>'`. HTML bodies are converted to text when no plain-text body is available. The cursor is Gmail internal date, stored in `sync_state` and advanced only after all selected messages are processed.
-
-The `gmail-auth` helper starts a temporary `127.0.0.1` callback server, prints an OAuth URL, waits for the browser loopback, exchanges the code, and prints `GMAIL_REFRESH_TOKEN`. No tunnel is needed when the browser and CLI are on the same machine.
-
-### Twitter/X lists
-
-`npm run sync-twitter` imports configured Twitter/X lists through TwitterAPI.io.
-
-For each list, Briefed stores the newest successfully processed tweet ID in `sync_state` under `twitterapi:list:<list_id>:latest_id`. A normal run fetches newest tweets first and stops when it reaches that stored tweet. If the stored tweet is not reached, sync stops at the configured page/tweet limits. Twitter/X entries use `source_key = 'twitterapi:list:<list_id>'` and `source_type = 'twitter'`.
 
 ---
 

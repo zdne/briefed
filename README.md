@@ -2,7 +2,15 @@
 
 **Your agent's morning read.**
 
-Briefed syncs your feeds, newsletters, and social sources, enriches each entry with AI, and generates a daily briefing grounded in your configured topics. Use it via MCP (e.g. in Claude), or run sync and digest from the CLI to Markdown.
+Briefed syncs your feeds, newsletters, and social sources, enriches each entry with AI, and generates a daily briefing grounded in your configured topics. Use it via MCP (e.g. in Claude), or from the CLI to Obsidian Markdown.
+
+Supported sources:
+
+- RSS/Atom feeds 
+  - including Reddit and Google News
+- Email newsletters
+- Twitter/X lists
+- Feedbin.com
 
 ## Prerequisites
 
@@ -54,6 +62,7 @@ Restart Claude Desktop. Example prompts:
 - "Give me a brief on agentic payments"
 - "Create a briefing for the last 48 hours"
 - "Brief me on recent topics from Twitter"
+- "Add 'agent memory' to my required topics"
 
 **MCP tools:**
 
@@ -81,33 +90,6 @@ Automate with cron:
 */15 * * * * cd /path/to/briefed && npm run sync >> /var/log/briefed-sync.log 2>&1
 0 7  * * * cd /path/to/briefed && npm run digest >> /var/log/briefed-digest.log 2>&1
 ```
-
-## Commands
-
-| Command | Purpose |
-|---|---|
-| `npm run sync` | Sync every enabled collector |
-| `npm run sync -- --hours 48` | Sync with a lookback |
-| `npm run digest` | Generate and write a friendly briefing for the last 24h |
-| `npm run digest -- --hours 48` | Custom lookback |
-| `npm run cli -- query "<question>"` | Query the archive |
-| `npm run cli -- query-followup "<question>"` | Follow-up on latest saved query |
-| `npm run digest -- --canonical-only` | Write only the canonical Markdown (Obsidian-friendly) |
-| `npm run digest -- --emit-canonical` | Write both friendly and canonical Markdown |
-| `npm run cli -- digest canonical` | Re-render latest stored briefing without calling LLM |
-| `npm run cli -- digest canonical --id 4` | Re-render a specific stored briefing |
-| `npm run digest -- --hours 24 --days-ago 3` | Briefing window ending 3 days ago |
-| `npm run cli -- digest friendly --id 4 --style warm` | Re-render as warm friendly Markdown |
-| `npm run cli -- sync-rss --hours 48` | Sync RSS feeds only |
-| `npm run cli -- sync-gmail --hours 48` | Sync Gmail newsletters only |
-| `npm run sync-twitter` | Sync Twitter/X lists only |
-| `npm run sync-feedbin` | Sync Feedbin |
-| `npm run cli -- sync-feedbin --hours 48` | Feedbin sync with lookback |
-| `npm run cli -- sync-feedbin --reset-cursor` | Clear cursor and rescan full Feedbin archive |
-| `npm run cli -- enrich --source reddit --limit 20` | Upgrade embedded-only entries to full enrichment |
-| `npm run mcp` | Start the stdio MCP server |
-| `npm run db:migrate` | Apply SQL migrations |
-| `npm test` | Run unit tests |
 
 ## Configuration
 
@@ -148,6 +130,18 @@ See `.env.example` for all variables and their defaults.
 
 ## Collector Setup
 
+### RSS feeds
+
+Add feeds to `collectors.rss.feeds` in `briefed.config.json` — each entry needs `title`, `url`, and `"enabled": true`. RSS works out of the box with no extra credentials.
+
+**Reddit RSS** requires credentials to avoid rate limits. Get them from an authenticated Reddit RSS URL (`https://www.reddit.com/prefs/feeds`):
+
+```
+https://www.reddit.com/r/example.rss?user=<user>&feed=<feed>
+```
+
+Add to `.env`: `REDDIT_RSS_USER=...` and `REDDIT_RSS_FEED=...`
+
 ### Gmail newsletters
 
 1. Create a Google Cloud project, enable the Gmail API, configure OAuth consent with scope `https://www.googleapis.com/auth/gmail.readonly`, and create a Desktop app OAuth client.
@@ -160,19 +154,36 @@ See `.env.example` for all variables and their defaults.
 1. Get a [TwitterAPI.io](https://twitterapi.io) API key, add `TWITTERAPI_IO_API_KEY=...` to `.env`.
 2. Add list IDs to `briefed.config.json`: `"twitter": { "enabled": true, "listIds": ["..."] }`
 
-### Reddit RSS
-
-Reddit RSS requires credentials to avoid rate limits. Get them from an authenticated Reddit RSS URL (`https://www.reddit.com/prefs/feeds`):
-
-```
-https://www.reddit.com/r/example.rss?user=<user>&feed=<feed>
-```
-
-Add to `.env`: `REDDIT_RSS_USER=...` and `REDDIT_RSS_FEED=...`
-
-### Feedbin
+### Feedbin (optional)
 
 Add `FEEDBIN_EMAIL` and `FEEDBIN_PASSWORD` to `.env`, set `"feedbin": { "enabled": true }` in `briefed.config.json`, then run `npm run sync-feedbin -- --hours 48` for the initial sync.
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `npm run sync` | Sync every enabled collector |
+| `npm run sync -- --hours 48` | Sync with a lookback |
+| `npm run digest` | Generate and write a friendly briefing for the last 24h |
+| `npm run digest -- --hours 48` | Custom lookback |
+| `npm run cli -- query "<question>"` | Query the archive |
+| `npm run cli -- query-followup "<question>"` | Follow-up on latest saved query |
+| `npm run digest -- --canonical-only` | Write only the canonical Markdown (Obsidian-friendly) |
+| `npm run digest -- --emit-canonical` | Write both friendly and canonical Markdown |
+| `npm run cli -- digest canonical` | Re-render latest stored briefing without calling LLM |
+| `npm run cli -- digest canonical --id 4` | Re-render a specific stored briefing |
+| `npm run digest -- --hours 24 --days-ago 3` | Briefing window ending 3 days ago |
+| `npm run cli -- digest friendly --id 4 --style warm` | Re-render as warm friendly Markdown |
+| `npm run cli -- sync-rss --hours 48` | Sync RSS feeds only |
+| `npm run cli -- sync-gmail --hours 48` | Sync Gmail newsletters only |
+| `npm run sync-twitter` | Sync Twitter/X lists only |
+| `npm run cli -- enrich --source reddit --limit 20` | Upgrade embedded-only entries to full enrichment |
+| `npm run sync-feedbin` | Sync Feedbin |
+| `npm run cli -- sync-feedbin --hours 48` | Feedbin sync with lookback |
+| `npm run cli -- sync-feedbin --reset-cursor` | Clear cursor and rescan full Feedbin archive |
+| `npm run mcp` | Start the stdio MCP server |
+| `npm run db:migrate` | Apply SQL migrations |
+| `npm test` | Run unit tests |
 
 ## Reference
 
