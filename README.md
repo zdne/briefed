@@ -15,11 +15,13 @@ Supported sources:
 ## Prerequisites
 
 - Node.js 22+
-- Docker + Compose (for Postgres)
+- Postgres with pgvector — local Docker (default) or a cloud provider like [Neon](https://neon.tech)
 - OpenAI API key — always required for embeddings
 - OpenAI or Anthropic API key for enrichment and synthesis
 
 ## Setup
+
+**Local Postgres (default):**
 
 ```bash
 cp .env.example .env
@@ -33,6 +35,30 @@ npm run sync -- --hours 48
 ```
 
 After a system restart: `docker compose up -d postgres` (on macOS with Colima: `colima start` first).
+
+**Cloud Postgres with Neon:**
+
+Neon's free tier (0.5 GB) is sufficient for personal use. Create a project at [neon.tech](https://neon.tech), then:
+
+```bash
+cp .env.example .env
+cp briefed.config.example.json briefed.config.json
+# Set DATABASE_URL and PG_POOL_MAX in .env (see below)
+# Add API keys; configure feeds and topics in briefed.config.json
+
+npm install
+npm run db:migrate
+npm run sync -- --hours 48
+```
+
+Neon `.env` additions:
+
+```
+DATABASE_URL=postgresql://<user>:<pass>@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+PG_POOL_MAX=2
+```
+
+No Docker needed. The app works identically — `DATABASE_URL` is the only difference.
 
 ## MCP with Claude
 
@@ -126,7 +152,7 @@ Automate with cron:
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Postgres connection string |
+| `DATABASE_URL` | Postgres connection string (local default or Neon `postgresql://...?sslmode=require`) |
 | `OPENAI_API_KEY` | Required — used for embeddings |
 | `LLM_PROVIDER` | `openai` (default) or `anthropic` |
 | `ANTHROPIC_API_KEY` | Required when `LLM_PROVIDER=anthropic` |

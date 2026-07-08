@@ -256,8 +256,8 @@ Failed enrichments are stored with `enrichment_status = 'failed'` and an error m
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | `postgres://pnd:pnd@localhost:5432/pnd` | Postgres connection string |
-| `PG_POOL_MAX` | `3` | Max Postgres pool connections per process |
+| `DATABASE_URL` | `postgres://pnd:pnd@localhost:5432/pnd` | Postgres connection string. For Neon: `postgresql://<user>:<pass>@ep-xxx.region.aws.neon.tech/neondb?sslmode=require` |
+| `PG_POOL_MAX` | `3` | Max Postgres pool connections per process. Set to `2` for Neon free tier. |
 | `PORT` | `3000` | HTTP server port |
 | `OPENAI_API_KEY` | — | Required for embeddings |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model (fixed at 1536 dimensions) |
