@@ -119,11 +119,25 @@ npm run digest          # generate briefing for last 24h, write Markdown
 npm run cli -- query "What changed in AI infrastructure this week?"
 ```
 
-Automate with cron:
+**Automate on macOS with launchd** (fires at next wake if the Mac was asleep at the scheduled time):
+
+```bash
+# Load the included agent — runs sync + digest daily at 6am
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.briefed.daily.plist
+
+# Logs
+tail -f ~/Library/Logs/briefed.log
+
+# Unload
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/org.briefed.daily.plist
+```
+
+The plist is at `~/Library/LaunchAgents/org.briefed.daily.plist` and calls `scripts/run-daily.sh`. Edit the plist's `StartCalendarInterval` to change the schedule.
+
+**Automate on Linux with cron:**
 
 ```cron
-*/15 * * * * cd /path/to/briefed && npm run sync >> /var/log/briefed-sync.log 2>&1
-0 7  * * * cd /path/to/briefed && npm run digest >> /var/log/briefed-digest.log 2>&1
+0 6 * * * cd /path/to/briefed && npm run sync; npm run digest -- --canonical-only >> /var/log/briefed.log 2>&1
 ```
 
 ## Configuration
