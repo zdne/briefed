@@ -5,7 +5,6 @@ import { AnalystAI } from "./ai.js";
 import { normalizeClip } from "./clip.js";
 import { config } from "./config.js";
 import { getDigestForRendering, listClips, pool, retrieveRelevantClips } from "./db.js";
-import { createDigest } from "./digest.js";
 import { renderDigestMarkdown, renderQueryMarkdown } from "./markdown.js";
 import { ingestClip } from "./pipeline.js";
 import { queryArchive } from "./query.js";
@@ -30,15 +29,6 @@ const queryArchiveInput = {
   ),
   limit: z.number().int().min(1).max(30).optional().describe(
     "Maximum number of archived sources to retrieve for the answer. Increase for broad or multi-topic questions."
-  )
-};
-
-const createDigestInput = {
-  hours: z.number().int().min(1).optional().describe(
-    "Lookback window in hours for a new briefing. Defaults to DIGEST_HOURS."
-  ),
-  daysAgo: z.number().int().min(0).optional().describe(
-    "End the new briefing window N days before now. Use 1 for yesterday."
   )
 };
 
@@ -92,35 +82,6 @@ server.registerTool(
       createdAt,
       question,
       answer: result.answer,
-      sources: result.sources,
-      markdown
-    }, markdown);
-  }
-);
-
-server.registerTool(
-  "create_briefing",
-  {
-    title: "Create Briefing",
-    description:
-      "Use when the user asks to generate a new briefing for a time window, such as \"create my briefing for the last 48 hours\", \"generate yesterday's briefing\", or \"make a briefing for the past week\". This creates and stores a new briefing, performs embedding and LLM calls, can be slow, and may take 30-60 seconds. Do not use for quick topical questions; use brief instead.",
-    inputSchema: createDigestInput
-  },
-  async ({ hours, daysAgo }) => {
-    const digestHours = hours ?? config.DIGEST_HOURS;
-    const offsetDays = daysAgo ?? 0;
-    const referenceTime = new Date(Date.now() - offsetDays * 24 * 60 * 60 * 1000);
-    const result = await createDigest(digestHours, new AnalystAI(), stderrLogger, referenceTime);
-    const createdAt = new Date();
-    const markdown = renderDigestMarkdown(result, createdAt);
-    return jsonToolResult({
-      createdAt: createdAt.toISOString(),
-      hours: digestHours,
-      daysAgo: offsetDays,
-      id: result.id,
-      periodStart: result.periodStart,
-      periodEnd: result.periodEnd,
-      body: result.body,
       sources: result.sources,
       markdown
     }, markdown);

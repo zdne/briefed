@@ -103,7 +103,6 @@ Example prompts:
 |---|---|
 | `brief` | Ad hoc question over the archive with citations |
 | `briefing` | Show the latest (or a specific) stored briefing |
-| `create_briefing` | Generate a new briefing — calls the LLM, takes 30-60s |
 | `clip` | Save a URL or text to the archive immediately |
 | `clips` | List or search saved clips |
 | `get_user_config` | Read current collector and topic config |

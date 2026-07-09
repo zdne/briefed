@@ -7,7 +7,7 @@ RSS/Atom feeds ────┐
 Gmail newsletters ─┤
 TwitterAPI.io ─────┤  sync → normalize → Postgres + pgvector
 Feedbin API ───────┘  (optional)               │
-                                               ├─ MCP tools (brief / briefing / create_briefing)
+                                               ├─ MCP tools (brief / briefing)
                                         OpenAI embeddings    ├─ CLI digest → Markdown
                                         LLM enrichment       └─ CLI query → Markdown
 ```
