@@ -137,7 +137,13 @@ Default for `reddit`, `hackernews`, and `twitter` (controlled by `LIGHTWEIGHT_SO
 
 Both modes participate in vector search and briefing source selection.
 
-### Upgrading embedded-only entries
+### Automatic upgrade during sync
+
+When a new lightweight entry is synced, Briefed embeds its title and content and checks cosine similarity against all configured topics (required topics + focus areas). If the similarity meets `ENRICHMENT_TOPIC_UPGRADE_THRESHOLD` (default 0.35), the entry is automatically upgraded to full enrichment — LLM summary, topic tags, and entities — without requiring a separate `enrich` run. Entries below the threshold are stored as `embedded_only` as usual.
+
+This means on-topic posts (e.g. "New payments wallet for agents") receive a full summary and are considered alongside articles in briefing selection, while off-topic posts (e.g. "Built an MCP server for MyFitnessPal" when fitness is not a configured topic) remain `embedded_only` and are filtered at selection time.
+
+### Upgrading embedded-only entries manually
 
 Stored `embedded_only` entries can be upgraded to full enrichment without re-fetching from the source:
 
@@ -167,14 +173,16 @@ Briefing source selection runs before LLM synthesis to prevent high-volume sourc
 
 Selection counts are logged: required-topic count, focus-area count, important-general count, general count.
 
+**Domain relevance filter:** terms are extracted from all configured topic names (stripping common English grammar words). Entries in the general and important-general buckets that contain none of these terms receive a score penalty and are skipped when the feed is focused on a specific domain. This prevents off-topic content from filling "Other Items" when all configured topics are domain-specific.
+
 **Bucket controls:**
 
 | Variable | Default | Effect |
 |---|---|---|
-| `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES` | 6 | Minimum sources reserved per required topic |
-| `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES` | 16 | Maximum sources per required topic |
-| `DIGEST_FOCUS_AREA_MIN_ENTRIES` | 3 | Minimum sources reserved per focus area |
-| `DIGEST_FOCUS_AREA_MAX_ENTRIES` | 10 | Maximum sources per focus area |
+| `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES` | 3 | Minimum sources reserved per required topic |
+| `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES` | 5 | Maximum sources per required topic |
+| `DIGEST_FOCUS_AREA_MIN_ENTRIES` | 2 | Minimum sources reserved per focus area |
+| `DIGEST_FOCUS_AREA_MAX_ENTRIES` | 4 | Maximum sources per focus area |
 | `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | 0.25 | Minimum cosine similarity for required-topic matches |
 | `DIGEST_FOCUS_AREA_MIN_SCORE` | 0.35 | Minimum cosine similarity for focus-area matches |
 | `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | 3 | Minimum keyword score for important-general entries |
@@ -266,14 +274,15 @@ Failed enrichments are stored with `enrichment_status = 'failed'` and an error m
 | `ANTHROPIC_API_KEY` | — | Required when `LLM_PROVIDER=anthropic` |
 | `ANTHROPIC_LLM_MODEL` | `claude-3-5-haiku-latest` | Anthropic model for enrichment and synthesis |
 | `LIGHTWEIGHT_SOURCE_TYPES` | `reddit,hackernews,twitter` | Source types that use embedding-only enrichment |
+| `ENRICHMENT_TOPIC_UPGRADE_THRESHOLD` | `0.35` | Cosine similarity threshold for auto-upgrading lightweight posts to full enrichment at sync time |
 | `QUERY_LIMIT` | `8` | Default vector matches passed to query synthesis |
 | `DIGEST_HOURS` | `24` | Default briefing lookback window |
 | `DIGEST_CANDIDATE_LIMIT` | `1000` | Newest completed entries loaded before topic selection |
 | `DIGEST_MAX_ENTRIES` | `200` | Hard cap on entries sent to one briefing prompt |
-| `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES` | `6` | Minimum sources reserved per required topic |
-| `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES` | `16` | Maximum sources per required topic |
-| `DIGEST_FOCUS_AREA_MIN_ENTRIES` | `3` | Minimum sources reserved per focus area |
-| `DIGEST_FOCUS_AREA_MAX_ENTRIES` | `10` | Maximum sources per focus area |
+| `DIGEST_REQUIRED_TOPIC_MIN_ENTRIES` | `3` | Minimum sources reserved per required topic |
+| `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES` | `5` | Maximum sources per required topic |
+| `DIGEST_FOCUS_AREA_MIN_ENTRIES` | `2` | Minimum sources reserved per focus area |
+| `DIGEST_FOCUS_AREA_MAX_ENTRIES` | `4` | Maximum sources per focus area |
 | `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | `0.25` | Minimum cosine similarity for required-topic matches |
 | `DIGEST_FOCUS_AREA_MIN_SCORE` | `0.35` | Minimum cosine similarity for focus-area matches |
 | `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | `3` | Minimum keyword score for important-general entries |
