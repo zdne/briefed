@@ -18,7 +18,7 @@ import {
   type SourceType
 } from "./enrichment-policy.js";
 import { FeedbinClient } from "./feedbin.js";
-import type { UserRssFeedConfig } from "./user-config.js";
+import { loadUserConfig, type UserRssFeedConfig } from "./user-config.js";
 import {
   filterNewRssItems,
   nextRssFeedState,
@@ -187,6 +187,44 @@ export async function embedOnlyContent(
   }
 }
 
+async function loadTopicEmbeddings(ai: AnalystAI): Promise<number[][]> {
+  const userConfig = await loadUserConfig();
+  const topics = [...userConfig.briefing.requiredTopics, ...userConfig.briefing.focusAreas];
+  return Promise.all(topics.map((topic) => ai.embed(topic)));
+}
+
+async function embedAndConditionallyUpgrade(
+  id: string,
+  entry: SourceEntry,
+  ai: AnalystAI,
+  topicEmbeddings: number[][],
+  threshold: number
+): Promise<"full" | "embedded_only"> {
+  await markEnrichmentProcessing(id);
+  try {
+    const titleAndContent = [entry.title, entry.contentText].filter(Boolean).join("\n\n");
+    const embedding = await ai.embed(titleAndContent);
+    const matches = topicEmbeddings.some((te) => cosineSimilarity(embedding, te) >= threshold);
+    if (matches) {
+      await fullyEnrichContent(id, entry.title, entry.contentText, ai);
+      return "full";
+    }
+    const summary = entry.sourceSummary ?? entry.title ?? entry.contentText.slice(0, 500);
+    await saveEmbeddedOnly(id, summary, embedding);
+    return "embedded_only";
+  } catch (error) {
+    await markEnrichmentFailed(id, error);
+    throw error;
+  }
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  // OpenAI embeddings are unit vectors; dot product equals cosine similarity
+  let dot = 0;
+  for (let i = 0; i < a.length; i++) dot += (a[i] ?? 0) * (b[i] ?? 0);
+  return dot;
+}
+
 export async function syncFeedbin(
   client: FeedbinClient,
   ai: AnalystAI,
@@ -211,6 +249,7 @@ export async function syncFeedbin(
   let newestCreatedAt = since;
   let pageNumber = 0;
   let totalEntries: number | null = null;
+  const topicEmbeddings = await loadTopicEmbeddings(ai);
 
   for await (const page of client.entriesSince(since)) {
     pageNumber++;
@@ -228,7 +267,7 @@ export async function syncFeedbin(
       const mode = desiredEnrichmentMode(sourceType, config.LIGHTWEIGHT_SOURCE_TYPES);
       const label = entry.title ?? entry.canonicalUrl ?? `${entry.sourceKey}:${entry.sourceItemId}`;
       const progress = formatProgress(result.fetched, totalEntries);
-      await storeAndProcessEntry(entry, sourceType, mode, ai, result, progress, log, label);
+      await storeAndProcessEntry(entry, sourceType, mode, ai, result, progress, log, label, topicEmbeddings);
     }
 
     log(
@@ -280,6 +319,7 @@ export async function syncRssFeeds(
   };
   let successfulFeeds = 0;
   log(`Loaded ${feeds.length} RSS feed(s) from user config`);
+  const topicEmbeddings = await loadTopicEmbeddings(ai);
 
   let previousFetchedFeed: UserRssFeedConfig | undefined;
   for (const feed of feeds) {
@@ -364,7 +404,8 @@ export async function syncRssFeeds(
           ai,
           result,
           `[${itemIndex + 1}/${selected.items.length}]`,
-          log
+          log,
+          topicEmbeddings
         );
       }
 
@@ -427,6 +468,7 @@ export async function syncGmail(
   };
 
   log(`Listing Gmail messages with query: ${effectiveQuery}`);
+  const topicEmbeddings = await loadTopicEmbeddings(ai);
   const messageIds = await client.listMessages(effectiveQuery, options.maxMessages);
   result.gmail!.messagesReturned = messageIds.length;
   let newestInternalDate = storedCursor;
@@ -446,7 +488,8 @@ export async function syncGmail(
       ai,
       result,
       `[${index + 1}/${messageIds.length}]`,
-      log
+      log,
+      topicEmbeddings
     );
     if (internalDate && (!newestInternalDate || Date.parse(internalDate) > Date.parse(newestInternalDate))) {
       newestInternalDate = internalDate;
@@ -480,6 +523,8 @@ export async function syncTwitterLists(
     enrichmentFailed: 0,
     twitterLists: []
   };
+
+  const topicEmbeddings = await loadTopicEmbeddings(ai);
 
   for (const listId of options.listIds) {
     const cursorKey = twitterListCursorKey(listId);
@@ -548,7 +593,8 @@ export async function syncTwitterLists(
           result,
           formatProgress(result.fetched, null),
           log,
-          label
+          label,
+          topicEmbeddings
         );
       }
 
@@ -733,12 +779,13 @@ export async function processSourceEntry(
   ai: AnalystAI,
   result: Pick<SyncResult, "insertedOrUpdated" | "fullyEnriched" | "embeddedOnly" | "enrichmentFailed">,
   progress: string,
-  log: SyncLogger
+  log: SyncLogger,
+  topicEmbeddings?: number[][]
 ): Promise<void> {
   const sourceType = detectSourceType(entry);
   const mode = desiredEnrichmentMode(sourceType, config.LIGHTWEIGHT_SOURCE_TYPES);
   const label = entry.title ?? entry.canonicalUrl ?? `${entry.sourceKey}:${entry.sourceItemId}`;
-  await storeAndProcessEntry(entry, sourceType, mode, ai, result, progress, log, label);
+  await storeAndProcessEntry(entry, sourceType, mode, ai, result, progress, log, label, topicEmbeddings);
 }
 
 async function storeAndProcessEntry(
@@ -749,7 +796,8 @@ async function storeAndProcessEntry(
   result: Pick<SyncResult, "insertedOrUpdated" | "fullyEnriched" | "embeddedOnly" | "enrichmentFailed">,
   progress: string,
   log: SyncLogger,
-  label: string
+  label: string,
+  topicEmbeddings?: number[][]
 ): Promise<void> {
   const stored = await upsertSourceContent(entry, sourceType, mode);
   result.insertedOrUpdated++;
@@ -758,7 +806,18 @@ async function storeAndProcessEntry(
   if (stored.needsEnrichment && entry.contentText) {
     log(`${progress} Processing content ${stored.id} (${sourceType}, ${mode})`);
     try {
-      if (mode === "embedded_only") {
+      if (mode === "embedded_only" && topicEmbeddings && topicEmbeddings.length > 0) {
+        const upgraded = await embedAndConditionallyUpgrade(
+          stored.id, entry, ai, topicEmbeddings, config.ENRICHMENT_TOPIC_UPGRADE_THRESHOLD
+        );
+        if (upgraded === "full") {
+          result.fullyEnriched++;
+          log(`${progress} Full enrichment complete (upgraded from embedded_only via topic match)`);
+        } else {
+          result.embeddedOnly++;
+          log(`${progress} Embedding-only processing complete`);
+        }
+      } else if (mode === "embedded_only") {
         await embedOnlyContent(stored.id, entry, ai);
         result.embeddedOnly++;
         log(`${progress} Embedding-only processing complete`);

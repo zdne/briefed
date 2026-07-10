@@ -46,6 +46,7 @@ const schema = z.object({
       z.enum(["reddit", "hackernews", "twitter"]).parse(source)
     ) as LightweightSourceType[]
   ),
+  ENRICHMENT_TOPIC_UPGRADE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.35),
   QUERY_LIMIT: z.coerce.number().int().min(1).max(30).default(8),
   DIGEST_HOURS: z.coerce.number().int().min(1).default(24),
   DIGEST_MAX_ENTRIES: z.coerce.number().int().min(1).default(200),

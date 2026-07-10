@@ -87,13 +87,15 @@ export function selectDigestSources(
     authorCounts: new Map<string, number>()
   };
 
+  const domainRelevanceTerms = options.domainRelevanceTerms ?? [];
   addTopicBuckets(state, buildBuckets(
     recentCandidates,
     requiredTopicMatches,
     "required",
     options.requiredTopicMinEntries,
     options.requiredTopicMaxEntries,
-    options.requiredTopicMinScore ?? 0
+    options.requiredTopicMinScore ?? 0,
+    domainRelevanceTerms
   ), options);
 
   const focusMatchesWithoutRequiredOverlap = focusAreaMatches.filter((focusArea) =>
@@ -105,7 +107,8 @@ export function selectDigestSources(
     "focus",
     options.focusAreaMinEntries,
     options.focusAreaMaxEntries,
-    options.focusAreaMinScore ?? 0
+    options.focusAreaMinScore ?? 0,
+    domainRelevanceTerms
   ), options);
 
   const importantGeneralLimit = Math.min(options.importantGeneralMaxEntries, options.maxEntries - state.selected.length);
@@ -122,13 +125,12 @@ export function selectDigestSources(
     importantGeneralCount += 1;
   }
 
-  const domainTerms = options.domainRelevanceTerms ?? [];
   const generalLimit = Math.min(options.generalMaxEntries, options.maxEntries - state.selected.length);
   let generalCount = 0;
   for (const candidate of rankedGeneralCandidates(recentCandidates)) {
     if (generalCount >= generalLimit || state.selected.length >= options.maxEntries) break;
     if (generalQualityScore(candidate) <= -4) continue;
-    if (domainTerms.length > 0 && !hasDomainMatch(searchableText(candidate), domainTerms)) continue;
+    if (domainRelevanceTerms.length > 0 && !hasDomainMatch(searchableText(candidate), domainRelevanceTerms)) continue;
     const freshness = classifyFreshness(state, candidate, options);
     if (freshness.label === "stale_repeat") continue;
     if (!addSelected(state, candidate, {
@@ -246,12 +248,13 @@ function buildBuckets(
   bucket: "required" | "focus",
   minEntries: number,
   maxEntries: number,
-  minScore: number
+  minScore: number,
+  domainRelevanceTerms: string[]
 ): SelectionBucket[] {
   return topicMatches.map((topicMatch) => ({
     topic: topicMatch.topic,
     bucket,
-    candidates: rankedTopicCandidates(recentCandidates, topicMatch, minScore),
+    candidates: rankedTopicCandidates(recentCandidates, topicMatch, minScore, domainRelevanceTerms),
     minEntries,
     maxEntries,
     minScore
@@ -261,7 +264,8 @@ function buildBuckets(
 function rankedTopicCandidates(
   recentCandidates: DigestCandidate[],
   topicMatch: DigestTopicMatches,
-  minScore: number
+  minScore: number,
+  domainRelevanceTerms: string[]
 ): DigestCandidate[] {
   const exactMatches = recentCandidates.filter((candidate) => candidateMatchesTopic(candidate, topicMatch.topic));
   const vectorMatches = topicMatch.matches.filter((candidate) =>
@@ -281,6 +285,7 @@ function rankedTopicCandidates(
       seen.add(item.candidate.id);
       return true;
     })
+    .filter((item) => hasInformativeTitle(item.candidate, topicMatch.topic, domainRelevanceTerms))
     .sort((a, b) =>
       a.group - b.group ||
       representativeSort(b.candidate, a.candidate) ||
@@ -288,6 +293,17 @@ function rankedTopicCandidates(
       a.index - b.index
     )
     .map((item) => item.candidate);
+}
+
+function hasInformativeTitle(candidate: DigestCandidate, topic: string, domainRelevanceTerms: string[]): boolean {
+  if ((candidate.summary ?? "").length >= 20) return true;
+  const titleText = normalizeText(candidate.title ?? "");
+  const words = titleText.split(/\s+/).filter(Boolean);
+  const anchors = new Set(topicAnchorTerms(topic));
+  const informative = words.filter((w) => !anchors.has(w));
+  if (informative.length >= 4) return true;
+  const otherDomainTerms = domainRelevanceTerms.filter((t) => !anchors.has(t));
+  return hasDomainMatch(titleText, otherDomainTerms);
 }
 
 function addTopicBuckets(
@@ -788,7 +804,10 @@ function communityMetaPenalty(candidate: DigestCandidate): number {
     /\bab test\b/g,
     /\ba\/b\b/g,
     /\bcomplaint\b/g,
-    /\boverrode my settings\b/g
+    /\boverrode my settings\b/g,
+    /\bno response\b/g,
+    /\bstill (no|waiting)\b/g,
+    /\bwhy (is|isn't|won't|doesn't)\b/g
   ]) * 2;
 }
 
