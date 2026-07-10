@@ -75,6 +75,10 @@ export async function createDigest(
       `over ${config.DIGEST_REPEAT_LOOKBACK_HOURS} hours`
     );
   }
+  const domainRelevanceTerms = extractDomainTerms([
+    ...userConfig.briefing.requiredTopics,
+    ...userConfig.briefing.focusAreas
+  ]);
   const selection = selectDigestSources(candidates, requiredTopicMatches, focusAreaMatches, {
     maxEntries: config.DIGEST_MAX_ENTRIES,
     requiredTopicMinEntries: config.DIGEST_REQUIRED_TOPIC_MIN_ENTRIES,
@@ -95,7 +99,8 @@ export async function createDigest(
     maxEntriesPerSourceKey: config.DIGEST_MAX_ENTRIES_PER_SOURCE_KEY,
     maxEntriesPerAuthor: config.DIGEST_MAX_ENTRIES_PER_AUTHOR,
     priorDigestCandidates,
-    maxFollowupsPerEvent: config.DIGEST_MAX_FOLLOWUPS_PER_EVENT
+    maxFollowupsPerEvent: config.DIGEST_MAX_FOLLOWUPS_PER_EVENT,
+    domainRelevanceTerms
   });
   const sources = selection.sources;
   log(
@@ -137,6 +142,17 @@ export async function createDigest(
   };
 }
 
+function extractDomainTerms(topics: string[]): string[] {
+  const grammarWords = new Set(["and", "or", "the", "for", "in", "of", "to", "a", "an", "with", "by"]);
+  const seen = new Set<string>();
+  for (const topic of topics) {
+    for (const word of topic.toLowerCase().split(/\s+/)) {
+      if (word && !grammarWords.has(word)) seen.add(word);
+    }
+  }
+  return [...seen];
+}
+
 async function vectorMatchesForTopics(
   topics: string[],
   maxEntries: number,
@@ -145,7 +161,7 @@ async function vectorMatchesForTopics(
   ai: AnalystAI,
   log: DigestLogger
 ): Promise<DigestTopicMatches[]> {
-  const limit = Math.max(1, maxEntries * 3);
+  const limit = Math.max(1, maxEntries * 5);
   const matches: DigestTopicMatches[] = [];
 
   for (const topic of topics) {

@@ -21,6 +21,7 @@ export interface DigestSelectionOptions {
   maxEntriesPerAuthor?: number;
   priorDigestCandidates?: DigestCandidate[];
   maxFollowupsPerEvent?: number;
+  domainRelevanceTerms?: string[];
 }
 
 export interface DigestSelectionResult {
@@ -109,7 +110,7 @@ export function selectDigestSources(
 
   const importantGeneralLimit = Math.min(options.importantGeneralMaxEntries, options.maxEntries - state.selected.length);
   let importantGeneralCount = 0;
-  for (const candidate of rankedImportantGeneralCandidates(recentCandidates, options.importantGeneralMinScore ?? 1)) {
+  for (const candidate of rankedImportantGeneralCandidates(recentCandidates, options.importantGeneralMinScore ?? 1, options.domainRelevanceTerms ?? [])) {
     if (importantGeneralCount >= importantGeneralLimit || state.selected.length >= options.maxEntries) break;
     const freshness = classifyFreshness(state, candidate, options);
     if (freshness.label === "stale_repeat") continue;
@@ -121,11 +122,13 @@ export function selectDigestSources(
     importantGeneralCount += 1;
   }
 
+  const domainTerms = options.domainRelevanceTerms ?? [];
   const generalLimit = Math.min(options.generalMaxEntries, options.maxEntries - state.selected.length);
   let generalCount = 0;
   for (const candidate of rankedGeneralCandidates(recentCandidates)) {
     if (generalCount >= generalLimit || state.selected.length >= options.maxEntries) break;
     if (generalQualityScore(candidate) <= -4) continue;
+    if (domainTerms.length > 0 && !hasDomainMatch(searchableText(candidate), domainTerms)) continue;
     const freshness = classifyFreshness(state, candidate, options);
     if (freshness.label === "stale_repeat") continue;
     if (!addSelected(state, candidate, {
@@ -205,6 +208,7 @@ function topicSpecificity(topic: string): number {
   return topicAnchorTerms(topic).length;
 }
 
+// domain-specific: synonym expansions for specific topic types; add branches here when a topic needs richer keyword matching than its name alone provides
 function specialTopicScore(text: string, topic: string): number {
   if (topic.includes("payment")) {
     return scoreMatches(text, [
@@ -226,7 +230,10 @@ function specialTopicScore(text: string, topic: string): number {
       /\b(procurement|buyers?|vendor|vendors?|sourcing|purchasing|rfp|evaluation)\b/g
     ]) * 2;
   }
-  return 0;
+  const terms = topicAnchorTerms(topic);
+  if (terms.length === 0) return 0;
+  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  return scoreMatches(text, [new RegExp(`\\b(${escaped})\\b`, "g")]) * 2;
 }
 
 function hasPaymentTopicAnchor(text: string): boolean {
@@ -504,6 +511,7 @@ function majorEntityTerms(candidate: DigestCandidate): Set<string> {
     .map(normalizeEntityTerm)
     .filter((value): value is string => Boolean(value));
   const text = normalizeEventText(`${candidate.title ?? ""} ${candidate.summary ?? ""}`);
+  // domain-specific: companies tracked as named actors for event clustering
   const knownEntities = [
     "openai",
     "visa",
@@ -587,11 +595,17 @@ function candidateHasTopicAnchor(candidate: DigestCandidate, topic: string): boo
   return anchors.some((anchor) => text.includes(anchor));
 }
 
+const TOPIC_GENERIC_WORDS = new Set([
+  "agentic", "ai", "artificial", "intelligence",
+  "and", "or", "with", "for", "in", "of", "the", "a", "an",
+  "area", "focus", "watchlist"
+]);
+
 function topicAnchorTerms(topic: string): string[] {
   return normalizeText(topic)
     .split(" ")
     .filter(Boolean)
-    .filter((term) => !["agentic", "ai", "artificial", "intelligence"].includes(term));
+    .filter((term) => !TOPIC_GENERIC_WORDS.has(term));
 }
 
 function topicsOverlap(left: string, right: string): boolean {
@@ -606,7 +620,7 @@ function topicOverlapTerms(topic: string): Set<string> {
   return new Set(normalizeText(topic)
     .split(" ")
     .filter(Boolean)
-    .filter((term) => !["and", "area", "discovery", "focus", "the", "watchlist"].includes(term)));
+    .filter((term) => !TOPIC_GENERIC_WORDS.has(term)));
 }
 
 function requiresAgenticAnchor(topic: string): boolean {
@@ -617,15 +631,15 @@ function hasAgenticConcept(text: string): boolean {
   return /\b(agent|agents|agentic|autonomous|automation|automated|ai|llm|llms|model|models)\b/.test(text);
 }
 
-function rankedImportantGeneralCandidates(candidates: DigestCandidate[], minScore: number): DigestCandidate[] {
+function rankedImportantGeneralCandidates(candidates: DigestCandidate[], minScore: number, domainRelevanceTerms: string[]): DigestCandidate[] {
   return candidates
-    .map((candidate, index) => ({ candidate, score: importantGeneralScore(candidate), index }))
+    .map((candidate, index) => ({ candidate, score: importantGeneralScore(candidate, domainRelevanceTerms), index }))
     .filter((item) => item.score >= minScore)
     .sort((a, b) => b.score - a.score || representativeSort(b.candidate, a.candidate) || a.index - b.index)
     .map((item) => item.candidate);
 }
 
-function importantGeneralScore(candidate: DigestCandidate): number {
+function importantGeneralScore(candidate: DigestCandidate, domainRelevanceTerms: string[]): number {
   if (candidate.sourceType === "clip") return 1000;
   const text = searchableText(candidate);
   const rawText = rawEntrySearchText(candidate.rawEntry);
@@ -641,6 +655,7 @@ function importantGeneralScore(candidate: DigestCandidate): number {
 
   score += scoreMatches(text, strategicAnalysisPatterns());
 
+  // domain-specific: companies whose mentions double the importance score
   score += scoreMatches(text, [
     /\b(google|apple|amazon|aws|microsoft|openai|anthropic|meta|visa|mastercard|paypal|stripe|american express|amex|alipay|worldpay)\b/g
   ]) * 2;
@@ -653,7 +668,14 @@ function importantGeneralScore(candidate: DigestCandidate): number {
   if (isSecurityAdvisory(candidate)) score += 5;
   score -= communityMetaPenalty(candidate);
 
+  if (domainRelevanceTerms.length > 0 && !hasDomainMatch(text, domainRelevanceTerms)) score -= 5;
+
   return score;
+}
+
+function hasDomainMatch(text: string, domainTerms: string[]): boolean {
+  const words = new Set(text.split(/\W+/).filter(Boolean));
+  return domainTerms.some((term) => words.has(term));
 }
 
 function rankedGeneralCandidates(candidates: DigestCandidate[]): DigestCandidate[] {
@@ -733,6 +755,8 @@ function generalQualityScore(candidate: DigestCandidate): number {
   ]) * 3;
   score -= communityMetaPenalty(candidate);
 
+  if ((candidate.sourceType === "reddit" || candidate.sourceType === "hackernews" || candidate.sourceType === "twitter") && summaryLength < 40) score -= 2;
+
   return score;
 }
 
@@ -752,6 +776,7 @@ function isOfficialSecurityDomain(input: string | null): boolean {
   }
 }
 
+// domain-specific: patterns that signal low-value community meta content
 function communityMetaPenalty(candidate: DigestCandidate): number {
   const text = searchableText(candidate);
   return scoreMatches(text, [
@@ -784,6 +809,7 @@ function isStrategicAnalysis(candidate: DigestCandidate): boolean {
   );
 }
 
+// domain-specific: vocabulary that signals an article is strategic analysis rather than news
 function strategicAnalysisPatterns(): RegExp[] {
   return [
     /\bpricing\b/g,

@@ -486,6 +486,7 @@ function isLinkWrapperUrl(input: string | null): boolean {
   }
 }
 
+// domain-specific: domains treated as primary/authoritative sources
 function isPrimarySourceUrl(input: string | null): boolean {
   if (!input) return false;
   try {
