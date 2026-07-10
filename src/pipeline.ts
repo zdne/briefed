@@ -150,20 +150,17 @@ export async function fullyEnrichContent(
   id: string,
   title: string | null,
   contentText: string,
-  ai: AnalystAI
+  ai: AnalystAI,
+  precomputedEmbedding?: number[]
 ): Promise<void> {
   await markEnrichmentProcessing(id);
   try {
     const enrichment = await ai.enrich(title, contentText);
-    const embeddingInput = [
-      title,
-      enrichment.summary,
-      enrichment.topics.join(", "),
-      contentText
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    const embedding = await ai.embed(embeddingInput);
+    const embedding = precomputedEmbedding ?? await ai.embed(
+      [title, enrichment.summary, enrichment.topics.join(", "), contentText]
+        .filter(Boolean)
+        .join("\n\n")
+    );
     await saveEnrichment(id, enrichment, embedding);
   } catch (error) {
     await markEnrichmentFailed(id, error);
@@ -206,7 +203,7 @@ async function embedAndConditionallyUpgrade(
     const embedding = await ai.embed(titleAndContent);
     const matches = topicEmbeddings.some((te) => cosineSimilarity(embedding, te) >= threshold);
     if (matches) {
-      await fullyEnrichContent(id, entry.title, entry.contentText, ai);
+      await fullyEnrichContent(id, entry.title, entry.contentText, ai, embedding);
       return "full";
     }
     const summary = entry.sourceSummary ?? entry.title ?? entry.contentText.slice(0, 500);
