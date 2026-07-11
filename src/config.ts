@@ -56,6 +56,7 @@ const schema = z.object({
   DIGEST_FOCUS_AREA_MIN_ENTRIES: z.coerce.number().int().min(0).default(2),
   DIGEST_FOCUS_AREA_MAX_ENTRIES: z.coerce.number().int().min(1).default(4),
   DIGEST_REQUIRED_TOPIC_MIN_SCORE: z.coerce.number().min(0).max(1).default(0.30),
+  DIGEST_TOPIC_BEST_MATCH_RATIO: z.coerce.number().min(0).max(1).default(0.75),
   DIGEST_FOCUS_AREA_MIN_SCORE: z.coerce.number().min(0).max(1).default(0.35),
   DIGEST_IMPORTANT_GENERAL_MIN_SCORE: z.coerce.number().int().min(1).default(3),
   DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES: z.coerce.number().int().min(0).default(12),

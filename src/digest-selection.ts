@@ -22,6 +22,7 @@ export interface DigestSelectionOptions {
   priorDigestCandidates?: DigestCandidate[];
   maxFollowupsPerEvent?: number;
   domainRelevanceTerms?: string[];
+  topicBestMatchRatio?: number;
 }
 
 export interface DigestSelectionResult {
@@ -88,6 +89,15 @@ export function selectDigestSources(
   };
 
   const domainRelevanceTerms = options.domainRelevanceTerms ?? [];
+  const topicBestMatchRatio = options.topicBestMatchRatio ?? 1;
+  const bestTopicScore = new Map<string, number>();
+  for (const { matches } of [...requiredTopicMatches, ...focusAreaMatches]) {
+    for (const candidate of matches) {
+      const current = bestTopicScore.get(candidate.id) ?? 0;
+      if (candidate.score > current) bestTopicScore.set(candidate.id, candidate.score);
+    }
+  }
+
   addTopicBuckets(state, buildBuckets(
     recentCandidates,
     requiredTopicMatches,
@@ -95,7 +105,9 @@ export function selectDigestSources(
     options.requiredTopicMinEntries,
     options.requiredTopicMaxEntries,
     options.requiredTopicMinScore ?? 0,
-    domainRelevanceTerms
+    domainRelevanceTerms,
+    bestTopicScore,
+    topicBestMatchRatio
   ), options);
 
   const focusMatchesWithoutRequiredOverlap = focusAreaMatches.filter((focusArea) =>
@@ -108,7 +120,9 @@ export function selectDigestSources(
     options.focusAreaMinEntries,
     options.focusAreaMaxEntries,
     options.focusAreaMinScore ?? 0,
-    domainRelevanceTerms
+    domainRelevanceTerms,
+    bestTopicScore,
+    topicBestMatchRatio
   ), options);
 
   const importantGeneralLimit = Math.min(options.importantGeneralMaxEntries, options.maxEntries - state.selected.length);
@@ -249,12 +263,14 @@ function buildBuckets(
   minEntries: number,
   maxEntries: number,
   minScore: number,
-  domainRelevanceTerms: string[]
+  domainRelevanceTerms: string[],
+  bestTopicScore: Map<string, number>,
+  topicBestMatchRatio: number
 ): SelectionBucket[] {
   return topicMatches.map((topicMatch) => ({
     topic: topicMatch.topic,
     bucket,
-    candidates: rankedTopicCandidates(recentCandidates, topicMatch, minScore, domainRelevanceTerms),
+    candidates: rankedTopicCandidates(recentCandidates, topicMatch, minScore, domainRelevanceTerms, bestTopicScore, topicBestMatchRatio),
     minEntries,
     maxEntries,
     minScore
@@ -265,12 +281,17 @@ function rankedTopicCandidates(
   recentCandidates: DigestCandidate[],
   topicMatch: DigestTopicMatches,
   minScore: number,
-  domainRelevanceTerms: string[]
+  domainRelevanceTerms: string[],
+  bestTopicScore: Map<string, number>,
+  topicBestMatchRatio: number
 ): DigestCandidate[] {
   const exactMatches = recentCandidates.filter((candidate) => candidateMatchesTopic(candidate, topicMatch.topic));
-  const vectorMatches = topicMatch.matches.filter((candidate) =>
-    candidate.score >= minScore && candidateHasTopicAnchor(candidate, topicMatch.topic)
-  );
+  const vectorMatches = topicMatch.matches.filter((candidate) => {
+    if (candidate.score < minScore) return false;
+    if (!candidateHasTopicAnchor(candidate, topicMatch.topic)) return false;
+    const best = bestTopicScore.get(candidate.id);
+    return best === undefined || candidate.score >= best * topicBestMatchRatio;
+  });
   const combined = [...exactMatches, ...vectorMatches];
   const seen = new Set<string>();
 

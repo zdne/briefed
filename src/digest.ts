@@ -100,7 +100,8 @@ export async function createDigest(
     maxEntriesPerAuthor: config.DIGEST_MAX_ENTRIES_PER_AUTHOR,
     priorDigestCandidates,
     maxFollowupsPerEvent: config.DIGEST_MAX_FOLLOWUPS_PER_EVENT,
-    domainRelevanceTerms
+    domainRelevanceTerms,
+    topicBestMatchRatio: config.DIGEST_TOPIC_BEST_MATCH_RATIO
   });
   const sources = selection.sources;
   log(

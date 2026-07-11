@@ -175,6 +175,8 @@ Selection counts are logged: required-topic count, focus-area count, important-g
 
 **Domain relevance filter:** terms are extracted from all configured topic names (stripping common English grammar words). Entries in the general and important-general buckets that contain none of these terms receive a score penalty and are skipped when the feed is focused on a specific domain. This prevents off-topic content from filling "Other Items" when all configured topics are domain-specific.
 
+**Cross-topic filter:** when a vector match scores much higher for a different topic than the one it was retrieved for, it is rejected from the current topic's bucket. Specifically, a candidate is rejected if its similarity to topic T is less than `DIGEST_TOPIC_BEST_MATCH_RATIO × best_score_across_all_topics`. This catches cases where a topic shares a broad concept (e.g. "agentic") with a specialized topic (e.g. "Agentic Payments") — an article about workplace AI that happens to score 0.32 for "Agentic Payments" but 0.45 for "Agentic AI" would be filtered from the payments bucket since 0.32 < 0.45 × 0.75. Exact text matches (articles that contain the topic name verbatim) are never filtered.
+
 **Bucket controls:**
 
 | Variable | Default | Effect |
@@ -185,6 +187,7 @@ Selection counts are logged: required-topic count, focus-area count, important-g
 | `DIGEST_FOCUS_AREA_MAX_ENTRIES` | 4 | Maximum sources per focus area |
 | `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | 0.30 | Minimum cosine similarity for required-topic matches |
 | `DIGEST_FOCUS_AREA_MIN_SCORE` | 0.35 | Minimum cosine similarity for focus-area matches |
+| `DIGEST_TOPIC_BEST_MATCH_RATIO` | 0.75 | Cross-topic filter: reject a vector match if its score for this topic < ratio × best score across all topics |
 | `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | 3 | Minimum keyword score for important-general entries |
 | `DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES` | 12 | Cap on important-general entries |
 | `DIGEST_GENERAL_MAX_ENTRIES` | 120 | Cap on general fill entries |
@@ -283,8 +286,9 @@ Failed enrichments are stored with `enrichment_status = 'failed'` and an error m
 | `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES` | `5` | Maximum sources per required topic |
 | `DIGEST_FOCUS_AREA_MIN_ENTRIES` | `2` | Minimum sources reserved per focus area |
 | `DIGEST_FOCUS_AREA_MAX_ENTRIES` | `4` | Maximum sources per focus area |
-| `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | `0.25` | Minimum cosine similarity for required-topic matches |
+| `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | `0.30` | Minimum cosine similarity for required-topic matches |
 | `DIGEST_FOCUS_AREA_MIN_SCORE` | `0.35` | Minimum cosine similarity for focus-area matches |
+| `DIGEST_TOPIC_BEST_MATCH_RATIO` | `0.75` | Cross-topic filter ratio; set to 1.0 to disable |
 | `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | `3` | Minimum keyword score for important-general entries |
 | `DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES` | `12` | Cap on important-general entries per briefing |
 | `DIGEST_GENERAL_MAX_ENTRIES` | `120` | Cap on general fill entries per briefing |
