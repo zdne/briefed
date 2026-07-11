@@ -23,7 +23,7 @@ const schema = z.object({
   RSS_REDDIT_FETCH_DELAY_MS: z.coerce.number().int().min(0).default(10000),
   REDDIT_RSS_USER: optionalString(),
   REDDIT_RSS_FEED: optionalString(),
-  REDDIT_RSS_DEBUG: z.coerce.boolean().default(false),
+  REDDIT_RSS_DEBUG: z.preprocess((v) => v === "true" || v === true, z.boolean()).default(false),
   RSS_MAX_ITEMS_PER_FEED: z.coerce.number().int().min(1).default(50),
   RSS_USER_AGENT: z.string().min(1).default("pnd-rss/0.1"),
   RSS_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1).default(15000),
