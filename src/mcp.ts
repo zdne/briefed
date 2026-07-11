@@ -103,7 +103,11 @@ server.registerTool(
       return jsonToolResult({ error: message }, message, true);
     }
     const createdAt = new Date(result.createdAt);
-    const markdown = renderDigestMarkdown(result, createdAt);
+    const ageHours = (Date.now() - createdAt.getTime()) / 3_600_000;
+    const staleWarning = ageHours > 25
+      ? `> ⚠️ This briefing is from ${createdAt.toLocaleDateString("en-US", { month: "long", day: "numeric" })} — today's briefing has not been generated yet (sync may have been incomplete).\n\n`
+      : "";
+    const markdown = staleWarning + renderDigestMarkdown(result, createdAt);
     return jsonToolResult({
       id: result.id,
       createdAt: result.createdAt,
