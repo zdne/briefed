@@ -209,7 +209,11 @@ function bestTopicAssignment(
 function candidateTopicAssignmentScore(candidate: DigestCandidate, topic: string): number {
   const normalizedTopic = normalizeText(topic);
   const text = exactSearchableText(candidate);
-  if (normalizedTopic.includes("payment") && !hasPaymentTopicAnchor(text)) return 0;
+  // Use only title+summary for the payment gate — entity types like "payment system" are metadata
+  // about mentioned tools, not evidence that the article itself is about payments.
+  if (normalizedTopic.includes("payment") && !hasPaymentTopicAnchor(normalizeText(
+    [candidate.title, candidate.summary].filter((p): p is string => Boolean(p)).join(" ")
+  ))) return 0;
   const anchors = topicAnchorTerms(normalizedTopic);
   let score = text.includes(normalizedTopic) ? 8 : 0;
 
