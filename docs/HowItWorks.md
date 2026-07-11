@@ -183,7 +183,7 @@ Selection counts are logged: required-topic count, focus-area count, important-g
 | `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES` | 5 | Maximum sources per required topic |
 | `DIGEST_FOCUS_AREA_MIN_ENTRIES` | 2 | Minimum sources reserved per focus area |
 | `DIGEST_FOCUS_AREA_MAX_ENTRIES` | 4 | Maximum sources per focus area |
-| `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | 0.25 | Minimum cosine similarity for required-topic matches |
+| `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | 0.30 | Minimum cosine similarity for required-topic matches |
 | `DIGEST_FOCUS_AREA_MIN_SCORE` | 0.35 | Minimum cosine similarity for focus-area matches |
 | `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | 3 | Minimum keyword score for important-general entries |
 | `DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES` | 12 | Cap on important-general entries |
