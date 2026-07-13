@@ -1,9 +1,14 @@
 #!/bin/bash
-set -e
-
-. /Users/z/.nvm/nvm.sh
-cd /Users/z/Codebase/briefed
 
 echo "=== $(date) ==="
+
+# Use node directly by path — nvm source can hang indefinitely under launchd
+export PATH="$HOME/.nvm/versions/node/v25.5.0/bin:$PATH"
+
+set -eo pipefail
+cd /Users/z/Codebase/briefed
+
 npm run sync
 npm run digest -- --canonical-only
+
+echo "=== Done: $(date) ==="
