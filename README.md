@@ -49,6 +49,8 @@ See [`.env.example`](.env.example) for all variables. For Neon, set `DATABASE_UR
 
 `requiredTopics` always appear in the briefing with explicit "no signal" when nothing matches. `focusAreas` appear only when there is meaningful signal.
 
+**Tip:** Once the MCP server is connected (see below), ask Claude to run the `briefed-setup` skill — it interviews you about your interests, picks topic labels, and configures your feeds automatically.
+
 **`.env`** — secrets and operational limits. Key values:
 
 | Variable | Purpose |
