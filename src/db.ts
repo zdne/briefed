@@ -18,6 +18,12 @@ export const pool = new Pool({
   max: config.PG_POOL_MAX
 });
 
+// Prevent idle/in-flight connection drops from crashing the process.
+// The pool removes the broken client and creates a fresh one for the next query.
+pool.on("error", (err) => {
+  console.error(`[${new Date().toISOString()}] [DB] Pool client error: ${err.message}`);
+});
+
 function vectorLiteral(vector: number[]): string {
   return `[${vector.join(",")}]`;
 }
