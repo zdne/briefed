@@ -253,6 +253,42 @@ Query output is saved as Markdown under `QUERY_OUTPUT_DIR` by default. Use `--no
 
 ---
 
+## MCP Server
+
+`npm run mcp` starts a Model Context Protocol server that exposes the Briefed archive to any MCP-capable agent (Claude, Claude Code, etc.). Connect it by pointing your MCP client at the process using the `mcp` script.
+
+### Available tools (`brief:*`)
+
+| Tool | Purpose |
+|---|---|
+| `brief` | Semantic query over the archive — citations, similarity scores, source metadata |
+| `briefing` | Render the latest stored digest (or a specific one by id) |
+| `clip` | Save a URL or freeform text to the archive; returns `fetchBlocked` if Cloudflare intercepted |
+| `clips` | List recent clips or semantic-search across them |
+| `get_user_config` | Read the full user config (topics, feeds, collectors) |
+| `update_user_config` | Full-replacement write of the user config |
+| `update_collectors` | Full-replacement write of the collectors section only |
+| `update_briefing_preferences` | Full-replacement write of requiredTopics + focusAreas only |
+| `health` | Returns DB connectivity, row counts, and last-sync timestamps |
+
+All update tools are **full-replacement**: they overwrite the entire section, not individual fields. Always call `get_user_config` first and echo every unchanged field back verbatim. Omitting a feed deletes it.
+
+### `briefed-setup` skill
+
+`briefed-setup.skill` is a Claude Code skill file that guides a Claude agent through first-time setup and ongoing optimization of Briefed. Load it in Claude Code with `/run briefed-setup` (or the equivalent in your MCP client).
+
+**First-time setup:** the skill interviews the user about their professional focus, core beats, and background interests; translates them into `requiredTopics` and `focusAreas` with vocabulary tuned to match how trade press actually writes; and proposes a minimal collector set (RSS feeds, Google News query feeds, Reddit subs, Gmail label, Twitter list). It writes preferences and collectors via the MCP tools and verifies both writes landed.
+
+**Ongoing optimization:** the skill audits an existing config by sampling signal quality per required topic via `brief` (reading per-source similarity scores), reviewing the latest `briefing` for empty sections, and diagnosing root causes (label mismatch, missing dedicated feed, umbrella/duplicate topic, high-volume noise feed). It proposes a diff before writing anything.
+
+Key rules the skill enforces:
+- Topics are **embedding queries** — label specificity and phrasing directly determine which articles surface
+- Every required topic should have at least one dedicated quoted Google News feed; relying on general sources for a required topic leads to empty sections
+- Disable (`enabled: false`), don't delete underperforming feeds — preserves audit trail
+- Never remove Gmail or Twitter collectors without explicit user instruction
+
+---
+
 ## Data Model
 
 - **`content`** — normalized source content, enrichment output, and vector embedding.
