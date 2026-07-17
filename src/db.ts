@@ -15,7 +15,11 @@ import type { EnrichmentMode, SourceType } from "./enrichment-policy.js";
 const { Pool } = pg;
 export const pool = new Pool({
   connectionString: config.DATABASE_URL,
-  max: config.PG_POOL_MAX
+  max: config.PG_POOL_MAX,
+  query_timeout: config.PG_QUERY_TIMEOUT_MS,
+  statement_timeout: config.PG_QUERY_TIMEOUT_MS,
+  keepalives: 1,
+  keepalives_idle: 30,
 });
 
 // Prevent idle/in-flight connection drops from crashing the process.
