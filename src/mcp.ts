@@ -4,9 +4,16 @@ import { z } from "zod";
 import { AnalystAI } from "./ai.js";
 import { normalizeClip } from "./clip.js";
 import { config } from "./config.js";
-import { getDigestForRendering, listClips, markContentClipped, pool, retrieveRelevantClips } from "./db.js";
+import {
+  getDigestForRendering,
+  listClips,
+  markContentClipped,
+  pool,
+  resolveDigestCitation,
+  retrieveRelevantClips
+} from "./db.js";
 import { renderDigestMarkdown, renderQueryMarkdown } from "./markdown.js";
-import { ingestClip } from "./pipeline.js";
+import { clipUrl, ingestClip } from "./pipeline.js";
 import { queryArchive } from "./query.js";
 import {
   briefingPreferencesSchema,
@@ -125,36 +132,44 @@ server.registerTool(
   {
     title: "Clip",
     description:
-      "Save a URL or text to the Brief archive for later retrieval, or mark an existing archive item as clipped. Use for prompts like \"clip this for me: https://...\", \"save this page to my archive\", \"save this note: [pasted text]\", or — for items already in the archive — \"clip source 3 from my briefing\" / \"save that article about X for later\" (resolve the source to its id via the briefing, brief, or clips tool results, then pass id). One of url, text, or id is required. Marking by id flags the existing item without re-fetching; it will rank higher in brief queries and stop appearing in future briefings.",
+      "Save a URL or text to the Brief archive for later retrieval, or mark an existing archive item as clipped. Use for prompts like \"clip this for me: https://...\", \"save this page to my archive\", \"save this note: [pasted text]\". For an item already in the archive — \"clip source 3 from my briefing\", \"save that article about X for later\" — pass citation (the \"Source N\" number, resolved server-side against the actual briefing) rather than guessing any numeric id; a raw id is never accepted. If you already have the item's canonical URL (e.g. from the rendered briefing text), passing url also works and marks it in place without re-fetching. One of url, text, or citation is required.",
     inputSchema: {
-      url: z.string().url().optional().describe("URL to fetch and store."),
+      url: z.string().url().optional().describe("URL to fetch and store, or an already-archived URL to mark as clipped in place."),
       text: z.string().min(1).optional().describe("Raw text to store directly."),
-      id: z.number().int().positive().optional().describe("Id of an existing archive item (from brief/briefing/clips results) to mark as clipped."),
+      citation: z.number().int().positive().optional().describe("The \"Source N\" citation number from a rendered briefing. Resolved server-side against digestId (or the latest briefing) to the real archive item — use this instead of guessing a numeric id."),
+      digestId: z.number().int().positive().optional().describe("Digest id to resolve citation against. Omit to use the latest briefing."),
       title: z.string().optional().describe("Optional title override."),
       note: z.string().optional().describe("Optional note appended to the content before enrichment, or attached to the marked item.")
     }
   },
-  async ({ url, text, id, title, note }) => {
-    if (id !== undefined) {
-      const marked = await markContentClipped(String(id), note);
-      if (!marked) {
-        return jsonToolResult({ error: `Item ${id} not found` }, `Item ${id} not found`, true);
+  async ({ url, text, citation, digestId, title, note }) => {
+    if (citation !== undefined) {
+      const resolved = await resolveDigestCitation(citation, digestId);
+      if (!resolved) {
+        const where = digestId ? `digest ${digestId}` : "the latest digest";
+        return jsonToolResult({ error: `No source ${citation} in ${where}` }, `No source ${citation} in ${where}`, true);
       }
-      const message = `Marked as clipped: ${marked.title ?? marked.canonicalUrl ?? `item ${id}`}`;
-      return jsonToolResult({ ...marked, marked: true, message }, message);
+      const marked = await markContentClipped(resolved.contentId, note);
+      const message = `Marked as clipped: ${marked?.title ?? resolved.title ?? `source ${citation}`}`;
+      return jsonToolResult({ ...marked, marked: true, digestId: resolved.digestId, citation, message }, message);
     }
-    if (!url && !text) {
-      return jsonToolResult({ error: "clip requires url, text, or id" }, "clip requires url, text, or id", true);
+    if (url) {
+      const result = await clipUrl(url, title, note, new AnalystAI(), stderrLogger);
+      const warning = result.fetchBlocked
+        ? ` The page was blocked by a bot-challenge (e.g. Cloudflare) — the URL is stored but no content was fetched. Try re-clipping with the article text, or use web_search to find the content and re-clip with text.`
+        : "";
+      const label = result.title ?? url;
+      const message = `${result.marked ? "Marked as clipped" : result.isNew ? "Clipped" : "Updated clip"}: ${label}.${warning}`;
+      return jsonToolResult({ ...result, message }, message);
+    }
+    if (!text) {
+      return jsonToolResult({ error: "clip requires url, text, or citation" }, "clip requires url, text, or citation", true);
     }
     const collectedAt = new Date().toISOString();
-    const { entry, fetchBlocked } = await normalizeClip({ url, text, title, note }, collectedAt);
+    const { entry } = await normalizeClip({ text, title, note }, collectedAt);
     const result = await ingestClip(entry, new AnalystAI(), stderrLogger);
-    const label = entry.title ?? url ?? "text clip";
-    const warning = fetchBlocked
-      ? ` The page was blocked by a bot-challenge (e.g. Cloudflare) — the URL is stored but no content was fetched. Try re-clipping with the article text, or use web_search to find the content and re-clip with text.`
-      : "";
-    const message = `${result.isNew ? "Clipped" : "Updated clip"}: ${label}.${warning}`;
-    return jsonToolResult({ id: result.id, isNew: result.isNew, title: entry.title, url: entry.canonicalUrl, fetchBlocked, message }, message);
+    const message = `${result.isNew ? "Clipped" : "Updated clip"}: ${entry.title ?? "text clip"}.`;
+    return jsonToolResult({ id: result.id, isNew: result.isNew, title: entry.title, url: entry.canonicalUrl, fetchBlocked: false, message }, message);
   }
 );
 

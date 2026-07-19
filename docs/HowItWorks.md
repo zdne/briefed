@@ -67,13 +67,17 @@ npm run cli -- sync-feedbin --reset-cursor
 
 ### Manual clipping
 
-`npm run cli -- clip` and the `clip` MCP tool save a URL or text directly to the archive, bypassing the collector schedule. They can also **mark an existing archive item as clipped** by id — flagging something already collected (an article read in a briefing, for example) for later retrieval, without re-fetching or re-enriching it.
+`npm run cli -- clip` and the `clip` MCP tool save a URL or text directly to the archive, bypassing the collector schedule. They can also **mark an existing archive item as clipped** — flagging something already collected (an article read in a briefing, for example) for later retrieval, without re-fetching or re-enriching it.
 
-**URL clips** — Briefed fetches the page, extracts the title, and converts the HTML body to plain text (15s timeout). Deduplicated by a hash of the URL: re-clipping the same URL upserts the existing entry.
+**URL clips** — Briefed fetches the page, extracts the title, and converts the HTML body to plain text (15s timeout), unless the URL is already in the archive (see below). Deduplicated by canonical URL.
 
 **Text clips** — Text is stored directly with no fetch. Deduplicated by a hash of the content.
 
-**Marking by id** — `clip --id <n>` stamps `clipped_at` (and optionally `clip_note`) on the existing `content` row. The item keeps its original `source_type` and content. Marking is idempotent: re-marking updates the note without changing the original clip time. Content ids are returned in the structured results of the `brief`, `briefing`, and `clips` MCP tools, so an agent can resolve "clip source 3 from my briefing" to an id and mark it.
+**Marking by URL** — `clip --url <url>` first checks whether that canonical URL is already archived. If so, it stamps `clipped_at` (and optionally `clip_note`) on the existing `content` row in place — no fetch, no re-enrichment, original `source_type`/content untouched. If the URL isn't archived yet, it falls through to the normal fetch-and-create flow. This is the URL you'd read straight off a rendered briefing (`[title](url)` under each `### Source N` heading) — no lookup needed.
+
+**Marking by citation** — `clip --citation <n> [--digest-id <n>]` marks "Source N" from a specific briefing (the latest one, if `--digest-id` is omitted). The citation number is resolved server-side against that digest's actual source list, the same way the `briefing` tool does — this is the only reliable way to mark a source that has no URL, such as a Gmail-sourced newsletter item. There is deliberately no way to mark by a raw numeric database id: an earlier version accepted one directly, and an agent mistook a "Source N" citation number for a real id, silently clipping an unrelated archive row. Citation and URL resolution can't be misapplied that way — a wrong citation/digest pair or an unmatched URL just errors or creates a new clip, never a silent wrong-row match.
+
+Marking is idempotent: re-marking updates the note without changing the original clip time.
 
 URL/text clips accept an optional `--title` override; all forms accept an optional `--note`. For new clips the note is appended to the content before enrichment and also stored in `source_summary`; for marked items it is stored as the clip note.
 
@@ -81,7 +85,8 @@ URL/text clips accept an optional `--title` override; all forms accept an option
 npm run cli -- clip --url https://example.com/article
 npm run cli -- clip --url https://example.com/article --note "relevant to agentic payments"
 npm run cli -- clip --text "interesting finding..." --title "My note"
-npm run cli -- clip --id 10234 --note "revisit for research"
+npm run cli -- clip --citation 5 --note "revisit for research"
+npm run cli -- clip --citation 5 --digest-id 42
 ```
 
 **Cloudflare and bot-challenge pages**

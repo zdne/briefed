@@ -21,10 +21,11 @@
 | `npm run sync-feedbin` | Sync Feedbin |
 | `npm run cli -- sync-feedbin --hours 48` | Feedbin sync with lookback |
 | `npm run cli -- sync-feedbin --reset-cursor` | Clear cursor and rescan full Feedbin archive |
-| `npm run cli -- clip --url <url>` | Clip a URL to the archive |
+| `npm run cli -- clip --url <url>` | Clip a URL, or mark it as clipped if already archived |
 | `npm run cli -- clip --url <url> --note "..."` | Clip a URL with a note |
 | `npm run cli -- clip --text "..."` | Clip raw text to the archive |
-| `npm run cli -- clip --id <n> --note "..."` | Mark an existing archive item as clipped |
+| `npm run cli -- clip --citation <n> --note "..."` | Mark "Source N" from the latest briefing as clipped |
+| `npm run cli -- clip --citation <n> --digest-id <id>` | Mark "Source N" from a specific briefing |
 | `npm run cli -- clips` | List 10 most recently saved items |
 | `npm run cli -- clips "<query>"` | Search saved items semantically |
 | `npm run cli -- enrich --source reddit --limit 20` | Upgrade embedded-only entries to full enrichment |
@@ -38,7 +39,7 @@
 |---|---|
 | `brief` | Ad hoc question over the archive with citations |
 | `briefing` | Show the latest (or a specific) stored briefing |
-| `clip` | Save a URL or text to the archive, or mark an existing item as clipped by id |
+| `clip` | Save a URL or text to the archive, or mark an existing item as clipped by URL/citation |
 | `clips` | List or search everything saved (fresh clips and marked items) |
 | `get_user_config` | Read current collector and topic config |
 | `update_user_config` | Replace full config |

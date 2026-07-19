@@ -1,6 +1,7 @@
 import { AnalystAI } from "./ai.js";
 import {
   enrichmentCandidates,
+  findContentByCanonicalUrl,
   getSyncCursor,
   getSyncCursorForKey,
   markContentClipped,
@@ -12,6 +13,7 @@ import {
   setSyncCursorForKey,
   upsertSourceContent
 } from "./db.js";
+import { normalizeClip } from "./clip.js";
 import { config } from "./config.js";
 import {
   desiredEnrichmentMode,
@@ -143,6 +145,50 @@ export async function ingestClip(
     log("Clip already enriched; skipped");
   }
   return { id: stored.id, isNew: stored.isNew };
+}
+
+export interface ClipUrlResult {
+  id: string;
+  isNew: boolean;
+  marked: boolean;
+  fetchBlocked: boolean;
+  title: string | null;
+  canonicalUrl: string | null;
+}
+
+// Marks an already-archived URL as clipped in place if it exists, avoiding a
+// redundant re-fetch that would otherwise overwrite the row's original
+// source_key/source_type/content_text. Falls back to the normal fetch-and-
+// create clip flow when the URL isn't already in the archive.
+export async function clipUrl(
+  url: string,
+  title: string | undefined,
+  note: string | undefined,
+  ai: AnalystAI,
+  log: SyncLogger = () => {}
+): Promise<ClipUrlResult> {
+  const existing = await findContentByCanonicalUrl(url);
+  if (existing) {
+    const marked = await markContentClipped(existing.id, note);
+    log(`Marked existing archive item as clipped: ${marked?.title ?? existing.title ?? url}`);
+    return {
+      id: existing.id,
+      isNew: false,
+      marked: true,
+      fetchBlocked: false,
+      title: marked?.title ?? existing.title,
+      canonicalUrl: marked?.canonicalUrl ?? url
+    };
+  }
+  const { entry, fetchBlocked } = await normalizeClip({ url, title, note }, new Date().toISOString());
+  const result = await ingestClip(entry, ai, log);
+  return {
+    ...result,
+    marked: false,
+    fetchBlocked,
+    title: entry.title,
+    canonicalUrl: entry.canonicalUrl
+  };
 }
 
 export async function enrichContent(id: string, entry: SourceEntry, ai: AnalystAI): Promise<void> {

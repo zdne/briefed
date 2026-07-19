@@ -488,3 +488,40 @@ export async function getDigestForRendering(id?: number): Promise<DigestForRende
     sources: sourcesResult.rows
   };
 }
+
+export async function findContentByCanonicalUrl(url: string): Promise<{ id: string; title: string | null } | null> {
+  const result = await pool.query<{ id: string; title: string | null }>(
+    `SELECT id::text, title FROM content WHERE canonical_url = $1 LIMIT 1`,
+    [url]
+  );
+  return result.rows[0] ?? null;
+}
+
+export interface DigestCitationResolution {
+  contentId: string;
+  digestId: string;
+  title: string | null;
+}
+
+// Resolves a "Source N" citation from a rendered briefing to the real content
+// row id. Citation numbers are 1-based positions within one digest's
+// content_ids array, NOT content ids themselves — this resolution is
+// authoritative against the actual digest, so it can't be misapplied the way
+// a raw guessed id could.
+export async function resolveDigestCitation(
+  citation: number,
+  digestId?: number
+): Promise<DigestCitationResolution | null> {
+  const result = await pool.query<{ digestId: string; contentId: string | null; title: string | null }>(
+    `SELECT d.id::text AS "digestId", d.content_ids[$1]::text AS "contentId", c.title
+     FROM digests d
+     LEFT JOIN content c ON c.id = d.content_ids[$1]
+     WHERE ($2::bigint IS NULL OR d.id = $2)
+     ORDER BY d.created_at DESC
+     LIMIT 1`,
+    [citation, digestId ?? null]
+  );
+  const row = result.rows[0];
+  if (!row || row.contentId === null) return null;
+  return { contentId: row.contentId, digestId: row.digestId, title: row.title };
+}
