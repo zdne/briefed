@@ -452,8 +452,7 @@ const digestCommand = program
   .option("-H, --hours <number>", "lookback hours", String(config.DIGEST_HOURS))
   .option("--days-ago <number>", "end the briefing window N days before now")
   .option("--style <style>", "friendly style: plain or warm", "plain")
-  .option("--canonical-only", "create only the canonical briefing and skip friendly rendering")
-  .option("--emit-canonical", "also write the canonical briefing Markdown when creating a friendly briefing")
+  .option("--friendly", "also render a reader-friendly Markdown rewrite with the configured LLM")
   .option("-f, --format <format>", "output format: markdown or json", "markdown")
   .option("-o, --output <path>", "write Markdown to this path instead of DIGEST_OUTPUT_DIR")
   .action(createDigestAction);
@@ -644,8 +643,7 @@ async function createDigestAction(options: {
   hours: string;
   daysAgo?: string;
   style: string;
-  canonicalOnly?: boolean;
-  emitCanonical?: boolean;
+  friendly?: boolean;
   format: string;
   output?: string;
 }): Promise<void> {
@@ -662,25 +660,22 @@ async function createDigestAction(options: {
   }
   const result = await createDigest(hours, ai, log, referenceTime);
   const createdAt = new Date();
+  const canonicalMarkdown = renderDigestMarkdown(result, createdAt);
 
-  if (options.canonicalOnly) {
-    const markdown = renderDigestMarkdown(result, createdAt);
+  if (!options.friendly) {
     const outputPath = options.output ?? digestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt);
-    const path = await writeMarkdownFile(outputPath, markdown);
+    const path = await writeMarkdownFile(outputPath, canonicalMarkdown);
     log(`Wrote canonical briefing Markdown to ${path}`);
-    printFormattedOutput(format, result, markdown, true);
+    printFormattedOutput(format, result, canonicalMarkdown, true);
     return;
   }
 
-  const canonicalMarkdown = renderDigestMarkdown(result, createdAt);
-  if (options.emitCanonical) {
-    const canonicalOutputPath = digestOutputPath(
-      options.output ? dirname(resolve(options.output)) : config.DIGEST_OUTPUT_DIR,
-      createdAt
-    );
-    const canonicalPath = await writeMarkdownFile(canonicalOutputPath, canonicalMarkdown);
-    log(`Wrote canonical briefing Markdown to ${canonicalPath}`);
-  }
+  const canonicalOutputPath = digestOutputPath(
+    options.output ? dirname(resolve(options.output)) : config.DIGEST_OUTPUT_DIR,
+    createdAt
+  );
+  const canonicalPath = await writeMarkdownFile(canonicalOutputPath, canonicalMarkdown);
+  log(`Wrote canonical briefing Markdown to ${canonicalPath}`);
 
   log("Requesting friendly briefing rewrite from LLM");
   const markdown = cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));

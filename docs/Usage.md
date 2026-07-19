@@ -6,10 +6,9 @@
 |---|---|
 | `npm run sync` | Sync every enabled collector |
 | `npm run sync -- --hours 48` | Sync with a lookback |
-| `npm run digest` | Generate and write a briefing for the last 24h |
+| `npm run digest` | Generate and write the canonical briefing (Obsidian-friendly) for the last 24h |
 | `npm run digest -- --hours 48` | Custom lookback |
-| `npm run digest -- --canonical-only` | Write only the canonical Markdown (Obsidian-friendly) |
-| `npm run digest -- --emit-canonical` | Write both friendly and canonical Markdown |
+| `npm run digest -- --friendly` | Also render a reader-friendly Markdown rewrite with the LLM |
 | `npm run digest -- --hours 24 --days-ago 3` | Briefing window ending 3 days ago |
 | `npm run cli -- query "<question>"` | Query the archive |
 | `npm run cli -- query-followup "<question>"` | Follow-up on latest saved query |

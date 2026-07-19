@@ -9,6 +9,6 @@ set -eo pipefail
 cd /Users/z/Codebase/briefed
 
 npm run sync
-npm run digest -- --canonical-only
+npm run digest
 
 echo "=== Done: $(date) ==="

@@ -85,7 +85,7 @@ Runs sync + digest daily at 6am. Fires at next wake if the Mac was asleep.
 **Automate with cron (Linux):**
 
 ```cron
-0 6 * * * cd /path/to/briefed && npm run sync && npm run digest -- --canonical-only >> /var/log/briefed.log 2>&1
+0 6 * * * cd /path/to/briefed && npm run sync && npm run digest >> /var/log/briefed.log 2>&1
 ```
 
 ### MCP (Claude app)

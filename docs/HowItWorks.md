@@ -215,16 +215,15 @@ The briefing command:
 1. Loads candidates and runs topic-aware selection.
 2. Sends selected entries to the configured LLM for a canonical source-grounded briefing.
 3. Stores the canonical briefing in the `digests` table.
-4. Generates a friendly Markdown rewrite (unless `--canonical-only`).
-5. Writes the Markdown file to `DIGEST_OUTPUT_DIR`.
+4. Writes the canonical Markdown file to `DIGEST_OUTPUT_DIR`.
+5. Generates a friendly Markdown rewrite too, if `--friendly` was passed.
 
 **Output modes:**
 
 ```bash
-npm run digest                        # friendly Markdown
-npm run digest -- --style warm        # warmer newsletter tone
-npm run digest -- --emit-canonical    # friendly + canonical Markdown
-npm run digest -- --canonical-only    # canonical Markdown only (Obsidian-friendly)
+npm run digest                        # canonical Markdown only (Obsidian-friendly)
+npm run digest -- --friendly          # friendly + canonical Markdown
+npm run digest -- --friendly --style warm    # warmer newsletter tone
 npm run cli -- digest canonical       # re-render latest stored briefing without LLM
 npm run cli -- digest canonical --id 4
 npm run cli -- digest friendly --id 4 --style warm
