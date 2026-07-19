@@ -29,7 +29,8 @@ export async function queryArchive(
       author: source.author,
       publishedAt: source.publishedAt,
       summary: source.summary,
-      score: source.score
+      score: source.score,
+      clipped: source.clipped ?? false
     }))
   };
 }

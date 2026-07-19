@@ -49,6 +49,7 @@ const schema = z.object({
   ),
   ENRICHMENT_TOPIC_UPGRADE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.35),
   QUERY_LIMIT: z.coerce.number().int().min(1).max(30).default(8),
+  QUERY_CLIP_BOOST: z.coerce.number().min(0).max(1).default(0.05),
   DIGEST_HOURS: z.coerce.number().int().min(1).default(24),
   DIGEST_MAX_ENTRIES: z.coerce.number().int().min(1).default(200),
   DIGEST_CANDIDATE_LIMIT: z.coerce.number().int().min(1).default(1000),

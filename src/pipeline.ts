@@ -3,6 +3,7 @@ import {
   enrichmentCandidates,
   getSyncCursor,
   getSyncCursorForKey,
+  markContentClipped,
   markEnrichmentFailed,
   markEnrichmentProcessing,
   saveEmbeddedOnly,
@@ -128,6 +129,8 @@ export async function ingestClip(
   log: SyncLogger = () => {}
 ): Promise<{ id: string; isNew: boolean }> {
   const stored = await upsertSourceContent(entry, "clip", "full");
+  const rawNote = (entry.rawEntry as { note?: string | null }).note;
+  await markContentClipped(stored.id, rawNote ?? undefined);
   const label = entry.title ?? entry.canonicalUrl ?? `clip:${entry.sourceItemId}`;
   log(`${stored.isNew ? "Stored new clip" : "Updated existing clip"}: ${label}`);
   if (stored.needsEnrichment && entry.contentText) {

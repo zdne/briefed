@@ -35,7 +35,7 @@ import {
 import { queryArchive, queryFollowUp } from "./query.js";
 import { TwitterApiClient } from "./twitterapi.js";
 import { enabledRssFeeds, gmailQueryFromUserConfig, loadUserConfig } from "./user-config.js";
-import { listClips, retrieveRelevantClips } from "./db.js";
+import { listClips, markContentClipped, retrieveRelevantClips } from "./db.js";
 import type { SourceType } from "./enrichment-policy.js";
 import type { FriendlyDigestStyle, QuerySession } from "./types.js";
 
@@ -516,14 +516,22 @@ digestCommand
 
 program
   .command("clip")
-  .description("Save a URL or text to the archive")
+  .description("Save a URL or text to the archive, or mark an existing archive item as clipped")
   .option("--url <url>", "URL to fetch and store")
   .option("--text <text>", "raw text to store directly")
+  .option("--id <number>", "mark an existing archive item as clipped instead of adding new content")
   .option("--title <title>", "optional title override")
   .option("--note <note>", "optional note appended to the content before enrichment")
-  .action(async (options: { url?: string; text?: string; title?: string; note?: string }) => {
+  .action(async (options: { url?: string; text?: string; id?: string; title?: string; note?: string }) => {
+    if (options.id) {
+      const id = positiveInteger(options.id, "--id");
+      const marked = await markContentClipped(String(id), options.note);
+      if (!marked) throw new Error(`Item ${id} not found`);
+      console.log(JSON.stringify({ ...marked, marked: true }, null, 2));
+      return;
+    }
     if (!options.url && !options.text) {
-      throw new Error("clip requires --url or --text");
+      throw new Error("clip requires --url, --text, or --id");
     }
     const collectedAt = new Date().toISOString();
     const log = timestampLogger;

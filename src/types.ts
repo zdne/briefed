@@ -54,6 +54,7 @@ export interface RetrievedContent {
   summary: string | null;
   contentText: string;
   score: number;
+  clipped?: boolean;
 }
 
 export interface DigestCandidate extends RetrievedContent {
@@ -104,5 +105,6 @@ export interface QuerySession {
     publishedAt: string | null;
     summary: string | null;
     score: number;
+    clipped?: boolean;
   }>;
 }

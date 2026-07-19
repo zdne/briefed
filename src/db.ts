@@ -236,27 +236,42 @@ export interface ClipRow {
   canonicalUrl: string | null;
   summary: string | null;
   collectedAt: string;
+  clippedAt: string;
   note: string | null;
 }
 
+export interface ClipMarkResult {
+  id: string;
+  title: string | null;
+  canonicalUrl: string | null;
+  clippedAt: string;
+}
+
+export async function markContentClipped(id: string, note?: string): Promise<ClipMarkResult | null> {
+  const result = await pool.query<ClipMarkResult>(
+    `UPDATE content SET
+      clipped_at = COALESCE(clipped_at, now()),
+      clip_note = COALESCE($2, clip_note),
+      updated_at = now()
+     WHERE id = $1
+     RETURNING id::text, title, canonical_url AS "canonicalUrl", clipped_at::text AS "clippedAt"`,
+    [id, note ?? null]
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function listClips(limit: number): Promise<ClipRow[]> {
-  const result = await pool.query<{ id: string; title: string | null; canonicalUrl: string | null; summary: string | null; collectedAt: string; rawEntry: unknown }>(
+  const result = await pool.query<ClipRow>(
     `SELECT id::text, title, canonical_url AS "canonicalUrl",
-      analyst_summary AS summary, collected_at::text AS "collectedAt", raw_entry AS "rawEntry"
+      analyst_summary AS summary, collected_at::text AS "collectedAt",
+      clipped_at::text AS "clippedAt", clip_note AS note
      FROM content
-     WHERE source_key LIKE 'clip:%'
-     ORDER BY collected_at DESC
+     WHERE clipped_at IS NOT NULL
+     ORDER BY clipped_at DESC
      LIMIT $1`,
     [limit]
   );
-  return result.rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    canonicalUrl: row.canonicalUrl,
-    summary: row.summary,
-    collectedAt: row.collectedAt,
-    note: rawEntryNote(row.rawEntry)
-  }));
+  return result.rows;
 }
 
 export async function retrieveRelevantClips(embedding: number[], limit: number): Promise<RetrievedContent[]> {
@@ -266,7 +281,7 @@ export async function retrieveRelevantClips(embedding: number[], limit: number):
       1 - (embedding <=> $1::vector) AS score
      FROM content
      WHERE embedding IS NOT NULL AND enrichment_status = 'complete'
-       AND source_key LIKE 'clip:%'
+       AND clipped_at IS NOT NULL
      ORDER BY embedding <=> $1::vector
      LIMIT $2`,
     [vectorLiteral(embedding), limit]
@@ -274,24 +289,25 @@ export async function retrieveRelevantClips(embedding: number[], limit: number):
   return result.rows;
 }
 
-function rawEntryNote(rawEntry: unknown): string | null {
-  if (!rawEntry || typeof rawEntry !== "object") return null;
-  const entry = rawEntry as Record<string, unknown>;
-  return typeof entry.note === "string" ? entry.note : null;
-}
-
 export async function retrieveRelevant(embedding: number[], limit: number): Promise<RetrievedContent[]> {
+  // Over-fetch with plain distance ordering so the HNSW index is used, then
+  // apply the clip boost and re-rank in process — a CASE expression in
+  // ORDER BY would force a sequential scan over all embeddings.
   const result = await pool.query<RetrievedContent>(
     `SELECT id::text, title, canonical_url AS "canonicalUrl", author,
       published_at::text AS "publishedAt", analyst_summary AS summary, content_text AS "contentText",
-      1 - (embedding <=> $1::vector) AS score
+      1 - (embedding <=> $1::vector) AS score,
+      clipped_at IS NOT NULL AS clipped
      FROM content
      WHERE embedding IS NOT NULL AND enrichment_status = 'complete'
      ORDER BY embedding <=> $1::vector
      LIMIT $2`,
-    [vectorLiteral(embedding), limit]
+    [vectorLiteral(embedding), limit * 3]
   );
-  return result.rows;
+  return result.rows
+    .map((row) => ({ ...row, score: row.clipped ? row.score + config.QUERY_CLIP_BOOST : row.score }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 }
 
 export async function countRecentContent(hours: number, referenceTime = new Date()): Promise<number> {
@@ -324,6 +340,7 @@ export async function recentDigestCandidates(
      WHERE enrichment_status = 'complete'
        AND published_at >= $3::timestamptz - ($1 * interval '1 hour')
        AND published_at < $3::timestamptz
+       AND NOT (clipped_at IS NOT NULL AND source_type <> 'clip')
      ORDER BY published_at DESC, collected_at DESC
      LIMIT $2`,
     [hours, limit, referenceTime.toISOString()]
@@ -347,6 +364,7 @@ export async function recentVectorMatches(
        AND enrichment_status = 'complete'
        AND published_at >= $4::timestamptz - ($2 * interval '1 hour')
        AND published_at < $4::timestamptz
+       AND NOT (clipped_at IS NOT NULL AND source_type <> 'clip')
      ORDER BY embedding <=> $1::vector
      LIMIT $3`,
     [vectorLiteral(embedding), hours, limit, referenceTime.toISOString()]

@@ -67,18 +67,21 @@ npm run cli -- sync-feedbin --reset-cursor
 
 ### Manual clipping
 
-`npm run cli -- clip` and the `clip` MCP tool save a URL or text directly to the archive, bypassing the collector schedule.
+`npm run cli -- clip` and the `clip` MCP tool save a URL or text directly to the archive, bypassing the collector schedule. They can also **mark an existing archive item as clipped** by id — flagging something already collected (an article read in a briefing, for example) for later retrieval, without re-fetching or re-enriching it.
 
 **URL clips** — Briefed fetches the page, extracts the title, and converts the HTML body to plain text (15s timeout). Deduplicated by a hash of the URL: re-clipping the same URL upserts the existing entry.
 
 **Text clips** — Text is stored directly with no fetch. Deduplicated by a hash of the content.
 
-Both accept an optional `--title` override and an optional `--note`. The note is appended to the content before enrichment and also stored in `source_summary`.
+**Marking by id** — `clip --id <n>` stamps `clipped_at` (and optionally `clip_note`) on the existing `content` row. The item keeps its original `source_type` and content. Marking is idempotent: re-marking updates the note without changing the original clip time. Content ids are returned in the structured results of the `brief`, `briefing`, and `clips` MCP tools, so an agent can resolve "clip source 3 from my briefing" to an id and mark it.
+
+URL/text clips accept an optional `--title` override; all forms accept an optional `--note`. For new clips the note is appended to the content before enrichment and also stored in `source_summary`; for marked items it is stored as the clip note.
 
 ```bash
 npm run cli -- clip --url https://example.com/article
 npm run cli -- clip --url https://example.com/article --note "relevant to agentic payments"
 npm run cli -- clip --text "interesting finding..." --title "My note"
+npm run cli -- clip --id 10234 --note "revisit for research"
 ```
 
 **Cloudflare and bot-challenge pages**
@@ -89,17 +92,23 @@ Some sites return HTTP 200 with a Cloudflare or bot-challenge page rather than a
 - The canonical URL is preserved — the clip exists in the archive and is findable.
 - `fetchBlocked: true` is returned. Via MCP, the agent receives a message suggesting it use `web_search` to retrieve the content and re-clip with `--text`. Via CLI, a warning is printed.
 
-**Priority in briefings**
+**Effect on briefings and queries**
 
-Clips have `source_type = 'clip'` and are always fully enriched. They receive a fixed priority in digest selection — regardless of keyword score, clips are placed in the `important_general` bucket before any keyword-scored entries.
+Clipped state is tracked by `clipped_at` on the `content` row, orthogonal to `source_type`:
+
+- **Fresh URL/text clips** get `source_type = 'clip'`, are always fully enriched, and receive a fixed priority in digest selection — regardless of keyword score, they are placed in the `important_general` bucket before any keyword-scored entries, so they appear in the next briefing.
+- **Marked existing items** keep their original `source_type` and are **permanently excluded from future briefings** — they were already briefed once, and marking retires them from digest candidacy (both the recency pool and topic vector matches). There is no unclip command; clearing `clipped_at` via SQL is the escape hatch.
+- **`brief` queries boost clipped items**: `retrieveRelevant` adds `QUERY_CLIP_BOOST` (default 0.05, `0` disables) to the similarity score of any clipped row, so saved items outrank equally relevant unclipped content. Query results carry a `clipped: true` flag per source. The boost is applied in process after an index-friendly over-fetch (3× limit) so the HNSW embedding index stays usable.
 
 **Retrieval**
 
 ```bash
-npm run cli -- clips                    # list 10 most recent clips
+npm run cli -- clips                    # list 10 most recently saved items
 npm run cli -- clips --limit 20         # list more
-npm run cli -- clips "agentic payments" # semantic search over clips
+npm run cli -- clips "agentic payments" # semantic search over saved items
 ```
+
+The list covers everything saved — fresh clips and marked items alike — ordered by when you saved them (`clipped_at DESC`).
 
 Via MCP: the `clips` tool accepts an optional `query` for semantic search or returns a chronological list when omitted.
 
@@ -242,7 +251,7 @@ npm run cli -- query-followup "Which of these seem most important?"
 
 Query flow:
 1. Embeds the question with OpenAI.
-2. Uses pgvector cosine similarity to retrieve up to `QUERY_LIMIT` relevant entries.
+2. Uses pgvector cosine similarity to retrieve up to `QUERY_LIMIT` relevant entries; clipped items get a `QUERY_CLIP_BOOST` similarity bonus so saved sources rank higher.
 3. Sends retrieved titles, summaries, URLs, and dates to the LLM.
 4. Returns a cited answer with `[1]`-style inline citations and a source list.
 
@@ -315,6 +324,7 @@ Failed enrichments are stored with `enrichment_status = 'failed'` and an error m
 | `LIGHTWEIGHT_SOURCE_TYPES` | `reddit,hackernews,twitter` | Source types that use embedding-only enrichment |
 | `ENRICHMENT_TOPIC_UPGRADE_THRESHOLD` | `0.35` | Cosine similarity threshold for auto-upgrading lightweight posts to full enrichment at sync time |
 | `QUERY_LIMIT` | `8` | Default vector matches passed to query synthesis |
+| `QUERY_CLIP_BOOST` | `0.05` | Similarity bonus for clipped items in query retrieval (`0` disables) |
 | `DIGEST_HOURS` | `24` | Default briefing lookback window |
 | `DIGEST_CANDIDATE_LIMIT` | `1000` | Newest completed entries loaded before topic selection |
 | `DIGEST_MAX_ENTRIES` | `200` | Hard cap on entries sent to one briefing prompt |

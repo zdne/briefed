@@ -4,7 +4,7 @@ import { z } from "zod";
 import { AnalystAI } from "./ai.js";
 import { normalizeClip } from "./clip.js";
 import { config } from "./config.js";
-import { getDigestForRendering, listClips, pool, retrieveRelevantClips } from "./db.js";
+import { getDigestForRendering, listClips, markContentClipped, pool, retrieveRelevantClips } from "./db.js";
 import { renderDigestMarkdown, renderQueryMarkdown } from "./markdown.js";
 import { ingestClip } from "./pipeline.js";
 import { queryArchive } from "./query.js";
@@ -125,17 +125,26 @@ server.registerTool(
   {
     title: "Clip",
     description:
-      "Save a URL or text to the Brief archive for later retrieval and briefing. Use for prompts like \"clip this for me: https://...\", \"save this page to my archive\", \"clip this and note it's relevant to agentic payments: https://...\", or \"save this note: [pasted text]\". One of url or text is required. The note is appended to the content before enrichment.",
+      "Save a URL or text to the Brief archive for later retrieval, or mark an existing archive item as clipped. Use for prompts like \"clip this for me: https://...\", \"save this page to my archive\", \"save this note: [pasted text]\", or — for items already in the archive — \"clip source 3 from my briefing\" / \"save that article about X for later\" (resolve the source to its id via the briefing, brief, or clips tool results, then pass id). One of url, text, or id is required. Marking by id flags the existing item without re-fetching; it will rank higher in brief queries and stop appearing in future briefings.",
     inputSchema: {
       url: z.string().url().optional().describe("URL to fetch and store."),
       text: z.string().min(1).optional().describe("Raw text to store directly."),
+      id: z.number().int().positive().optional().describe("Id of an existing archive item (from brief/briefing/clips results) to mark as clipped."),
       title: z.string().optional().describe("Optional title override."),
-      note: z.string().optional().describe("Optional note appended to the content before enrichment.")
+      note: z.string().optional().describe("Optional note appended to the content before enrichment, or attached to the marked item.")
     }
   },
-  async ({ url, text, title, note }) => {
+  async ({ url, text, id, title, note }) => {
+    if (id !== undefined) {
+      const marked = await markContentClipped(String(id), note);
+      if (!marked) {
+        return jsonToolResult({ error: `Item ${id} not found` }, `Item ${id} not found`, true);
+      }
+      const message = `Marked as clipped: ${marked.title ?? marked.canonicalUrl ?? `item ${id}`}`;
+      return jsonToolResult({ ...marked, marked: true, message }, message);
+    }
     if (!url && !text) {
-      return jsonToolResult({ error: "clip requires url or text" }, "clip requires url or text", true);
+      return jsonToolResult({ error: "clip requires url, text, or id" }, "clip requires url, text, or id", true);
     }
     const collectedAt = new Date().toISOString();
     const { entry, fetchBlocked } = await normalizeClip({ url, text, title, note }, collectedAt);
@@ -154,7 +163,7 @@ server.registerTool(
   {
     title: "Clips",
     description:
-      "List or search saved clips. Use for prompts like \"what have I clipped recently?\", \"show me my last 10 clips\", \"find what I clipped about MCP\", or \"have I saved anything on Stripe?\". Omit query for a chronological list; supply query for semantic search over clips.",
+      "List or search everything saved to the archive — both freshly clipped URLs/text and existing items marked as clipped. Use for prompts like \"what have I clipped recently?\", \"show me my last 10 clips\", \"find what I clipped about MCP\", or \"have I saved anything on Stripe?\". Omit query for a chronological list (most recently saved first); supply query for semantic search over saved items.",
     inputSchema: {
       query: z.string().optional().describe("Semantic search query. Omit to list most recent clips."),
       limit: z.number().int().min(1).max(50).optional().describe("Maximum clips to return. Defaults to 10.")

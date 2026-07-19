@@ -24,8 +24,9 @@
 | `npm run cli -- clip --url <url>` | Clip a URL to the archive |
 | `npm run cli -- clip --url <url> --note "..."` | Clip a URL with a note |
 | `npm run cli -- clip --text "..."` | Clip raw text to the archive |
-| `npm run cli -- clips` | List 10 most recent clips |
-| `npm run cli -- clips "<query>"` | Search clips semantically |
+| `npm run cli -- clip --id <n> --note "..."` | Mark an existing archive item as clipped |
+| `npm run cli -- clips` | List 10 most recently saved items |
+| `npm run cli -- clips "<query>"` | Search saved items semantically |
 | `npm run cli -- enrich --source reddit --limit 20` | Upgrade embedded-only entries to full enrichment |
 | `npm run mcp` | Start the stdio MCP server |
 | `npm run db:migrate` | Apply SQL migrations |
@@ -37,8 +38,8 @@
 |---|---|
 | `brief` | Ad hoc question over the archive with citations |
 | `briefing` | Show the latest (or a specific) stored briefing |
-| `clip` | Save a URL or text to the archive immediately |
-| `clips` | List or search saved clips |
+| `clip` | Save a URL or text to the archive, or mark an existing item as clipped by id |
+| `clips` | List or search everything saved (fresh clips and marked items) |
 | `get_user_config` | Read current collector and topic config |
 | `update_user_config` | Replace full config |
 | `update_collectors` | Replace collectors section |
@@ -59,6 +60,7 @@
 | `ANTHROPIC_LLM_MODEL` | `claude-3-5-haiku-latest` | Anthropic model for enrichment and synthesis |
 | `LIGHTWEIGHT_SOURCE_TYPES` | `reddit,hackernews,twitter` | Source types that use embedding-only enrichment |
 | `QUERY_LIMIT` | `8` | Default vector matches passed to query synthesis |
+| `QUERY_CLIP_BOOST` | `0.05` | Similarity bonus for clipped items in query retrieval (`0` disables) |
 | `DIGEST_HOURS` | `24` | Default briefing lookback window |
 | `DIGEST_CANDIDATE_LIMIT` | `1000` | Newest completed entries loaded before topic selection |
 | `DIGEST_MAX_ENTRIES` | `200` | Hard cap on entries sent to one briefing prompt |
