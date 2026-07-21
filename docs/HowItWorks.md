@@ -310,6 +310,16 @@ Key rules the skill enforces:
 
 Failed enrichments are stored with `enrichment_status = 'failed'` and an error message for inspection and future retry.
 
+### Sync reliability
+
+Neon (and managed Postgres generally) can drop idle or in-flight connections without warning. Three layers guard against this:
+
+- **Idle pool clients** — `pool.on("error", ...)` in `src/db.ts` catches errors from clients sitting idle in the pool; the pool discards the broken client and creates a fresh one for the next query.
+- **Checked-out clients** — `upsertSourceContent` manually checks out a client via `pool.connect()` for its transaction. Per node-postgres, `pool.on("error")` does *not* cover a client once it's checked out — that's the caller's responsibility. Without an explicit listener, a connection dropping mid-transaction throws an **unhandled `'error'` event**, which is a synchronous Node crash that bypasses the promise chain entirely (this took down a full sync run and the day's briefing on 2026-07-21). `upsertSourceContent` now attaches its own listener and calls `client.release(err)` on failure so pg destroys the poisoned connection instead of recycling it.
+- **Per-item isolation** — a single item's storage failure (`storeAndProcessEntry` in `src/pipeline.ts`) is caught, logged, and counted in `SyncResult.storageFailed` rather than aborting the rest of the sync run; the item is simply picked up again on the next sync. This mirrors the existing per-item handling for enrichment failures.
+
+As a last resort, `src/cli.ts` registers process-level `uncaughtException`/`unhandledRejection` handlers so any *other* crash-class error still logs clearly and exits with a bounded, deliberate shutdown instead of Node's default noisy crash.
+
 ---
 
 ## All Environment Variables

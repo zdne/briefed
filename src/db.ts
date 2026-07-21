@@ -95,6 +95,13 @@ export async function upsertSourceContent(
   desiredMode: EnrichmentMode
 ): Promise<{ id: string; needsEnrichment: boolean; isNew: boolean }> {
   const client = await pool.connect();
+  // pool.on("error") only covers idle clients; a checked-out client is our
+  // responsibility, or a mid-transaction connection drop throws an unhandled
+  // 'error' event and crashes the process instead of rejecting this promise.
+  let connectionError: Error | undefined;
+  client.on("error", (err) => {
+    connectionError = err;
+  });
   try {
     await client.query("BEGIN");
     const existing = await client.query<{
@@ -150,10 +157,16 @@ export async function upsertSourceContent(
     await client.query("COMMIT");
     return { id, needsEnrichment, isNew: !existing.rows[0] };
   } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
+    if (!connectionError) {
+      // Only attempt ROLLBACK on a live connection — if the connection
+      // already dropped, issuing another query on it would itself throw.
+      await client.query("ROLLBACK").catch(() => {});
+    }
+    throw connectionError ?? error;
   } finally {
-    client.release();
+    // Pass the error so pg destroys a broken connection instead of
+    // returning it to the pool for the next query to fail on.
+    client.release(connectionError);
   }
 }
 

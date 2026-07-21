@@ -56,6 +56,7 @@ export interface SyncResult {
   fullyEnriched: number;
   embeddedOnly: number;
   enrichmentFailed: number;
+  storageFailed: number;
   cursor?: string;
   twitterLists?: TwitterListSyncSummary[];
   rssFeeds?: RssFeedSyncSummary[];
@@ -290,6 +291,7 @@ export async function syncFeedbin(
     fullyEnriched: 0,
     embeddedOnly: 0,
     enrichmentFailed: 0,
+    storageFailed: 0,
     cursor: since
   };
   let newestCreatedAt = since;
@@ -361,6 +363,7 @@ export async function syncRssFeeds(
     fullyEnriched: 0,
     embeddedOnly: 0,
     enrichmentFailed: 0,
+    storageFailed: 0,
     rssFeeds: []
   };
   let successfulFeeds = 0;
@@ -504,6 +507,7 @@ export async function syncGmail(
     fullyEnriched: 0,
     embeddedOnly: 0,
     enrichmentFailed: 0,
+    storageFailed: 0,
     gmail: {
       query: options.query,
       effectiveQuery,
@@ -567,6 +571,7 @@ export async function syncTwitterLists(
     fullyEnriched: 0,
     embeddedOnly: 0,
     enrichmentFailed: 0,
+    storageFailed: 0,
     twitterLists: []
   };
 
@@ -823,7 +828,7 @@ function formatProgress(current: number, total: number | null): string {
 export async function processSourceEntry(
   entry: SourceEntry,
   ai: AnalystAI,
-  result: Pick<SyncResult, "insertedOrUpdated" | "fullyEnriched" | "embeddedOnly" | "enrichmentFailed">,
+  result: Pick<SyncResult, "insertedOrUpdated" | "fullyEnriched" | "embeddedOnly" | "enrichmentFailed" | "storageFailed">,
   progress: string,
   log: SyncLogger,
   topicEmbeddings?: number[][]
@@ -839,13 +844,23 @@ async function storeAndProcessEntry(
   sourceType: SourceType,
   mode: "full" | "embedded_only",
   ai: AnalystAI,
-  result: Pick<SyncResult, "insertedOrUpdated" | "fullyEnriched" | "embeddedOnly" | "enrichmentFailed">,
+  result: Pick<SyncResult, "insertedOrUpdated" | "fullyEnriched" | "embeddedOnly" | "enrichmentFailed" | "storageFailed">,
   progress: string,
   log: SyncLogger,
   label: string,
   topicEmbeddings?: number[][]
 ): Promise<void> {
-  const stored = await upsertSourceContent(entry, sourceType, mode);
+  let stored: { id: string; needsEnrichment: boolean; isNew: boolean };
+  try {
+    stored = await upsertSourceContent(entry, sourceType, mode);
+  } catch (error) {
+    // A single item's storage failure (e.g. a transient connection drop)
+    // shouldn't abort the rest of the sync run — log it and move on; the
+    // item will be picked up again on the next sync.
+    result.storageFailed++;
+    log(`${progress} Storage failed, skipping: ${errorMessage(error)}`);
+    return;
+  }
   result.insertedOrUpdated++;
   log(`${progress} Stored: ${label}`);
 

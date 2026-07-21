@@ -40,6 +40,23 @@ import { listClips, markContentClipped, resolveDigestCitation, retrieveRelevantC
 import type { SourceType } from "./enrichment-policy.js";
 import type { FriendlyDigestStyle, QuerySession } from "./types.js";
 
+// Last-resort safety net: some errors (e.g. a connection dropping while a
+// checked-out pg client has no error listener) throw synchronously outside
+// the promise chain and bypass parseAsync().catch() below entirely. Without
+// this, Node's default behavior dumps a noisy stack trace and crashes with
+// no chance to close the pool — this at least logs clearly and exits
+// deliberately. A stuck pool.end() (e.g. the connection itself is wedged)
+// is bounded so the process doesn't hang forever trying to shut down.
+function crashAndExit(label: string, error: unknown): void {
+  const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+  console.error(`[${new Date().toISOString()}] [FATAL] ${label}: ${detail}`);
+  const forceExit = setTimeout(() => process.exit(1), 5_000);
+  forceExit.unref();
+  pool.end().catch(() => {}).finally(() => process.exit(1));
+}
+process.on("uncaughtException", (error) => crashAndExit("Uncaught exception", error));
+process.on("unhandledRejection", (reason) => crashAndExit("Unhandled rejection", reason));
+
 const program = new Command().name("brief").description("Briefed.sh personal news intelligence");
 const collectorOrder = ["rss", "gmail", "twitter", "feedbin"] as const;
 type CollectorName = typeof collectorOrder[number];
@@ -621,10 +638,12 @@ function formatFullSyncSummary(
     .filter((name) => failures[name] !== undefined)
     .map((name) => collectorLabels[name]);
   const total = collectorOrder.reduce((sum, name) => sum + (results[name]?.fetched ?? 0), 0);
+  const storageFailed = collectorOrder.reduce((sum, name) => sum + (results[name]?.storageFailed ?? 0), 0);
   const sources = syncedSources.length > 0 ? syncedSources.join(", ") : "none";
   const failed = failedSources.length > 0 ? `; failed: ${failedSources.join(", ")}` : "";
+  const storageFailedNote = storageFailed > 0 ? `; ${storageFailed} item(s) failed to store` : "";
 
-  return `Full sync complete: ${total} item${total === 1 ? "" : "s"} synced from ${sources}${failed}`;
+  return `Full sync complete: ${total} item${total === 1 ? "" : "s"} synced from ${sources}${failed}${storageFailedNote}`;
 }
 
 function printFormattedOutput(
