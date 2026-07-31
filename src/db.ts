@@ -98,10 +98,15 @@ export async function upsertSourceContent(
   // pool.on("error") only covers idle clients; a checked-out client is our
   // responsibility, or a mid-transaction connection drop throws an unhandled
   // 'error' event and crashes the process instead of rejecting this promise.
+  // The pool reuses this same Client instance across checkouts, so the
+  // listener must be named and removed below — an anonymous listener left
+  // attached would accumulate on every call and eventually trip Node's
+  // MaxListenersExceededWarning.
   let connectionError: Error | undefined;
-  client.on("error", (err) => {
+  const onConnectionError = (err: Error) => {
     connectionError = err;
-  });
+  };
+  client.on("error", onConnectionError);
   try {
     await client.query("BEGIN");
     const existing = await client.query<{
@@ -164,6 +169,7 @@ export async function upsertSourceContent(
     }
     throw connectionError ?? error;
   } finally {
+    client.removeListener("error", onConnectionError);
     // Pass the error so pg destroys a broken connection instead of
     // returning it to the pool for the next query to fail on.
     client.release(connectionError);

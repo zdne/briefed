@@ -85,8 +85,10 @@ Runs sync + digest daily at 6am. Fires at next wake if the Mac was asleep.
 **Automate with cron (Linux):**
 
 ```cron
-0 6 * * * cd /path/to/briefed && npm run sync && npm run digest >> /var/log/briefed.log 2>&1
+0 6 * * * cd /path/to/briefed && (npm run sync; npm run digest) >> /var/log/briefed.log 2>&1
 ```
+
+Use `;` rather than `&&` between sync and digest — `sync` exits non-zero if any individual collector fails (e.g. an expired OAuth token), even when the others succeed, and you still want a briefing from whatever did sync.
 
 ### MCP (Claude app)
 
