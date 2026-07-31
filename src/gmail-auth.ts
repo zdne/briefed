@@ -1,5 +1,9 @@
+import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 export const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const CALLBACK_PATH = "/oauth2callback";
@@ -118,6 +122,14 @@ export async function runGmailAuthFlow(options: GmailAuthFlowOptions): Promise<G
 
   log("Open this URL in your browser to authorize Gmail access:");
   log(authUrl);
+  if (process.platform === "darwin") {
+    try {
+      await execFileAsync("open", [authUrl]);
+      log("Opened the URL above in your default browser.");
+    } catch (error) {
+      log(`Could not open browser automatically (${errorMessage(error)}) — open the URL above manually.`);
+    }
+  }
   log(`Waiting for Google OAuth callback on ${redirectUri}`);
 
   try {
@@ -137,6 +149,10 @@ export async function runGmailAuthFlow(options: GmailAuthFlowOptions): Promise<G
 
 export function formatGmailRefreshTokenEnv(token: string): string {
   return `GMAIL_REFRESH_TOKEN=${token}`;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 interface CallbackOptions {

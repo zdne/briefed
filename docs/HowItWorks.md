@@ -38,7 +38,7 @@ RSS feed state is stored in `sync_state` under `rss:feed:<feed_hash>:state` as J
 
 Gmail sync lists matching messages, fetches full payloads, parses subject/sender/snippet/internal-date/body, and stores each message with `source_key = 'gmail:query:<query_hash>'`. HTML bodies are converted to text when no plain-text body is available. The cursor is Gmail internal date, stored in `sync_state` and advanced only after all selected messages are processed.
 
-The `gmail-auth` helper starts a temporary `127.0.0.1` callback server, prints an OAuth URL, waits for the browser loopback, exchanges the code, and prints `GMAIL_REFRESH_TOKEN`. No tunnel is needed when the browser and CLI are on the same machine.
+The `gmail-auth` helper starts a temporary `127.0.0.1` callback server, prints an OAuth URL, waits for the browser loopback, exchanges the code, and prints `GMAIL_REFRESH_TOKEN`. No tunnel is needed when the browser and CLI are on the same machine. On macOS it also opens the URL automatically via `open` (best-effort; falls back to the printed URL on failure or on other platforms) — copying the URL manually out of terminal output risks grabbing part of an adjacent log line into the paste, which Google rejects as an invalid `code_challenge_method`.
 
 ### Twitter/X lists
 
