@@ -233,7 +233,7 @@ server.registerTool(
   {
     title: "Update Briefing Preferences",
     description:
-      "Replaces briefing requiredTopics and focusAreas in briefed.config.json after validation.",
+      "Replaces briefing requiredTopics and optionalTopics in briefed.config.json after validation.",
     inputSchema: updateBriefingPreferencesInput
   },
   async ({ briefing }) => jsonToolResult(await updateBriefingPreferences(briefing))

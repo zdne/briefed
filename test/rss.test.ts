@@ -26,7 +26,7 @@ describe("enabledRssFeeds", () => {
       },
       briefing: {
         requiredTopics: [],
-        focusAreas: []
+        optionalTopics: []
       }
     })));
 
@@ -50,7 +50,7 @@ describe("parseRssXml", () => {
     },
     briefing: {
       requiredTopics: [],
-      focusAreas: []
+      optionalTopics: []
     }
   })))[0]!;
 

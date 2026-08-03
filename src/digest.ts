@@ -57,7 +57,7 @@ export async function createDigest(
     log
   );
   const focusAreaMatches = await vectorMatchesForTopics(
-    userConfig.briefing.focusAreas,
+    userConfig.briefing.optionalTopics,
     config.DIGEST_FOCUS_AREA_MAX_ENTRIES,
     hours,
     referenceTime,
@@ -68,7 +68,7 @@ export async function createDigest(
     requiredTopicMatches,
     focusAreaMatches,
     userConfig.briefing.requiredTopics,
-    userConfig.briefing.focusAreas,
+    userConfig.briefing.optionalTopics,
     ai,
     log
   );
@@ -86,7 +86,7 @@ export async function createDigest(
   }
   const domainRelevanceTerms = extractDomainTerms([
     ...userConfig.briefing.requiredTopics,
-    ...userConfig.briefing.focusAreas
+    ...userConfig.briefing.optionalTopics
   ]);
   const selection = selectDigestSources(candidates, requiredTopicMatches, focusAreaMatches, {
     maxEntries: config.DIGEST_MAX_ENTRIES,
@@ -122,7 +122,7 @@ export async function createDigest(
   log(`Generating briefing with ${sources.length} sources using the configured LLM`);
   const body = await ai.digest(sources, hours, {
     requiredTopics: userConfig.briefing.requiredTopics,
-    focusAreas: userConfig.briefing.focusAreas,
+    optionalTopics: userConfig.briefing.optionalTopics,
     sourceContexts: selection.selectedSources.map((selectedSource) => ({
       bucket: selectedSource.bucket,
       topic: selectedSource.topic,
@@ -190,7 +190,7 @@ async function classifyTopicMatches(
   requiredTopicMatches: DigestTopicMatches[],
   focusAreaMatches: DigestTopicMatches[],
   requiredTopics: string[],
-  focusAreas: string[],
+  optionalTopics: string[],
   ai: AnalystAI,
   log: DigestLogger
 ): Promise<Map<string, TopicClassification>> {
@@ -208,6 +208,6 @@ async function classifyTopicMatches(
       summary: candidate.summary
     })),
     requiredTopics,
-    focusAreas
+    optionalTopics
   );
 }

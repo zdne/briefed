@@ -96,7 +96,7 @@ describe("buildDigestPrompt", () => {
       }
     ], 24, {
       requiredTopics: ["agentic payments"],
-      focusAreas: ["MCP"],
+      optionalTopics: ["MCP"],
       sourceContexts: [
         { bucket: "required", topic: "agentic payments" },
         { bucket: "important_general", freshnessLabel: "follow_up" }

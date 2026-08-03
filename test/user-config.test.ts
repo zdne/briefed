@@ -50,7 +50,7 @@ const validConfig = {
   },
   briefing: {
     requiredTopics: ["agentic payments"],
-    focusAreas: ["MCP"]
+    optionalTopics: ["MCP"]
   }
 };
 
@@ -136,12 +136,12 @@ describe("user config", () => {
 
     const updated = await updateBriefingPreferences({
       requiredTopics: ["agentic commerce"],
-      focusAreas: ["AI observability"]
+      optionalTopics: ["AI observability"]
     }, path);
 
     expect(updated.briefing).toEqual({
       requiredTopics: ["agentic commerce"],
-      focusAreas: ["AI observability"]
+      optionalTopics: ["AI observability"]
     });
     expect(updated.collectors).toEqual(parsed.collectors);
   });

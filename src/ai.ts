@@ -69,17 +69,17 @@ ${content.slice(0, 40_000)}`;
   async classifyTopics(
     candidates: ClassifiableCandidate[],
     requiredTopics: string[],
-    focusAreas: string[]
+    optionalTopics: string[]
   ): Promise<Map<string, TopicClassification>> {
-    if (candidates.length === 0 || (requiredTopics.length === 0 && focusAreas.length === 0)) {
+    if (candidates.length === 0 || (requiredTopics.length === 0 && optionalTopics.length === 0)) {
       return new Map();
     }
 
     const bucketByTopic = new Map<string, "required" | "focus">();
     for (const topic of requiredTopics) bucketByTopic.set(topic, "required");
-    for (const topic of focusAreas) bucketByTopic.set(topic, "focus");
+    for (const topic of optionalTopics) bucketByTopic.set(topic, "focus");
 
-    const prompt = buildTopicClassificationPrompt(candidates, requiredTopics, focusAreas);
+    const prompt = buildTopicClassificationPrompt(candidates, requiredTopics, optionalTopics);
     const parsed = topicClassificationSchema.parse(await this.generateJson(prompt));
 
     const candidateIds = new Set(candidates.map((candidate) => candidate.id));
@@ -154,7 +154,7 @@ ${formatSources(sources)}`);
   async digest(
     sources: RetrievedContent[],
     hours: number,
-    options: { requiredTopics?: string[]; focusAreas?: string[]; sourceContexts?: DigestSourceContext[] } = {}
+    options: { requiredTopics?: string[]; optionalTopics?: string[]; sourceContexts?: DigestSourceContext[] } = {}
   ): Promise<string> {
     return this.generateText(buildDigestPrompt(sources, hours, options));
   }
@@ -234,7 +234,7 @@ Summary: ${source.summary ?? source.contentText.slice(0, 1200)}`
 export function buildTopicClassificationPrompt(
   candidates: ClassifiableCandidate[],
   requiredTopics: string[],
-  focusAreas: string[]
+  optionalTopics: string[]
 ): string {
   return `Classify each candidate article against the configured topics below.
 
@@ -242,7 +242,7 @@ Required watchlist topics:
 ${requiredTopics.map((topic) => `- ${topic}`).join("\n")}
 
 Focus area topics:
-${focusAreas.map((topic) => `- ${topic}`).join("\n") || "(none configured)"}
+${optionalTopics.map((topic) => `- ${topic}`).join("\n") || "(none configured)"}
 
 Rules:
 - Classify a candidate under a topic only if the candidate's core subject is that topic — not because it mentions a related word in passing.
@@ -260,7 +260,7 @@ Return JSON: {"classifications": [{"id": "<candidate id>", "topic": "<exact topi
 export function buildDigestPrompt(
   sources: RetrievedContent[],
   hours: number,
-  options: { requiredTopics?: string[]; focusAreas?: string[]; sourceContexts?: DigestSourceContext[] } = {}
+  options: { requiredTopics?: string[]; optionalTopics?: string[]; sourceContexts?: DigestSourceContext[] } = {}
 ): string {
   return `Create a concise source-grounded report of the entries published in the last ${hours} hours using only the supplied sources.
 
@@ -296,7 +296,7 @@ If no focus area has meaningful signal, omit this section.
 ## Other Items
 3-5 bullets drawn from important-general, strategic-analysis, and high-signal general candidates, for items not already covered in the Watchlist or Focus Areas above.
 When at least one selected source is labeled strategic analysis and reports a high-signal analysis, newsletter, or market-structure article, include at least one such item.
-${formatOtherNotableRelevance(options.requiredTopics ?? [], options.focusAreas ?? [])}
+${formatOtherNotableRelevance(options.requiredTopics ?? [], options.optionalTopics ?? [])}
 Omit this section if there are no qualifying items.
 Do not write "No meaningful new signal found in this window" in this section.
 
@@ -399,7 +399,7 @@ Bad: MCP remains pivotal infrastructure.
 Better: Worldpay published an MCP server for agentic payments.
 Outside the Watchlist section, the selection label on each source is a hint, not a binding assignment: if a source's content does not match its labeled focus-area/general topic, use it where it fits best or omit it. This does not relax the Watchlist rules above — a source with no "required watchlist / <topic>" Selection line must never be placed in a Watchlist subsection, even if it fits best there; write "No meaningful new signal found in this window" instead.
 
-${formatDigestTopicInstructions(options.requiredTopics ?? [], options.focusAreas ?? [])}
+${formatDigestTopicInstructions(options.requiredTopics ?? [], options.optionalTopics ?? [])}
 
 ${formatDigestSources(sources, options.sourceContexts ?? [])}`;
 }
@@ -590,23 +590,23 @@ function selectionLabel(context: DigestSourceContext): string {
   return `general${freshness}`;
 }
 
-function formatOtherNotableRelevance(requiredTopics: string[], focusAreas: string[]): string {
+function formatOtherNotableRelevance(requiredTopics: string[], optionalTopics: string[]): string {
   const lines = ["Include selected important-general items when they report named AI companies, AI governance, financing, security, major releases, or widely used technical infrastructure."];
   lines.push("Also prefer items connected to these configured interests:");
   if (requiredTopics.length > 0) {
     lines.push(`Required watchlist: ${requiredTopics.join("; ")}`);
   }
-  if (focusAreas.length > 0) {
-    lines.push(`Focus areas: ${focusAreas.join("; ")}`);
+  if (optionalTopics.length > 0) {
+    lines.push(`Focus areas: ${optionalTopics.join("; ")}`);
   }
-  if (requiredTopics.length === 0 && focusAreas.length === 0) {
+  if (requiredTopics.length === 0 && optionalTopics.length === 0) {
     return "Include selected important-general items when they report named AI companies, AI governance, financing, security, major releases, or widely used technical infrastructure.";
   }
   lines.push("Do not require an important-general item to match a required watchlist or focus area.");
   return lines.join("\n");
 }
 
-function formatDigestTopicInstructions(requiredTopics: string[], focusAreas: string[]): string {
+function formatDigestTopicInstructions(requiredTopics: string[], optionalTopics: string[]): string {
   const sections: string[] = [];
   if (requiredTopics.length > 0) {
     sections.push(`Exact required watchlist subsection headings:
@@ -614,9 +614,9 @@ ${requiredTopics.map((topic) => `- ${topic}`).join("\n")}
 For every required watchlist topic, include exactly one subsection using the exact heading text above.`);
   }
 
-  if (focusAreas.length > 0) {
+  if (optionalTopics.length > 0) {
     sections.push(`Exact focus-area subsection headings:
-${focusAreas.map((area) => `- ${area}`).join("\n")}
+${optionalTopics.map((area) => `- ${area}`).join("\n")}
 Do not create focus-area subsections with any other heading text.
 Do not create empty focus-area subsections.`);
   }

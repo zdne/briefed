@@ -44,7 +44,7 @@ export const collectorsSchema = z.object({
 
 export const briefingPreferencesSchema = z.object({
   requiredTopics: stringList,
-  focusAreas: stringList
+  optionalTopics: stringList
 }).strict();
 
 export const userConfigSchema = z.object({

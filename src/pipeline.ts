@@ -236,7 +236,7 @@ export async function embedOnlyContent(
 
 async function loadTopicEmbeddings(ai: AnalystAI): Promise<number[][]> {
   const userConfig = await loadUserConfig();
-  const topics = [...userConfig.briefing.requiredTopics, ...userConfig.briefing.focusAreas];
+  const topics = [...userConfig.briefing.requiredTopics, ...userConfig.briefing.optionalTopics];
   return Promise.all(topics.map((topic) => ai.embed(topic)));
 }
 

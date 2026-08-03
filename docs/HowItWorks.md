@@ -182,7 +182,7 @@ Briefing source selection runs before LLM synthesis to prevent high-volume sourc
 
 1. Load up to `DIGEST_CANDIDATE_LIMIT` enriched entries published in the briefing lookback window.
 2. For each `requiredTopic`, embed the topic phrase and vector-search recent entries to fill a recall pool (recall only, unfiltered by score — not a final bucket assignment).
-3. For each `focusArea`, do the same with a smaller budget — except a focus area whose terms are a subset/superset of a required topic's terms is dropped first, so it can't duplicate a required-topic section.
+3. For each optional topic, do the same with a smaller budget — except one whose terms are a subset/superset of a required topic's terms is dropped first, so it can't duplicate a required-topic section.
 4. Pool every candidate retrieved by any topic's vector search and send the whole pool to the LLM in a single classification pass against the full topic list (required + focus). The LLM assigns each candidate to at most one topic — the one it judges the candidate's core subject to be — regardless of which topic's query happened to retrieve it; unrelated candidates are omitted from the classification result entirely.
 5. Fill required buckets, then focus buckets, from candidates the classifier confirmed for that exact topic — each candidate must also clear that topic's minimum cosine-similarity score and an "informative title" check (summary ≥20 characters, or title ≥4 words, or a domain-relevance term match). Within a bucket, fresh candidates fill first; only if none are fresh does it fall back to material follow-ups of a recently covered event (bounded by the freshness settings in the diversity-caps table below).
 6. Fill an important-general bucket from newsworthy candidates outside those topics — named AI companies, security/governance signals, standards releases — ranked by a heuristic score.
@@ -284,7 +284,7 @@ Query output is saved as Markdown under `QUERY_OUTPUT_DIR` by default. Use `--no
 | `get_user_config` | Read the full user config (topics, feeds, collectors) |
 | `update_user_config` | Full-replacement write of the user config |
 | `update_collectors` | Full-replacement write of the collectors section only |
-| `update_briefing_preferences` | Full-replacement write of requiredTopics + focusAreas only |
+| `update_briefing_preferences` | Full-replacement write of requiredTopics + optionalTopics only |
 | `health` | Runs `SELECT 1` and returns DB connectivity status plus the configured pool size |
 
 All update tools are **full-replacement**: they overwrite the entire section, not individual fields. Always call `get_user_config` first and echo every unchanged field back verbatim. Omitting a feed deletes it.
@@ -293,7 +293,7 @@ All update tools are **full-replacement**: they overwrite the entire section, no
 
 `briefed-setup.skill` is a Claude Code skill file that guides a Claude agent through first-time setup and ongoing optimization of Briefed. Load it in Claude Code with `/run briefed-setup` (or the equivalent in your MCP client).
 
-**First-time setup:** the skill interviews the user about their professional focus, core beats, and background interests; translates them into `requiredTopics` and `focusAreas` with vocabulary tuned to match how trade press actually writes; and proposes a minimal collector set (RSS feeds, Google News query feeds, Reddit subs, Gmail label, Twitter list). It writes preferences and collectors via the MCP tools and verifies both writes landed.
+**First-time setup:** the skill interviews the user about their professional focus, core beats, and background interests; translates them into `requiredTopics` and `optionalTopics` with vocabulary tuned to match how trade press actually writes; and proposes a minimal collector set (RSS feeds, Google News query feeds, Reddit subs, Gmail label, Twitter list). It writes preferences and collectors via the MCP tools and verifies both writes landed.
 
 **Ongoing optimization:** the skill audits an existing config by sampling signal quality per required topic via `brief` (reading per-source similarity scores), reviewing the latest `briefing` for empty sections, and diagnosing root causes (label mismatch, missing dedicated feed, umbrella/duplicate topic, high-volume noise feed). It proposes a diff before writing anything.
 
