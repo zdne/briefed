@@ -1,4 +1,4 @@
-import type { DigestCandidate } from "./types.js";
+import type { DigestCandidate, TopicClassification } from "./types.js";
 
 export interface DigestTopicMatches {
   topic: string;
@@ -22,7 +22,7 @@ export interface DigestSelectionOptions {
   priorDigestCandidates?: DigestCandidate[];
   maxFollowupsPerEvent?: number;
   domainRelevanceTerms?: string[];
-  topicBestMatchRatio?: number;
+  topicClassifications?: Map<string, TopicClassification>;
 }
 
 export interface DigestSelectionResult {
@@ -89,40 +89,46 @@ export function selectDigestSources(
   };
 
   const domainRelevanceTerms = options.domainRelevanceTerms ?? [];
-  const topicBestMatchRatio = options.topicBestMatchRatio ?? 1;
-  const bestTopicScore = new Map<string, number>();
+  const topicClassifications = options.topicClassifications ?? new Map<string, TopicClassification>();
+
+  // The classifier judges each candidate against every configured topic, independent of which
+  // topic's vector search happened to retrieve it — so pool all topic-recalled candidates together
+  // and let classification (not the originating query) decide which topic's bucket they land in.
+  const candidatePool = new Map<string, DigestCandidate>();
+  const bestScore = new Map<string, number>();
   for (const { matches } of [...requiredTopicMatches, ...focusAreaMatches]) {
     for (const candidate of matches) {
-      const current = bestTopicScore.get(candidate.id) ?? 0;
-      if (candidate.score > current) bestTopicScore.set(candidate.id, candidate.score);
+      candidatePool.set(candidate.id, candidate);
+      const current = bestScore.get(candidate.id) ?? -Infinity;
+      if (candidate.score > current) bestScore.set(candidate.id, candidate.score);
     }
   }
 
   addTopicBuckets(state, buildBuckets(
-    recentCandidates,
-    requiredTopicMatches,
+    requiredTopicMatches.map((match) => match.topic),
     "required",
     options.requiredTopicMinEntries,
     options.requiredTopicMaxEntries,
     options.requiredTopicMinScore ?? 0,
     domainRelevanceTerms,
-    bestTopicScore,
-    topicBestMatchRatio
+    candidatePool,
+    bestScore,
+    topicClassifications
   ), options);
 
-  const focusMatchesWithoutRequiredOverlap = focusAreaMatches.filter((focusArea) =>
-    !requiredTopicMatches.some((requiredTopic) => topicsOverlap(focusArea.topic, requiredTopic.topic))
-  );
+  const focusTopicsWithoutRequiredOverlap = focusAreaMatches
+    .map((match) => match.topic)
+    .filter((focusTopic) => !requiredTopicMatches.some((requiredTopic) => topicsOverlap(focusTopic, requiredTopic.topic)));
   addTopicBuckets(state, buildBuckets(
-    recentCandidates,
-    focusMatchesWithoutRequiredOverlap,
+    focusTopicsWithoutRequiredOverlap,
     "focus",
     options.focusAreaMinEntries,
     options.focusAreaMaxEntries,
     options.focusAreaMinScore ?? 0,
     domainRelevanceTerms,
-    bestTopicScore,
-    topicBestMatchRatio
+    candidatePool,
+    bestScore,
+    topicClassifications
   ), options);
 
   const importantGeneralLimit = Math.min(options.importantGeneralMaxEntries, options.maxEntries - state.selected.length);
@@ -155,11 +161,7 @@ export function selectDigestSources(
     generalCount += 1;
   }
 
-  const selectedSources = assignMostSpecificTopics(
-    state.selected,
-    requiredTopicMatches.map((match) => match.topic),
-    focusAreaMatches.map((match) => match.topic)
-  );
+  const selectedSources = state.selected;
 
   return {
     sources: selectedSources.map((selection) => selection.source),
@@ -171,110 +173,21 @@ export function selectDigestSources(
   };
 }
 
-function assignMostSpecificTopics(
-  selected: SelectedDigestSource[],
-  requiredTopics: string[],
-  focusAreas: string[]
-): SelectedDigestSource[] {
-  return selected.map((selection) => {
-    if (selection.bucket !== "focus" && selection.bucket !== "important_general" && selection.bucket !== "general") {
-      return selection;
-    }
-
-    const required = bestTopicAssignment(selection.source, requiredTopics);
-    if (required && required.score >= 5) {
-      return { ...selection, bucket: "required", topic: required.topic };
-    }
-
-    if (selection.bucket === "important_general" || selection.bucket === "general") {
-      const focus = bestTopicAssignment(selection.source, focusAreas);
-      if (focus && focus.score >= 5) return { ...selection, bucket: "focus", topic: focus.topic };
-    }
-
-    return selection;
-  });
-}
-
-function bestTopicAssignment(
-  candidate: DigestCandidate,
-  topics: string[]
-): { topic: string; score: number } | null {
-  return topics
-    .map((topic, index) => ({ topic, score: candidateTopicAssignmentScore(candidate, topic), index }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || topicSpecificity(b.topic) - topicSpecificity(a.topic) || a.index - b.index)
-    .at(0) ?? null;
-}
-
-function candidateTopicAssignmentScore(candidate: DigestCandidate, topic: string): number {
-  const normalizedTopic = normalizeText(topic);
-  const text = exactSearchableText(candidate);
-  // Use only title+summary for the payment gate — entity types like "payment system" are metadata
-  // about mentioned tools, not evidence that the article itself is about payments.
-  if (normalizedTopic.includes("payment") && !hasPaymentTopicAnchor(normalizeText(
-    [candidate.title, candidate.summary].filter((p): p is string => Boolean(p)).join(" ")
-  ))) return 0;
-  const anchors = topicAnchorTerms(normalizedTopic);
-  let score = text.includes(normalizedTopic) ? 8 : 0;
-
-  score += anchors.filter((anchor) => text.includes(anchor)).length * 2;
-  if (normalizedTopic.includes("agentic") && hasAgenticConcept(text)) score += 2;
-  score += specialTopicScore(text, normalizedTopic);
-
-  return score;
-}
-
-function topicSpecificity(topic: string): number {
-  return topicAnchorTerms(topic).length;
-}
-
-// domain-specific: synonym expansions for specific topic types; add branches here when a topic needs richer keyword matching than its name alone provides
-function specialTopicScore(text: string, topic: string): number {
-  if (topic.includes("payment")) {
-    return scoreMatches(text, [
-      /\b(payments?|checkout|wallet|wallets|signer|signers|credential|credentials|stablecoin|settlement)\b/g
-    ]) * 2;
-  }
-  if (topic.includes("commerce")) {
-    return scoreMatches(text, [
-      /\b(commerce|shopping|checkout|retail|marketplace|merchant|purchase|buying)\b/g
-    ]) * 2;
-  }
-  if (topic.includes("memory")) {
-    return scoreMatches(text, [
-      /\b(memory|recall|deletion|retention|remember|notes?|simplenote)\b/g
-    ]) * 2;
-  }
-  if (topic.includes("procurement")) {
-    return scoreMatches(text, [
-      /\b(procurement|buyers?|vendor|vendors?|sourcing|purchasing|rfp|evaluation)\b/g
-    ]) * 2;
-  }
-  const terms = topicAnchorTerms(topic);
-  if (terms.length === 0) return 0;
-  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  return scoreMatches(text, [new RegExp(`\\b(${escaped})\\b`, "g")]) * 2;
-}
-
-function hasPaymentTopicAnchor(text: string): boolean {
-  return /\b(payments?|checkout|wallet|wallets|signer|signers|stablecoin|settlement|merchant|merchants)\b/g.test(text);
-}
-
 function buildBuckets(
-  recentCandidates: DigestCandidate[],
-  topicMatches: DigestTopicMatches[],
+  topics: string[],
   bucket: "required" | "focus",
   minEntries: number,
   maxEntries: number,
   minScore: number,
   domainRelevanceTerms: string[],
-  bestTopicScore: Map<string, number>,
-  topicBestMatchRatio: number
+  candidatePool: Map<string, DigestCandidate>,
+  bestScore: Map<string, number>,
+  topicClassifications: Map<string, TopicClassification>
 ): SelectionBucket[] {
-  return topicMatches.map((topicMatch) => ({
-    topic: topicMatch.topic,
+  return topics.map((topic) => ({
+    topic,
     bucket,
-    candidates: rankedTopicCandidates(recentCandidates, topicMatch, minScore, domainRelevanceTerms, bestTopicScore, topicBestMatchRatio),
+    candidates: rankedTopicCandidates(topic, minScore, domainRelevanceTerms, candidatePool, bestScore, topicClassifications),
     minEntries,
     maxEntries,
     minScore
@@ -282,53 +195,34 @@ function buildBuckets(
 }
 
 function rankedTopicCandidates(
-  recentCandidates: DigestCandidate[],
-  topicMatch: DigestTopicMatches,
+  topic: string,
   minScore: number,
   domainRelevanceTerms: string[],
-  bestTopicScore: Map<string, number>,
-  topicBestMatchRatio: number
+  candidatePool: Map<string, DigestCandidate>,
+  bestScore: Map<string, number>,
+  topicClassifications: Map<string, TopicClassification>
 ): DigestCandidate[] {
-  const exactMatches = recentCandidates.filter((candidate) => candidateMatchesTopic(candidate, topicMatch.topic));
-  const vectorMatches = topicMatch.matches.filter((candidate) => {
-    if (candidate.score < minScore) return false;
-    if (!candidateHasTopicAnchor(candidate, topicMatch.topic)) return false;
-    const best = bestTopicScore.get(candidate.id);
-    return best === undefined || candidate.score >= best * topicBestMatchRatio;
-  });
-  const combined = [...exactMatches, ...vectorMatches];
-  const seen = new Set<string>();
-
-  return combined
-    .map((candidate, index) => ({
-      candidate,
-      group: exactMatches.some((match) => match.id === candidate.id) ? 0 : 1,
-      index
-    }))
-    .filter((item) => {
-      if (seen.has(item.candidate.id)) return false;
-      seen.add(item.candidate.id);
-      return true;
+  return [...candidatePool.values()]
+    .filter((candidate) => {
+      if (topicClassifications.get(candidate.id)?.topic !== topic) return false;
+      return (bestScore.get(candidate.id) ?? candidate.score) >= minScore;
     })
-    .filter((item) => hasInformativeTitle(item.candidate, topicMatch.topic, domainRelevanceTerms))
+    .filter((candidate) => hasInformativeTitle(candidate, domainRelevanceTerms))
+    .map((candidate, index) => ({ candidate, index, score: bestScore.get(candidate.id) ?? candidate.score }))
     .sort((a, b) =>
-      a.group - b.group ||
       representativeSort(b.candidate, a.candidate) ||
-      b.candidate.score - a.candidate.score ||
+      b.score - a.score ||
       a.index - b.index
     )
     .map((item) => item.candidate);
 }
 
-function hasInformativeTitle(candidate: DigestCandidate, topic: string, domainRelevanceTerms: string[]): boolean {
+function hasInformativeTitle(candidate: DigestCandidate, domainRelevanceTerms: string[]): boolean {
   if ((candidate.summary ?? "").length >= 20) return true;
   const titleText = normalizeText(candidate.title ?? "");
   const words = titleText.split(/\s+/).filter(Boolean);
-  const anchors = new Set(topicAnchorTerms(topic));
-  const informative = words.filter((w) => !anchors.has(w));
-  if (informative.length >= 4) return true;
-  const otherDomainTerms = domainRelevanceTerms.filter((t) => !anchors.has(t));
-  return hasDomainMatch(titleText, otherDomainTerms);
+  if (words.length >= 4) return true;
+  return hasDomainMatch(titleText, domainRelevanceTerms);
 }
 
 function addTopicBuckets(
@@ -617,37 +511,11 @@ function intersectionSize<T>(left: Set<T>, right: Set<T>): number {
   return size;
 }
 
-function candidateMatchesTopic(candidate: DigestCandidate, topic: string): boolean {
-  const needle = normalizeText(topic);
-  if (!needle || !isSpecificTopic(needle)) return false;
-  return exactSearchableText(candidate).includes(needle);
-}
-
-function candidateHasTopicAnchor(candidate: DigestCandidate, topic: string): boolean {
-  const normalizedTopic = normalizeText(topic);
-  const text = exactSearchableText(candidate);
-  if (requiresAgenticAnchor(normalizedTopic)) {
-    const anchors = topicAnchorTerms(normalizedTopic);
-    return text.includes(normalizedTopic) || (hasAgenticConcept(text) && anchors.some((anchor) => text.includes(anchor)));
-  }
-
-  const anchors = topicAnchorTerms(topic);
-  if (anchors.length === 0) return true;
-  return anchors.some((anchor) => text.includes(anchor));
-}
-
 const TOPIC_GENERIC_WORDS = new Set([
   "agentic", "ai", "artificial", "intelligence",
   "and", "or", "with", "for", "in", "of", "the", "a", "an",
   "area", "focus", "watchlist"
 ]);
-
-function topicAnchorTerms(topic: string): string[] {
-  return normalizeText(topic)
-    .split(" ")
-    .filter(Boolean)
-    .filter((term) => !TOPIC_GENERIC_WORDS.has(term));
-}
 
 function topicsOverlap(left: string, right: string): boolean {
   const leftTerms = topicOverlapTerms(left);
@@ -662,14 +530,6 @@ function topicOverlapTerms(topic: string): Set<string> {
     .split(" ")
     .filter(Boolean)
     .filter((term) => !TOPIC_GENERIC_WORDS.has(term)));
-}
-
-function requiresAgenticAnchor(topic: string): boolean {
-  return topic.split(" ").includes("agentic") && topicAnchorTerms(topic).length > 0;
-}
-
-function hasAgenticConcept(text: string): boolean {
-  return /\b(agent|agents|agentic|autonomous|automation|automated|ai|llm|llms|model|models)\b/.test(text);
 }
 
 function rankedImportantGeneralCandidates(candidates: DigestCandidate[], minScore: number, domainRelevanceTerms: string[]): DigestCandidate[] {
@@ -893,21 +753,6 @@ function searchableText(candidate: DigestCandidate): string {
   ];
 
   return normalizeText(parts.filter((part): part is string => Boolean(part)).join(" "));
-}
-
-function exactSearchableText(candidate: DigestCandidate): string {
-  const parts = [
-    candidate.title,
-    candidate.summary,
-    ...candidate.topicTags,
-    ...entitySearchParts(candidate.entities)
-  ];
-
-  return normalizeText(parts.filter((part): part is string => Boolean(part)).join(" "));
-}
-
-function isSpecificTopic(topic: string): boolean {
-  return topic.split(" ").filter(Boolean).length >= 2 || topic.length >= 4;
 }
 
 function entitySearchParts(entities: unknown): string[] {

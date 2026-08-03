@@ -65,6 +65,11 @@ export interface DigestCandidate extends RetrievedContent {
   rawEntry: unknown;
 }
 
+export interface TopicClassification {
+  bucket: "required" | "focus";
+  topic: string;
+}
+
 export interface DigestSourceContext {
   bucket: "required" | "focus" | "important_general" | "general";
   topic?: string;

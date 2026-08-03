@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDigestPrompt, buildFriendlyDigestPrompt, normalizeEnrichment } from "../src/ai.js";
+import { buildDigestPrompt, buildFriendlyDigestPrompt, buildTopicClassificationPrompt, normalizeEnrichment } from "../src/ai.js";
 import { parseCommaSeparatedList } from "../src/config.js";
 
 describe("normalizeEnrichment", () => {
@@ -33,6 +33,41 @@ describe("parseCommaSeparatedList", () => {
       "personal memory",
       "MCP"
     ]);
+  });
+});
+
+describe("buildTopicClassificationPrompt", () => {
+  it("lists required and focus topics, candidates, and the calibration example", () => {
+    const prompt = buildTopicClassificationPrompt(
+      [
+        { id: "1", title: "OpenAI cuts GPT-5.6 pricing", summary: "OpenAI cut pricing to drive high-volume enterprise adoption." },
+        { id: "2", title: null, summary: null }
+      ],
+      ["ai procurement"],
+      ["MCP"]
+    );
+
+    expect(prompt).toContain("Required watchlist topics:");
+    expect(prompt).toContain("- ai procurement");
+    expect(prompt).toContain("Focus area topics:");
+    expect(prompt).toContain("- MCP");
+    expect(prompt).toContain("[1] OpenAI cuts GPT-5.6 pricing");
+    expect(prompt).toContain("OpenAI cut pricing to drive high-volume enterprise adoption.");
+    expect(prompt).toContain("[2] Untitled");
+    expect(prompt).toContain("(no summary)");
+    expect(prompt).toContain("core subject is that topic");
+    expect(prompt).toContain("not because it mentions a related word in passing");
+    expect(prompt).toContain("a price cut is not a procurement decision");
+    expect(prompt).toContain("Assign each candidate to at most one topic");
+    expect(prompt).toContain("Omit a candidate from the output entirely if it does not centrally match any listed topic.");
+    expect(prompt).toContain('Return JSON: {"classifications"');
+  });
+
+  it("notes when no focus areas are configured", () => {
+    const prompt = buildTopicClassificationPrompt([{ id: "1", title: "Title", summary: "Summary" }], ["agentic payments"], []);
+
+    expect(prompt).toContain("Focus area topics:");
+    expect(prompt).toContain("(none configured)");
   });
 });
 

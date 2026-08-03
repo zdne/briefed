@@ -11,6 +11,7 @@ import {
   type DigestTopicMatches,
   selectDigestSources
 } from "./digest-selection.js";
+import type { DigestCandidate, TopicClassification } from "./types.js";
 import { loadUserConfig } from "./user-config.js";
 
 export type DigestLogger = (message: string) => void;
@@ -63,6 +64,14 @@ export async function createDigest(
     ai,
     log
   );
+  const topicClassifications = await classifyTopicMatches(
+    requiredTopicMatches,
+    focusAreaMatches,
+    userConfig.briefing.requiredTopics,
+    userConfig.briefing.focusAreas,
+    ai,
+    log
+  );
   const priorDigestCandidates = await recentDigestHistoryCandidates(
     config.DIGEST_REPEAT_LOOKBACK_HOURS,
     referenceTime,
@@ -101,7 +110,7 @@ export async function createDigest(
     priorDigestCandidates,
     maxFollowupsPerEvent: config.DIGEST_MAX_FOLLOWUPS_PER_EVENT,
     domainRelevanceTerms,
-    topicBestMatchRatio: config.DIGEST_TOPIC_BEST_MATCH_RATIO
+    topicClassifications
   });
   const sources = selection.sources;
   log(
@@ -162,7 +171,7 @@ async function vectorMatchesForTopics(
   ai: AnalystAI,
   log: DigestLogger
 ): Promise<DigestTopicMatches[]> {
-  const limit = Math.max(1, maxEntries * 5);
+  const limit = Math.max(1, maxEntries * 8);
   const matches: DigestTopicMatches[] = [];
 
   for (const topic of topics) {
@@ -175,4 +184,30 @@ async function vectorMatchesForTopics(
   }
 
   return matches;
+}
+
+async function classifyTopicMatches(
+  requiredTopicMatches: DigestTopicMatches[],
+  focusAreaMatches: DigestTopicMatches[],
+  requiredTopics: string[],
+  focusAreas: string[],
+  ai: AnalystAI,
+  log: DigestLogger
+): Promise<Map<string, TopicClassification>> {
+  const candidatesById = new Map<string, DigestCandidate>();
+  for (const { matches } of [...requiredTopicMatches, ...focusAreaMatches]) {
+    for (const candidate of matches) candidatesById.set(candidate.id, candidate);
+  }
+  if (candidatesById.size === 0) return new Map();
+
+  log(`Classifying ${candidatesById.size} topic-matched candidate(s) against configured topics`);
+  return ai.classifyTopics(
+    [...candidatesById.values()].map((candidate) => ({
+      id: candidate.id,
+      title: candidate.title,
+      summary: candidate.summary
+    })),
+    requiredTopics,
+    focusAreas
+  );
 }

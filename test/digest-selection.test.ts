@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { selectDigestSources } from "../src/digest-selection.js";
-import type { DigestCandidate } from "../src/types.js";
+import type { DigestCandidate, TopicClassification } from "../src/types.js";
 
 const defaults = {
   maxEntries: 6,
@@ -16,10 +16,14 @@ describe("selectDigestSources", () => {
   it("selects required topic matches before general recent candidates", () => {
     const recent = [candidate("general-1"), candidate("general-2")];
     const required = [{ topic: "agentic payments", matches: [candidate("required-1", {
-      title: "Agentic payments update"
+      title: "Agentic payments update",
+      summary: "A named source reported an agentic payments protocol update."
     })] }];
 
-    const result = selectDigestSources(recent, required, [], defaults);
+    const result = selectDigestSources(recent, required, [], {
+      ...defaults,
+      topicClassifications: classifications([["required-1", "required", "agentic payments"]])
+    });
 
     expect(result.sources.map((source) => source.id)).toEqual(["required-1", "general-1", "general-2"]);
     expect(result.requiredCount).toBe(1);
@@ -29,9 +33,21 @@ describe("selectDigestSources", () => {
   it("selects focus area matches after required topic matches", () => {
     const result = selectDigestSources(
       [candidate("general-1")],
-      [{ topic: "payments", matches: [candidate("required-1", { title: "Payments update" })] }],
-      [{ topic: "observability", matches: [candidate("focus-1", { title: "Observability update" })] }],
-      defaults
+      [{ topic: "payments", matches: [candidate("required-1", {
+        title: "Payments update",
+        summary: "A named source reported a payments protocol update."
+      })] }],
+      [{ topic: "observability", matches: [candidate("focus-1", {
+        title: "Observability update",
+        summary: "A named source reported an observability tooling update."
+      })] }],
+      {
+        ...defaults,
+        topicClassifications: classifications([
+          ["required-1", "required", "payments"],
+          ["focus-1", "focus", "observability"]
+        ])
+      }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["required-1", "focus-1", "general-1"]);
@@ -44,71 +60,68 @@ describe("selectDigestSources", () => {
     const result = selectDigestSources(
       [],
       [{ topic: "agentic payments", matches: [
-        candidate("weak-required", { score: 0.24 }),
-        candidate("strong-required", { score: 0.25, title: "Agentic payments update" })
+        candidate("weak-required", { score: 0.24, summary: "A named source reported an agentic payments update." }),
+        candidate("strong-required", { score: 0.25, title: "Agentic payments update", summary: "A named source reported an agentic payments update." })
       ] }],
       [{ topic: "observability", matches: [
-        candidate("weak-focus", { score: 0.34 }),
-        candidate("strong-focus", { score: 0.35, title: "Observability update" })
+        candidate("weak-focus", { score: 0.34, summary: "A named source reported an observability update." }),
+        candidate("strong-focus", { score: 0.35, title: "Observability update", summary: "A named source reported an observability update." })
       ] }],
       {
         ...defaults,
         requiredTopicMaxEntries: 3,
         focusAreaMaxEntries: 3,
         requiredTopicMinScore: 0.25,
-        focusAreaMinScore: 0.35
+        focusAreaMinScore: 0.35,
+        topicClassifications: classifications([
+          ["weak-required", "required", "agentic payments"],
+          ["strong-required", "required", "agentic payments"],
+          ["weak-focus", "focus", "observability"],
+          ["strong-focus", "focus", "observability"]
+        ])
       }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["strong-required", "strong-focus"]);
   });
 
-  it("filters topic vector matches without a lexical topic anchor", () => {
+  it("only selects vector matches the classifier confirms for the topic", () => {
     const result = selectDigestSources(
       [],
       [{ topic: "agentic payments", matches: [
-        candidate("browser-agent", {
-          score: 0.9,
-          title: "Browser agent token costs"
-        }),
-        candidate("payments", {
-          score: 0.4,
-          title: "AI agency stablecoin payments tooling"
-        })
+        candidate("browser-agent", { score: 0.9, title: "Browser agent token costs" }),
+        candidate("payments", { score: 0.4, title: "AI agency stablecoin payments tooling" })
       ] }],
       [],
       {
         ...defaults,
         requiredTopicMaxEntries: 3,
-        requiredTopicMinScore: 0.25
+        requiredTopicMinScore: 0.25,
+        // "browser-agent" scored higher on the vector search but the classifier only confirmed "payments"
+        topicClassifications: classifications([["payments", "required", "agentic payments"]])
       }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["payments"]);
   });
 
-  it("requires agentic topic matches to include an agentic concept and topic anchor", () => {
+  it("keeps only classifier-confirmed candidates when several share a broad concept", () => {
     const result = selectDigestSources(
       [],
       [{ topic: "agentic commerce", matches: [
-        candidate("generic-commerce", {
-          score: 0.9,
-          title: "Q-commerce retail sales update"
-        }),
-        candidate("agentic-commerce", {
-          score: 0.4,
-          title: "AI agents for commerce checkout"
-        }),
-        candidate("exact-agentic-commerce", {
-          score: 0.3,
-          title: "Agentic commerce payments rollout"
-        })
+        candidate("generic-commerce", { score: 0.9, title: "Q-commerce retail sales update" }),
+        candidate("agentic-commerce", { score: 0.4, title: "AI agents for commerce checkout" }),
+        candidate("exact-agentic-commerce", { score: 0.3, title: "Agentic commerce payments rollout" })
       ] }],
       [],
       {
         ...defaults,
         requiredTopicMaxEntries: 3,
-        requiredTopicMinScore: 0.25
+        requiredTopicMinScore: 0.25,
+        topicClassifications: classifications([
+          ["agentic-commerce", "required", "agentic commerce"],
+          ["exact-agentic-commerce", "required", "agentic commerce"]
+        ])
       }
     );
 
@@ -116,15 +129,24 @@ describe("selectDigestSources", () => {
   });
 
   it("deduplicates candidates that match more than one bucket", () => {
-    const shared = candidate("shared");
+    const shared = candidate("shared", {
+      title: "Payments update",
+      summary: "A named source reported a payments protocol update."
+    });
     const result = selectDigestSources(
       [shared, candidate("general-1")],
-      [{ topic: "payments", matches: [{ ...shared, title: "Payments update" }] }],
+      [{ topic: "payments", matches: [shared] }],
       [{ topic: "commerce", matches: [
-        { ...shared, title: "Commerce update" },
-        candidate("focus-1", { title: "Commerce update" })
+        shared,
+        candidate("focus-1", { title: "Commerce update", summary: "A named source reported a commerce tooling update." })
       ] }],
-      defaults
+      {
+        ...defaults,
+        topicClassifications: classifications([
+          ["shared", "required", "payments"],
+          ["focus-1", "focus", "commerce"]
+        ])
+      }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["shared", "focus-1", "general-1"]);
@@ -139,7 +161,10 @@ describe("selectDigestSources", () => {
       [{ topic: "MCP", matches: [
         candidate("focus-mcp", { title: "MCP focus security update" })
       ] }],
-      defaults
+      {
+        ...defaults,
+        topicClassifications: classifications([["required-mcp", "required", "MCP Discovery"]])
+      }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["required-mcp"]);
@@ -151,12 +176,15 @@ describe("selectDigestSources", () => {
     const result = selectDigestSources(
       [],
       [{ topic: "Agentic Payments", matches: [
-        candidate("required-agentic", { title: "Agentic payments update" })
+        candidate("required-agentic", { title: "Agentic payments update", summary: "A named source reported an agentic payments update." })
       ] }],
       [{ topic: "Agentic", matches: [
         candidate("focus-agentic", { title: "Agentic workflow update" })
       ] }],
-      defaults
+      {
+        ...defaults,
+        topicClassifications: classifications([["required-agentic", "required", "Agentic Payments"]])
+      }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["required-agentic"]);
@@ -203,7 +231,11 @@ describe("selectDigestSources", () => {
       [],
       {
         ...defaults,
-        requiredTopicMaxEntries: 2
+        requiredTopicMaxEntries: 2,
+        topicClassifications: classifications([
+          ["payments-copy", "required", "agentic payments"],
+          ["commerce-copy", "required", "agentic commerce"]
+        ])
       }
     );
 
@@ -278,14 +310,19 @@ describe("selectDigestSources", () => {
         { topic: "agentic commerce", matches: [shared] }
       ],
       [],
-      { ...defaults, requiredTopicMaxEntries: 2 }
+      {
+        ...defaults,
+        requiredTopicMaxEntries: 2,
+        // the classifier assigns a single most-specific topic per candidate
+        topicClassifications: classifications([["visa-openai-payments-commerce", "required", "agentic payments"]])
+      }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["visa-openai-payments-commerce"]);
     expect(result.selectedSources.map((selection) => selection.topic)).toEqual(["agentic payments"]);
   });
 
-  it("reassigns payment authorization signals from broad agent frameworks to agentic payments", () => {
+  it("promotes a candidate to the topic the classifier picked even if a different topic's search retrieved it", () => {
     const paymentAuth = candidate("payment-auth", {
       title: "How should an AI agent prove a payment is allowed before it reaches the signer?",
       summary: "Discussion about agent payment authorization before a signer approves a transaction."
@@ -295,7 +332,11 @@ describe("selectDigestSources", () => {
       [],
       [{ topic: "Agentic Payments", matches: [] }],
       [{ topic: "agent frameworks", matches: [paymentAuth] }],
-      { ...defaults, focusAreaMaxEntries: 2 }
+      {
+        ...defaults,
+        focusAreaMaxEntries: 2,
+        topicClassifications: classifications([["payment-auth", "required", "Agentic Payments"]])
+      }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["payment-auth"]);
@@ -307,7 +348,7 @@ describe("selectDigestSources", () => {
     expect(result.focusCount).toBe(0);
   });
 
-  it("does not reassign generic agent authorization to agentic payments", () => {
+  it("leaves a candidate under its classified focus topic when it does not match a required topic", () => {
     const agentAuthz = candidate("agent-authz", {
       title: "A2A solved how agents talk. It didn’t solve what a stranger agent is allowed to do - how are you handling authz?",
       summary: "Discussion about authorization for stranger agents."
@@ -317,7 +358,11 @@ describe("selectDigestSources", () => {
       [],
       [{ topic: "Agentic Payments", matches: [] }],
       [{ topic: "agent frameworks", matches: [agentAuthz] }],
-      { ...defaults, focusAreaMaxEntries: 2 }
+      {
+        ...defaults,
+        focusAreaMaxEntries: 2,
+        topicClassifications: classifications([["agent-authz", "focus", "agent frameworks"]])
+      }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["agent-authz"]);
@@ -485,26 +530,30 @@ describe("selectDigestSources", () => {
       summary: "OpenAI and Visa announced agentic commerce checkout payments for ChatGPT users."
     });
 
+    const stablecoin = visaOpenAi("stablecoin", {
+      title: "Visa and OpenAI add stablecoin settlement to agent payments",
+      summary: "Visa and OpenAI added stablecoin settlement expansion to agentic payments."
+    });
+    const freshPayments = candidate("fresh-payments", {
+      title: "Pine Labs launches agentic payments protocol",
+      summary: "Pine Labs launched an agentic payments protocol for payment processing.",
+      entities: [{ name: "Pine Labs", type: "company" }]
+    });
+
     const result = selectDigestSources(
-      [
-        visaOpenAi("stablecoin", {
-          title: "Visa and OpenAI add stablecoin settlement to agent payments",
-          summary: "Visa and OpenAI added stablecoin settlement expansion to agentic payments."
-        }),
-        candidate("fresh-payments", {
-          title: "Pine Labs launches agentic payments protocol",
-          summary: "Pine Labs launched an agentic payments protocol for payment processing.",
-          entities: [{ name: "Pine Labs", type: "company" }]
-        })
-      ],
-      [{ topic: "agentic payments", matches: [] }],
+      [stablecoin, freshPayments],
+      [{ topic: "agentic payments", matches: [stablecoin, freshPayments] }],
       [],
       {
         ...defaults,
         requiredTopicMaxEntries: 2,
         priorDigestCandidates: [yesterday],
         importantGeneralMaxEntries: 0,
-        generalMaxEntries: 0
+        generalMaxEntries: 0,
+        topicClassifications: classifications([
+          ["visa-openai-stablecoin", "required", "agentic payments"],
+          ["fresh-payments", "required", "agentic payments"]
+        ])
       }
     );
 
@@ -516,53 +565,81 @@ describe("selectDigestSources", () => {
     const result = selectDigestSources(
       [candidate("general-1"), candidate("general-2"), candidate("general-3")],
       [{ topic: "payments", matches: [
-        candidate("required-1", { title: "Payments update" }),
-        candidate("required-2", { title: "Payments launch" })
+        candidate("required-1", { title: "Payments update", summary: "A named source reported a payments protocol update." }),
+        candidate("required-2", { title: "Payments launch", summary: "A named source reported a new payments protocol launch." })
       ] }],
       [{ topic: "commerce", matches: [
-        candidate("focus-1", { title: "Commerce update" }),
-        candidate("focus-2", { title: "Commerce launch" })
+        candidate("focus-1", { title: "Commerce update", summary: "A named source reported a commerce tooling update." }),
+        candidate("focus-2", { title: "Commerce launch", summary: "A named source reported a commerce tooling launch." })
       ] }],
-      { ...defaults, maxEntries: 3 }
+      {
+        ...defaults,
+        maxEntries: 3,
+        topicClassifications: classifications([
+          ["required-1", "required", "payments"],
+          ["required-2", "required", "payments"],
+          ["focus-1", "focus", "commerce"],
+          ["focus-2", "focus", "commerce"]
+        ])
+      }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["required-1", "required-2", "focus-1"]);
   });
 
-  it("adds exact title and topic-tag matches ahead of vector matches", () => {
+  it("selects classifier-confirmed matches ahead of unconfirmed vector matches", () => {
     const exactTitle = candidate("exact-title", {
-      title: "Agentic payments rollout"
+      title: "Agentic payments rollout",
+      summary: "A named source reported an agentic payments rollout."
     });
     const exactTag = candidate("exact-tag", {
-      topicTags: ["agentic payments"]
+      topicTags: ["agentic payments"],
+      summary: "A named source reported an agentic payments update."
     });
     const vector = candidate("vector", {
       title: "AI payments infrastructure"
     });
 
     const result = selectDigestSources(
-      [exactTitle, exactTag],
-      [{ topic: "agentic payments", matches: [vector] }],
       [],
-      { ...defaults, requiredTopicMaxEntries: 3 }
+      [{ topic: "agentic payments", matches: [exactTitle, exactTag, vector] }],
+      [],
+      {
+        ...defaults,
+        requiredTopicMaxEntries: 3,
+        // the classifier did not confirm "vector" as centrally about the topic
+        topicClassifications: classifications([
+          ["exact-title", "required", "agentic payments"],
+          ["exact-tag", "required", "agentic payments"]
+        ])
+      }
     );
 
-    expect(result.sources.map((source) => source.id)).toEqual(["exact-title", "exact-tag", "vector"]);
+    expect(result.sources.map((source) => source.id)).toEqual(["exact-title", "exact-tag"]);
   });
 
-  it("does not treat content body substring matches as exact topic matches", () => {
+  it("does not classify a candidate into a topic bucket without classifier confirmation", () => {
     const result = selectDigestSources(
       [
         candidate("body-only", {
           contentText: "This body mentions agentic payments, but the source summary is unrelated."
         }),
         candidate("title-match", {
-          title: "Agentic payments rollout"
+          title: "Agentic payments rollout",
+          summary: "A named source reported an agentic payments rollout."
         })
       ],
-      [{ topic: "agentic payments", matches: [] }],
+      [{ topic: "agentic payments", matches: [
+        candidate("title-match", {
+          title: "Agentic payments rollout",
+          summary: "A named source reported an agentic payments rollout."
+        })
+      ] }],
       [],
-      defaults
+      {
+        ...defaults,
+        topicClassifications: classifications([["title-match", "required", "agentic payments"]])
+      }
     );
 
     expect(result.sources.map((source) => source.id)).toEqual(["title-match", "body-only"]);
@@ -687,11 +764,13 @@ describe("selectDigestSources", () => {
   it("limits selected entries by source type", () => {
     const result = selectDigestSources(
       [
-        candidate("reddit-1", { sourceType: "reddit" }),
-        candidate("reddit-2", { sourceType: "reddit" }),
-        candidate("reddit-3", { sourceType: "reddit" }),
-        candidate("article-1", { sourceType: "article" }),
-        candidate("article-2", { sourceType: "article" })
+        // give each a summary >=40 chars so the reddit/twitter/hackernews low-content
+        // penalty in generalQualityScore doesn't confound this cap-only test
+        candidate("reddit-1", { sourceType: "reddit", summary: "A named source reported a reddit discussion update." }),
+        candidate("reddit-2", { sourceType: "reddit", summary: "A named source reported another reddit discussion update." }),
+        candidate("reddit-3", { sourceType: "reddit", summary: "A named source reported a third reddit discussion update." }),
+        candidate("article-1", { sourceType: "article", summary: "A named source reported an article update." }),
+        candidate("article-2", { sourceType: "article", summary: "A named source reported another article update." })
       ],
       [],
       [],
@@ -760,4 +839,10 @@ function visaOpenAi(id: string, overrides: Partial<DigestCandidate> = {}): Diges
     entities: [{ name: "Visa", type: "company" }, { name: "OpenAI", type: "company" }],
     ...overrides
   });
+}
+
+function classifications(
+  entries: Array<[id: string, bucket: TopicClassification["bucket"], topic: string]>
+): Map<string, TopicClassification> {
+  return new Map(entries.map(([id, bucket, topic]) => [id, { bucket, topic }]));
 }

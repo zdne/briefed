@@ -8,8 +8,9 @@ Gmail newsletters ─┤
 TwitterAPI.io ─────┤  sync → normalize → Postgres + pgvector
 Feedbin API ───────┘  (optional)               │
                                                ├─ MCP tools (brief / briefing)
-                                        OpenAI embeddings    ├─ CLI digest → Markdown
-                                        LLM enrichment       └─ CLI query → Markdown
+                                        OpenAI embeddings    ├─ HTTP server (/health, /query)
+                                        LLM enrichment       ├─ CLI digest → Markdown
+                                                             └─ CLI query → Markdown
 ```
 
 `npm run sync` reads `briefed.config.json` and runs every enabled collector. `--hours` and `--days` apply as lookbacks to RSS, Gmail, and Feedbin; Twitter/X uses a stored latest-tweet cursor. The aggregate sync reports per-collector results as JSON, records failures, continues to later collectors, and exits nonzero if any enabled collector failed.
@@ -69,11 +70,11 @@ npm run cli -- sync-feedbin --reset-cursor
 
 `npm run cli -- clip` and the `clip` MCP tool save a URL or text directly to the archive, bypassing the collector schedule. They can also **mark an existing archive item as clipped** — flagging something already collected (an article read in a briefing, for example) for later retrieval, without re-fetching or re-enriching it.
 
-**URL clips** — Briefed fetches the page, extracts the title, and converts the HTML body to plain text (15s timeout), unless the URL is already in the archive (see below). Deduplicated by canonical URL.
+**URL clips** — Briefed fetches the page, extracts the title, and converts the HTML body to plain text (15s timeout), unless the URL is already in the archive (see below). Deduplicated by an **exact match** on the URL string as given — unlike RSS/Feedbin ingestion, clip URLs are never run through `canonicalizeUrl()` (no stripping of `utm_*`/tracking params, no host lowercasing, no trailing-slash normalization). Paste the exact same URL to re-mark or dedupe against an earlier clip; a URL differing only by a tracking parameter or trailing slash is treated as new.
 
 **Text clips** — Text is stored directly with no fetch. Deduplicated by a hash of the content.
 
-**Marking by URL** — `clip --url <url>` first checks whether that canonical URL is already archived. If so, it stamps `clipped_at` (and optionally `clip_note`) on the existing `content` row in place — no fetch, no re-enrichment, original `source_type`/content untouched. If the URL isn't archived yet, it falls through to the normal fetch-and-create flow. This is the URL you'd read straight off a rendered briefing (`[title](url)` under each `### Source N` heading) — no lookup needed.
+**Marking by URL** — `clip --url <url>` first checks whether that exact URL string is already archived. If so, it stamps `clipped_at` (and optionally `clip_note`) on the existing `content` row in place — no fetch, no re-enrichment, original `source_type`/content untouched. If the URL isn't archived yet, it falls through to the normal fetch-and-create flow. This is the URL you'd read straight off a rendered briefing (`[title](url)` under each `### Source N` heading) — no lookup needed, since it's stored verbatim.
 
 **Marking by citation** — `clip --citation <n> [--digest-id <n>]` marks "Source N" from a specific briefing (the latest one, if `--digest-id` is omitted). The citation number is resolved server-side against that digest's actual source list, the same way the `briefing` tool does — this is the only reliable way to mark a source that has no URL, such as a Gmail-sourced newsletter item. There is deliberately no way to mark by a raw numeric database id: an earlier version accepted one directly, and an agent mistook a "Source N" citation number for a real id, silently clipping an unrelated archive row. Citation and URL resolution can't be misapplied that way — a wrong citation/digest pair or an unmatched URL just errors or creates a new clip, never a silent wrong-row match.
 
@@ -180,16 +181,19 @@ To change which non-article source types use embedding-only sync, set `LIGHTWEIG
 Briefing source selection runs before LLM synthesis to prevent high-volume sources from drowning out important topics.
 
 1. Load up to `DIGEST_CANDIDATE_LIMIT` enriched entries published in the briefing lookback window.
-2. For each `requiredTopic`, embed the topic phrase and vector-search recent entries to fill a protected bucket.
-3. For each `focusArea`, do the same with a smaller budget.
-4. Fill the remaining budget with newest general entries, subject to source-type and author caps.
-5. Deduplicate across buckets while preserving bucket priority (required → focus → general).
+2. For each `requiredTopic`, embed the topic phrase and vector-search recent entries to fill a recall pool (recall only, unfiltered by score — not a final bucket assignment).
+3. For each `focusArea`, do the same with a smaller budget — except a focus area whose terms are a subset/superset of a required topic's terms is dropped first, so it can't duplicate a required-topic section.
+4. Pool every candidate retrieved by any topic's vector search and send the whole pool to the LLM in a single classification pass against the full topic list (required + focus). The LLM assigns each candidate to at most one topic — the one it judges the candidate's core subject to be — regardless of which topic's query happened to retrieve it; unrelated candidates are omitted from the classification result entirely.
+5. Fill required buckets, then focus buckets, from candidates the classifier confirmed for that exact topic — each candidate must also clear that topic's minimum cosine-similarity score and an "informative title" check (summary ≥20 characters, or title ≥4 words, or a domain-relevance term match). Within a bucket, fresh candidates fill first; only if none are fresh does it fall back to material follow-ups of a recently covered event (bounded by the freshness settings in the diversity-caps table below).
+6. Fill an important-general bucket from newsworthy candidates outside those topics — named AI companies, security/governance signals, standards releases — ranked by a heuristic score.
+7. Fill the remaining budget with general entries, ranked primarily by a content-quality heuristic (author present, summary length, security-advisory/strategic-analysis vocabulary, penalties for hiring posts and low-content community meta-discussion) — not simply newest-first; recency is only the final tiebreaker.
+8. Deduplicate across buckets while preserving bucket priority (required → focus → important-general → general).
 
 Selection counts are logged: required-topic count, focus-area count, important-general count, general count.
 
-**Domain relevance filter:** terms are extracted from all configured topic names (stripping common English grammar words). Entries in the general and important-general buckets that contain none of these terms receive a score penalty and are skipped when the feed is focused on a specific domain. This prevents off-topic content from filling "Other Items" when all configured topics are domain-specific.
+**Why an LLM classification pass instead of keyword matching:** vector similarity alone is too fuzzy (semantically-adjacent-but-wrong articles score high), and an earlier keyword-anchor design — requiring the topic's own words, or a hardcoded per-topic synonym list, to appear literally in the text — was precise but brittle: synonym lists had to be hand-tuned per topic after each false positive, a single incidental mention of a topic word (e.g. "...risks procurement teams will need to screen for") could pull an unrelated article into a topic bucket, and new topics got no synonym coverage until someone hit a failure and added one. The classification pass judges the candidate's actual subject instead of pattern-matching its words, and generalizes to newly configured topics without code changes.
 
-**Cross-topic filter:** when a vector match scores much higher for a different topic than the one it was retrieved for, it is rejected from the current topic's bucket. Specifically, a candidate is rejected if its similarity to topic T is less than `DIGEST_TOPIC_BEST_MATCH_RATIO × best_score_across_all_topics`. This catches cases where a topic shares a broad concept (e.g. "agentic") with a specialized topic (e.g. "Agentic Payments") — an article about workplace AI that happens to score 0.32 for "Agentic Payments" but 0.45 for "Agentic AI" would be filtered from the payments bucket since 0.32 < 0.45 × 0.75. Exact text matches (articles that contain the topic name verbatim) are never filtered.
+**Domain relevance filter:** terms are extracted from all configured topic names (stripping common English grammar words) — this list is non-empty, and the filter active, whenever any topic or focus area is configured. Its effect differs by bucket: an **important-general** candidate matching none of these terms takes a soft `-5` score penalty and can still qualify if otherwise strong; a **general** candidate matching none of these terms is skipped outright, with no score computed at all. This prevents off-topic content from filling "Other Items" once at least one topic is configured.
 
 **Bucket controls:**
 
@@ -199,10 +203,9 @@ Selection counts are logged: required-topic count, focus-area count, important-g
 | `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES` | 5 | Maximum sources per required topic |
 | `DIGEST_FOCUS_AREA_MIN_ENTRIES` | 2 | Minimum sources reserved per focus area |
 | `DIGEST_FOCUS_AREA_MAX_ENTRIES` | 4 | Maximum sources per focus area |
-| `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | 0.30 | Minimum cosine similarity for required-topic matches |
-| `DIGEST_FOCUS_AREA_MIN_SCORE` | 0.35 | Minimum cosine similarity for focus-area matches |
-| `DIGEST_TOPIC_BEST_MATCH_RATIO` | 0.75 | Cross-topic filter: reject a vector match if its score for this topic < ratio × best score across all topics |
-| `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | 3 | Minimum keyword score for important-general entries |
+| `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | 0.30 | Minimum cosine similarity, applied alongside classifier confirmation, for a candidate to fill a required-topic bucket (not a pre-filter on what the classifier sees) |
+| `DIGEST_FOCUS_AREA_MIN_SCORE` | 0.35 | Minimum cosine similarity, applied alongside classifier confirmation, for a candidate to fill a focus-area bucket (not a pre-filter on what the classifier sees) |
+| `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | 3 | Minimum heuristic score for important-general entries |
 | `DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES` | 12 | Cap on important-general entries |
 | `DIGEST_GENERAL_MAX_ENTRIES` | 120 | Cap on general fill entries |
 
@@ -282,7 +285,7 @@ Query output is saved as Markdown under `QUERY_OUTPUT_DIR` by default. Use `--no
 | `update_user_config` | Full-replacement write of the user config |
 | `update_collectors` | Full-replacement write of the collectors section only |
 | `update_briefing_preferences` | Full-replacement write of requiredTopics + focusAreas only |
-| `health` | Returns DB connectivity, row counts, and last-sync timestamps |
+| `health` | Runs `SELECT 1` and returns DB connectivity status plus the configured pool size |
 
 All update tools are **full-replacement**: they overwrite the entire section, not individual fields. Always call `get_user_config` first and echo every unchanged field back verbatim. Omitting a feed deletes it.
 
@@ -299,6 +302,17 @@ Key rules the skill enforces:
 - Every required topic should have at least one dedicated quoted Google News feed; relying on general sources for a required topic leads to empty sections
 - Disable (`enabled: false`), don't delete underperforming feeds — preserves audit trail
 - Never remove Gmail or Twitter collectors without explicit user instruction
+
+---
+
+## HTTP Server
+
+`npm run dev` (or `npm start` against the compiled `dist/`) starts a small Fastify HTTP server (`src/server.ts`) on `PORT`, for callers that want plain HTTP instead of MCP.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Runs `SELECT 1` against Postgres and returns `{ status: "ok" }` |
+| `POST /query` | Body `{ question, limit? }` (`limit` clamped to 1-30, defaults to `QUERY_LIMIT`) → runs the same `queryArchive` flow as the CLI/MCP `brief` tool and returns the result as JSON. Returns 400 if `question` is missing. |
 
 ---
 
@@ -330,6 +344,7 @@ As a last resort, `src/cli.ts` registers process-level `uncaughtException`/`unha
 | `PG_POOL_MAX` | `3` | Max Postgres pool connections per process. Set to `2` for Neon free tier. |
 | `PG_QUERY_TIMEOUT_MS` | `30000` | Client- and server-side query timeout (ms). Prevents hung queries from stalling the sync when Neon drops a connection silently. |
 | `PORT` | `3000` | HTTP server port |
+| `LOG_LEVEL` | `info` | Fastify HTTP server log level |
 | `OPENAI_API_KEY` | — | Required for embeddings |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model (fixed at 1536 dimensions) |
 | `LLM_PROVIDER` | `openai` | `openai` or `anthropic` |
@@ -347,10 +362,9 @@ As a last resort, `src/cli.ts` registers process-level `uncaughtException`/`unha
 | `DIGEST_REQUIRED_TOPIC_MAX_ENTRIES` | `5` | Maximum sources per required topic |
 | `DIGEST_FOCUS_AREA_MIN_ENTRIES` | `2` | Minimum sources reserved per focus area |
 | `DIGEST_FOCUS_AREA_MAX_ENTRIES` | `4` | Maximum sources per focus area |
-| `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | `0.30` | Minimum cosine similarity for required-topic matches |
-| `DIGEST_FOCUS_AREA_MIN_SCORE` | `0.35` | Minimum cosine similarity for focus-area matches |
-| `DIGEST_TOPIC_BEST_MATCH_RATIO` | `0.75` | Cross-topic filter ratio; set to 1.0 to disable |
-| `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | `3` | Minimum keyword score for important-general entries |
+| `DIGEST_REQUIRED_TOPIC_MIN_SCORE` | `0.30` | Minimum cosine similarity, alongside classifier confirmation, for a required-topic bucket |
+| `DIGEST_FOCUS_AREA_MIN_SCORE` | `0.35` | Minimum cosine similarity, alongside classifier confirmation, for a focus-area bucket |
+| `DIGEST_IMPORTANT_GENERAL_MIN_SCORE` | `3` | Minimum heuristic score for important-general entries |
 | `DIGEST_IMPORTANT_GENERAL_MAX_ENTRIES` | `12` | Cap on important-general entries per briefing |
 | `DIGEST_GENERAL_MAX_ENTRIES` | `120` | Cap on general fill entries per briefing |
 | `DIGEST_MAX_ARTICLE_ENTRIES` | `80` | Cap on article entries per briefing |
@@ -366,7 +380,7 @@ As a last resort, `src/cli.ts` registers process-level `uncaughtException`/`unha
 | `RSS_FETCH_DELAY_MS` | `1500` | Inter-feed delay for RSS (ms) |
 | `RSS_REDDIT_FETCH_DELAY_MS` | `10000` | Inter-feed delay for Reddit RSS (ms) |
 | `RSS_MAX_ITEMS_PER_FEED` | `50` | Max items processed per feed per run |
-| `RSS_USER_AGENT` | `briefed-rss/0.1` | User-Agent header for RSS requests |
+| `RSS_USER_AGENT` | `pnd-rss/0.1` | User-Agent header for RSS requests |
 | `RSS_REQUEST_TIMEOUT_MS` | `15000` | HTTP request timeout for RSS fetches (ms) |
 | `REDDIT_RSS_USER` | — | Reddit RSS credential (from authenticated RSS URL) |
 | `REDDIT_RSS_FEED` | — | Reddit RSS credential (from authenticated RSS URL) |
@@ -383,3 +397,4 @@ As a last resort, `src/cli.ts` registers process-level `uncaughtException`/`unha
 | `FEEDBIN_PASSWORD` | — | Feedbin account password |
 | `FEEDBIN_BASE_URL` | `https://api.feedbin.com/v2` | Feedbin API base URL |
 | `USER_CONFIG_PATH` | `briefed.config.json` | Path to user config file |
+| `BRIEFED_CONFIG_PATH` | — | Fallback for `USER_CONFIG_PATH` if that's unset; both unset falls back to `briefed.config.json` |

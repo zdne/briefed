@@ -8,7 +8,8 @@ import type {
   DigestSourceContext,
   Enrichment,
   FriendlyDigestStyle,
-  RetrievedContent
+  RetrievedContent,
+  TopicClassification
 } from "./types.js";
 
 const enrichmentSchema = z.object({
@@ -16,6 +17,16 @@ const enrichmentSchema = z.object({
   topics: z.array(z.string()),
   entities: z.array(z.object({ name: z.string(), type: z.string() }))
 });
+
+const topicClassificationSchema = z.object({
+  classifications: z.array(z.object({ id: z.string(), topic: z.string() }))
+});
+
+export interface ClassifiableCandidate {
+  id: string;
+  title: string | null;
+  summary: string | null;
+}
 
 export class AnalystAI {
   private openai?: OpenAI;
@@ -53,6 +64,33 @@ Title: ${title ?? "(untitled)"}
 Content:
 ${content.slice(0, 40_000)}`;
     return normalizeEnrichment(enrichmentSchema.parse(await this.generateJson(prompt)));
+  }
+
+  async classifyTopics(
+    candidates: ClassifiableCandidate[],
+    requiredTopics: string[],
+    focusAreas: string[]
+  ): Promise<Map<string, TopicClassification>> {
+    if (candidates.length === 0 || (requiredTopics.length === 0 && focusAreas.length === 0)) {
+      return new Map();
+    }
+
+    const bucketByTopic = new Map<string, "required" | "focus">();
+    for (const topic of requiredTopics) bucketByTopic.set(topic, "required");
+    for (const topic of focusAreas) bucketByTopic.set(topic, "focus");
+
+    const prompt = buildTopicClassificationPrompt(candidates, requiredTopics, focusAreas);
+    const parsed = topicClassificationSchema.parse(await this.generateJson(prompt));
+
+    const candidateIds = new Set(candidates.map((candidate) => candidate.id));
+    const result = new Map<string, TopicClassification>();
+    for (const item of parsed.classifications) {
+      if (!candidateIds.has(item.id)) continue;
+      const bucket = bucketByTopic.get(item.topic);
+      if (!bucket) continue;
+      result.set(item.id, { bucket, topic: item.topic });
+    }
+    return result;
   }
 
   async answer(question: string, sources: RetrievedContent[]): Promise<string> {
@@ -191,6 +229,32 @@ Published: ${source.publishedAt ?? "unknown"}
 Summary: ${source.summary ?? source.contentText.slice(0, 1200)}`
     )
     .join("\n\n");
+}
+
+export function buildTopicClassificationPrompt(
+  candidates: ClassifiableCandidate[],
+  requiredTopics: string[],
+  focusAreas: string[]
+): string {
+  return `Classify each candidate article against the configured topics below.
+
+Required watchlist topics:
+${requiredTopics.map((topic) => `- ${topic}`).join("\n")}
+
+Focus area topics:
+${focusAreas.map((topic) => `- ${topic}`).join("\n") || "(none configured)"}
+
+Rules:
+- Classify a candidate under a topic only if the candidate's core subject is that topic — not because it mentions a related word in passing.
+- Example: an article reporting that OpenAI cut API pricing to drive high-volume enterprise adoption is NOT "ai procurement" — a price cut is not a procurement decision, even though enterprises buying AI is a loosely related idea. An article centrally advising procurement/vendor-evaluation teams on how to assess AI tools IS "ai procurement", even if brief.
+- Assign each candidate to at most one topic: the single topic it is most specifically and centrally about.
+- Omit a candidate from the output entirely if it does not centrally match any listed topic.
+- Use the exact topic text as given above, verbatim.
+
+Candidates:
+${candidates.map((candidate) => `[${candidate.id}] ${candidate.title ?? "Untitled"}\n${candidate.summary ?? "(no summary)"}`).join("\n\n")}
+
+Return JSON: {"classifications": [{"id": "<candidate id>", "topic": "<exact topic text>"}, ...]}`;
 }
 
 export function buildDigestPrompt(
@@ -333,7 +397,7 @@ Bad: Browser-agent reliability remains a key operational challenge.
 Better: Reddit: browser-agent tasks involving tabs, login sessions, modals, and dynamic pages.
 Bad: MCP remains pivotal infrastructure.
 Better: Worldpay published an MCP server for agentic payments.
-The selection label on each source is a hint, not a binding assignment. If a source's content does not match its labeled topic, use it where it fits best or omit it.
+Outside the Watchlist section, the selection label on each source is a hint, not a binding assignment: if a source's content does not match its labeled focus-area/general topic, use it where it fits best or omit it. This does not relax the Watchlist rules above — a source with no "required watchlist / <topic>" Selection line must never be placed in a Watchlist subsection, even if it fits best there; write "No meaningful new signal found in this window" instead.
 
 ${formatDigestTopicInstructions(options.requiredTopics ?? [], options.focusAreas ?? [])}
 
