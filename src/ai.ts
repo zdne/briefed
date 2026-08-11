@@ -467,7 +467,10 @@ Use only the supplied canonical briefing body and source metadata. Do not use ou
 
 Required output:
 - Return only Markdown.
-- Do not include a title, date range, candidate count, or source count anywhere in your output — the application prepends these programmatically before your content. Start directly with the first section heading (e.g. "## Watchlist").
+- Do not include a title, date range, candidate count, or source count anywhere in your output — the application prepends these programmatically before your content.
+- The first line of your output must be a one-sentence summary in this exact form: "Summary: <sentence>". Maximum 15 words. Plain factual tone, no adjectives, no marketing language.
+- The summary must report one specific, concrete fact from today's bullets — name the actual company, protocol, product, or person involved. Do not describe the general theme of the watchlist (e.g. never write something like "Agentic commerce continues to grow" or "AI payments are evolving") — that's true every day and tells the reader nothing new.
+- After the summary line, leave one blank line, then start the sections (e.g. "## Watchlist").
 - Preserve the canonical briefing's Watchlist / Focus Areas / Other Items hierarchy when present.
 - Preserve explicit "no meaningful signal" watchlist lines. Do not omit absence reporting for required watchlist topics.
 - Do not replace watchlist or focus sections with generic categories such as "Industry Trends", "Community and Collaboration", "Security and Ethics", or "Additional Notable Mentions".

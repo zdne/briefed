@@ -30,9 +30,16 @@ if (!latest) {
   throw new Error(`No friendly briefing Markdown found in ${briefingsDir}`);
 }
 
-const content = await readFile(join(briefingsDir, latest), "utf8");
+const rawContent = await readFile(join(briefingsDir, latest), "utf8");
 const now = new Date();
 const date = now.toISOString().slice(0, 10);
+
+// The LLM's first line is "Summary: <sentence>" (see buildFriendlyDigestPrompt) —
+// pull it into front matter for the homepage listing and strip it from the body
+// so it isn't shown twice.
+const summaryMatch = rawContent.match(/^Summary:\s*(.+)$/m);
+const summary = summaryMatch ? summaryMatch[1].trim() : "";
+const content = summaryMatch ? rawContent.replace(/^Summary:.*\n+/m, "") : rawContent;
 
 const frontMatter = [
   "---",
@@ -40,6 +47,7 @@ const frontMatter = [
   `title: "Briefing ${formatOrdinalDate(now)}"`,
   `date: ${date}`,
   "tags: post",
+  ...(summary ? [`summary: ${JSON.stringify(summary)}`] : []),
   "---",
   "",
 ].join("\n");
