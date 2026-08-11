@@ -1,0 +1,101 @@
+name: Daily Digest
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # 6am CET/CEST
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  PG_POOL_MAX: ${{ secrets.PG_POOL_MAX }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  OPENAI_EMBEDDING_MODEL: ${{ secrets.OPENAI_EMBEDDING_MODEL }}
+  LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+  OPENAI_LLM_MODEL: ${{ secrets.OPENAI_LLM_MODEL }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  ANTHROPIC_LLM_MODEL: ${{ secrets.ANTHROPIC_LLM_MODEL }}
+  GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+  GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+  GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+  GMAIL_MAX_MESSAGES: ${{ secrets.GMAIL_MAX_MESSAGES }}
+  TWITTERAPI_IO_API_KEY: ${{ secrets.TWITTERAPI_IO_API_KEY }}
+  TWITTERAPI_IO_BASE_URL: ${{ secrets.TWITTERAPI_IO_BASE_URL }}
+  TWITTERAPI_LIST_MAX_PAGES: ${{ secrets.TWITTERAPI_LIST_MAX_PAGES }}
+  TWITTERAPI_LIST_MAX_TWEETS: ${{ secrets.TWITTERAPI_LIST_MAX_TWEETS }}
+  REDDIT_RSS_USER: ${{ secrets.REDDIT_RSS_USER }}
+  REDDIT_RSS_FEED: ${{ secrets.REDDIT_RSS_FEED }}
+  RSS_FETCH_DELAY_MS: ${{ secrets.RSS_FETCH_DELAY_MS }}
+  RSS_REDDIT_FETCH_DELAY_MS: ${{ secrets.RSS_REDDIT_FETCH_DELAY_MS }}
+  RSS_MAX_ITEMS_PER_FEED: ${{ secrets.RSS_MAX_ITEMS_PER_FEED }}
+  RSS_USER_AGENT: ${{ secrets.RSS_USER_AGENT }}
+  RSS_REQUEST_TIMEOUT_MS: ${{ secrets.RSS_REQUEST_TIMEOUT_MS }}
+  REDDIT_ENRICHMENT_MODE: ${{ secrets.REDDIT_ENRICHMENT_MODE }}
+  ENRICHMENT_TOPIC_UPGRADE_THRESHOLD: ${{ secrets.ENRICHMENT_TOPIC_UPGRADE_THRESHOLD }}
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write briefed.config.json from secret
+        run: printf '%s' "$BRIEFED_CONFIG_JSON" > briefed.config.json
+        env:
+          BRIEFED_CONFIG_JSON: ${{ secrets.BRIEFED_CONFIG_JSON }}
+
+      - name: Sync sources
+        run: npx tsx src/cli.ts sync --hours 24 || true
+
+      - name: Generate friendly digest
+        run: npx tsx src/cli.ts digest --friendly
+
+      - name: Prepare Jekyll post
+        run: node .github/scripts/prepare-post.mjs
+
+      - name: Commit archive
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add site/_posts
+          git diff --cached --quiet || git commit -m "Add briefing for $(date -u +%Y-%m-%d)"
+          git push
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./site
+          destination: ./_site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+  deploy:
+    needs: digest
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

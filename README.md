@@ -90,6 +90,19 @@ Runs sync + digest daily at 6am. Fires at next wake if the Mac was asleep.
 
 Use `;` rather than `&&` between sync and digest — `sync` exits non-zero if any individual collector fails (e.g. an expired OAuth token), even when the others succeed, and you still want a briefing from whatever did sync.
 
+**Automate with GitHub Actions (cloud, no machine required):**
+
+`.github/workflows/daily-digest.yml` runs `sync` + `digest --friendly` on a schedule (default 6am CET/CEST), commits each day's briefing to `site/_posts/`, and publishes the archive to GitHub Pages via Jekyll (`minima` theme — the homepage lists every day's post automatically). Useful when you want briefings to keep generating while your machine is off (e.g. traveling).
+
+One-time setup:
+
+1. Add every value from your `.env` as a GitHub Actions secret with the same name (Settings → Secrets and variables → Actions), plus one more: `BRIEFED_CONFIG_JSON` containing the full contents of your local `briefed.config.json` (that file and `.env` are both gitignored, so the workflow reconstructs them from secrets).
+2. Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+3. If your Gmail OAuth consent screen is in "Testing" publishing status, the refresh token expires after 7 days regardless of use — the Gmail collector will start failing after about a week (harmlessly; a failed collector doesn't block the digest, see above). Publish the OAuth app or accept the gap.
+4. Trigger the workflow once manually (Actions tab → Daily Digest → Run workflow) to confirm it works end-to-end before relying on the schedule.
+
+The published site is public and unauthenticated — anyone with the URL can read it. Raw Markdown for every day also lives in `site/_posts/` in the repo as a durable archive independent of Pages.
+
 ### MCP (Claude app)
 
 Works with any local MCP-compatible host — Claude Desktop, Cursor, Windsurf, or similar. The config below is for Claude Desktop.
