@@ -422,10 +422,30 @@ function formatFriendlyPeriod(periodStart: string | null, periodEnd: string | nu
   return `${format(periodStart)} to ${format(periodEnd)}`;
 }
 
+function ordinalSuffix(day: number): string {
+  if (day >= 11 && day <= 13) return "th";
+  switch (day % 10) {
+    case 1: return "st";
+    case 2: return "nd";
+    case 3: return "rd";
+    default: return "th";
+  }
+}
+
+function formatOrdinalDate(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const day = date.getUTCDate();
+  const month = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" }).format(date);
+  return `${day}${ordinalSuffix(day)} ${month} ${date.getUTCFullYear()}`;
+}
+
 export function buildFriendlyDigestHeader(digest: DigestMarkdownResult): string {
   const candidateCount = digest.candidateCount ?? digest.sources.length;
+  const dateTitle = formatOrdinalDate(digest.periodEnd);
   return [
-    "# Briefing",
+    `# Briefing${dateTitle ? ` ${dateTitle}` : ""}`,
     "",
     `**Date range:** ${formatFriendlyPeriod(digest.periodStart, digest.periodEnd)}  `,
     `**Candidates reviewed:** ${candidateCount}  `,

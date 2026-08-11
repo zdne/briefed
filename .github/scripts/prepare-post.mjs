@@ -3,6 +3,22 @@
 import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
+function ordinalSuffix(day) {
+  if (day >= 11 && day <= 13) return "th";
+  switch (day % 10) {
+    case 1: return "st";
+    case 2: return "nd";
+    case 3: return "rd";
+    default: return "th";
+  }
+}
+
+function formatOrdinalDate(date) {
+  const day = date.getUTCDate();
+  const month = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" }).format(date);
+  return `${day}${ordinalSuffix(day)} ${month} ${date.getUTCFullYear()}`;
+}
+
 const briefingsDir = "output/briefings";
 
 const files = (await readdir(briefingsDir))
@@ -21,7 +37,7 @@ const date = now.toISOString().slice(0, 10);
 const frontMatter = [
   "---",
   "layout: base.njk",
-  `title: "Briefing — ${date}"`,
+  `title: "Briefing ${formatOrdinalDate(now)}"`,
   `date: ${date}`,
   "tags: post",
   "---",
