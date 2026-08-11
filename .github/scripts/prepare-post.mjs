@@ -1,4 +1,4 @@
-// Copies the freshly generated friendly digest into site/_posts as a Jekyll post.
+// Copies the freshly generated friendly digest into site/posts as an Eleventy post.
 // Run right after `tsx src/cli.ts digest --friendly`, before committing.
 import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -17,18 +17,18 @@ if (!latest) {
 const content = await readFile(join(briefingsDir, latest), "utf8");
 const now = new Date();
 const date = now.toISOString().slice(0, 10);
-const timestamp = now.toISOString().replace("T", " ").slice(0, 19) + " +0000";
 
 const frontMatter = [
   "---",
-  "layout: post",
+  "layout: base.njk",
   `title: "Briefing — ${date}"`,
-  `date: ${timestamp}`,
+  `date: ${date}`,
+  "tags: post",
   "---",
   "",
 ].join("\n");
 
-await mkdir("site/_posts", { recursive: true });
-await writeFile(join("site/_posts", `${date}-briefing.md`), frontMatter + content, "utf8");
+await mkdir("site/posts", { recursive: true });
+await writeFile(join("site/posts", `${date}-briefing.md`), frontMatter + content, "utf8");
 
-console.log(`Wrote site/_posts/${date}-briefing.md from ${latest}`);
+console.log(`Wrote site/posts/${date}-briefing.md from ${latest}`);

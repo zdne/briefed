@@ -18,7 +18,9 @@
     "sync-twitter": "tsx src/cli.ts sync-twitter",
     "digest": "tsx src/cli.ts digest",
     "test": "vitest run test",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "site:dev": "eleventy --serve",
+    "site:build": "eleventy"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",
@@ -33,6 +35,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@11ty/eleventy": "^3.0.0",
     "@types/html-to-text": "^9.0.4",
     "@types/node": "^22.15.0",
     "@types/pg": "^8.15.0",

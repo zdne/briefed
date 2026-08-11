@@ -92,7 +92,9 @@ Use `;` rather than `&&` between sync and digest — `sync` exits non-zero if an
 
 **Automate with GitHub Actions (cloud, no machine required):**
 
-`.github/workflows/daily-digest.yml` runs `sync` + `digest --friendly` on a schedule (default 6am CET/CEST), commits each day's briefing to `site/_posts/`, and publishes the archive to GitHub Pages via Jekyll (`minima` theme — the homepage lists every day's post automatically). Useful when you want briefings to keep generating while your machine is off (e.g. traveling).
+`.github/workflows/daily-digest.yml` runs `sync` + `digest --friendly` on a schedule (default 6am CET/CEST), commits each day's briefing to `site/posts/`, and publishes the archive to GitHub Pages via [Eleventy](https://www.11ty.dev/) — the homepage lists every day's post automatically. Useful when you want briefings to keep generating while your machine is off (e.g. traveling).
+
+Preview the site locally with `npm run site:dev` (serves at `http://localhost:8080`) — no Ruby/Docker needed, it's plain Node.
 
 One-time setup:
 

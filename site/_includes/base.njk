@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if title %}{{ title }} · Briefed{% else %}Briefed{% endif %}</title>
+  <meta name="description" content="Daily AI-curated briefing archive">
+</head>
+<body>
+  <header class="site-header">
+    <a class="site-title" href="/">Briefed</a>
+  </header>
+  <main>
+    {{ content | safe }}
+  </main>
+  <footer class="site-footer">
+    <p>Daily AI-curated briefing archive</p>
+  </footer>
+</body>
+</html>

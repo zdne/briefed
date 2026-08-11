@@ -8,3 +8,5 @@ output
 .DS_Store
 feeds.json
 *.dump
+
+site/_site

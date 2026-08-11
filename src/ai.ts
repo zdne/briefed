@@ -404,6 +404,24 @@ ${formatDigestTopicInstructions(options.requiredTopics ?? [], options.optionalTo
 ${formatDigestSources(sources, options.sourceContexts ?? [])}`;
 }
 
+function formatFriendlyPeriod(periodStart: string | null, periodEnd: string | null): string {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+    timeZoneName: "short"
+  });
+  const format = (value: string | null): string => {
+    if (!value) return "unknown";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : formatter.format(date);
+  };
+  return `${format(periodStart)} to ${format(periodEnd)}`;
+}
+
 export function buildFriendlyDigestPrompt(
   digest: DigestMarkdownResult,
   canonicalMarkdown: string,
@@ -415,7 +433,7 @@ Use only the supplied canonical briefing body and source metadata. Do not use ou
 
 Required output:
 - Return only Markdown.
-- Preserve this date range exactly: ${digest.periodStart} to ${digest.periodEnd}.
+- Preserve this date range exactly, written for a human reader (not ISO 8601): ${formatFriendlyPeriod(digest.periodStart, digest.periodEnd)}.
 - Preserve this candidate count exactly when shown: ${digest.candidateCount ?? digest.sources.length}.
 - Preserve this cited source count exactly: ${digest.sources.length}.
 - Label counts as "Candidates reviewed" and "Sources cited"; do not collapse them into one ambiguous source count.

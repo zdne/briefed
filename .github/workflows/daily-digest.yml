@@ -71,27 +71,24 @@ jobs:
       - name: Generate friendly digest
         run: npx tsx src/cli.ts digest --friendly
 
-      - name: Prepare Jekyll post
+      - name: Prepare post
         run: node .github/scripts/prepare-post.mjs
 
       - name: Commit archive
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add site/_posts
+          git add site/posts
           git diff --cached --quiet || git commit -m "Add briefing for $(date -u +%Y-%m-%d)"
           git push
 
-      - name: Build with Jekyll
-        uses: actions/jekyll-build-pages@v1
-        with:
-          source: ./site
-          destination: ./_site
+      - name: Build site
+        run: npm run site:build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./_site
+          path: ./site/_site
 
   deploy:
     needs: digest
