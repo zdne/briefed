@@ -3,7 +3,12 @@ name: Daily Digest
 on:
   schedule:
     - cron: "0 4 * * *" # 6am CET/CEST
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      skip_sync:
+        description: "Skip sync/digest generation — just rebuild and redeploy the site from what's already committed"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -61,20 +66,25 @@ jobs:
         run: npm ci
 
       - name: Write briefed.config.json from secret
+        if: ${{ !inputs.skip_sync }}
         run: printf '%s' "$BRIEFED_CONFIG_JSON" > briefed.config.json
         env:
           BRIEFED_CONFIG_JSON: ${{ secrets.BRIEFED_CONFIG_JSON }}
 
       - name: Sync sources
+        if: ${{ !inputs.skip_sync }}
         run: npx tsx src/cli.ts sync --hours 24 || true
 
       - name: Generate friendly digest
+        if: ${{ !inputs.skip_sync }}
         run: npx tsx src/cli.ts digest --friendly
 
       - name: Prepare post
+        if: ${{ !inputs.skip_sync }}
         run: node .github/scripts/prepare-post.mjs
 
       - name: Commit archive
+        if: ${{ !inputs.skip_sync }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
