@@ -1,4 +1,6 @@
 export default function (eleventyConfig) {
+  eleventyConfig.addPassthroughCopy("site/style.css");
+
   eleventyConfig.addFilter("readableDate", (value) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;

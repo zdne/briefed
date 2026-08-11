@@ -5,16 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if title %}{{ title }} · Briefed{% else %}Briefed{% endif %}</title>
   <meta name="description" content="Daily AI-curated briefing archive">
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="site-header">
-    <a class="site-title" href="/">Briefed</a>
-  </header>
-  <main>
-    {{ content | safe }}
-  </main>
-  <footer class="site-footer">
-    <p>Daily AI-curated briefing archive</p>
-  </footer>
+  <div class="wrap">
+    <header>
+      <nav class="site-nav">
+        <a class="site-name" href="/">Briefed</a>
+      </nav>
+    </header>
+    <main>
+      {{ content | safe }}
+    </main>
+    <footer>
+      <p>Daily AI-curated briefing archive &middot; a project by <a href="https://zdne.org">Z</a></p>
+    </footer>
+  </div>
 </body>
 </html>
