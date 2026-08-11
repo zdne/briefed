@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if title %}{{ title }} · Briefed{% else %}Briefed{% endif %}</title>
   <meta name="description" content="Daily AI-curated briefing archive">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="{{ '/style.css' | url }}">
 </head>
 <body>
   <div class="wrap">
     <header>
       <nav class="site-nav">
-        <a class="site-name" href="/">Briefed</a>
+        <a class="site-name" href="{{ '/' | url }}">Briefed</a>
       </nav>
     </header>
     <main>

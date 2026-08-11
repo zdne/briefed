@@ -8,6 +8,7 @@ export default function (eleventyConfig) {
   });
 
   return {
+    pathPrefix: "/briefed/",
     dir: {
       input: "site",
       output: "site/_site",
