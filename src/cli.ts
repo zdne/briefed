@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { dirname, resolve } from "node:path";
-import { AnalystAI } from "./ai.js";
+import { AnalystAI, buildFriendlyDigestHeader } from "./ai.js";
 import { config, requireConfig } from "./config.js";
 import { getDigestForRendering, migrate, pool, resetSyncCursor } from "./db.js";
 import { createDigest } from "./digest.js";
@@ -520,7 +520,8 @@ digestCommand
     log("Initializing AI client");
     const ai = new AnalystAI();
     log("Requesting friendly briefing rewrite from LLM");
-    const markdown = cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));
+    const markdown = buildFriendlyDigestHeader(result)
+      + cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));
     log("Received friendly briefing rewrite");
     const outputPath = options.output ?? friendlyDigestOutputPath(
       config.DIGEST_OUTPUT_DIR,
@@ -724,7 +725,8 @@ async function createDigestAction(options: {
   log(`Wrote canonical briefing Markdown to ${canonicalPath}`);
 
   log("Requesting friendly briefing rewrite from LLM");
-  const markdown = cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));
+  const markdown = buildFriendlyDigestHeader(result)
+    + cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));
   log("Received friendly briefing rewrite");
   const outputPath = options.output ?? friendlyDigestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt, { style });
   const path = await writeMarkdownFile(outputPath, markdown);

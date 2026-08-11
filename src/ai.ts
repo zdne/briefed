@@ -422,6 +422,20 @@ function formatFriendlyPeriod(periodStart: string | null, periodEnd: string | nu
   return `${format(periodStart)} to ${format(periodEnd)}`;
 }
 
+export function buildFriendlyDigestHeader(digest: DigestMarkdownResult): string {
+  const candidateCount = digest.candidateCount ?? digest.sources.length;
+  return [
+    "# Briefing",
+    "",
+    `**Date range:** ${formatFriendlyPeriod(digest.periodStart, digest.periodEnd)}  `,
+    `**Candidates reviewed:** ${candidateCount}  `,
+    `**Sources cited:** ${digest.sources.length}  `,
+    "",
+    "---",
+    ""
+  ].join("\n");
+}
+
 export function buildFriendlyDigestPrompt(
   digest: DigestMarkdownResult,
   canonicalMarkdown: string,
@@ -433,10 +447,7 @@ Use only the supplied canonical briefing body and source metadata. Do not use ou
 
 Required output:
 - Return only Markdown.
-- Preserve this date range exactly, written for a human reader (not ISO 8601): ${formatFriendlyPeriod(digest.periodStart, digest.periodEnd)}.
-- Preserve this candidate count exactly when shown: ${digest.candidateCount ?? digest.sources.length}.
-- Preserve this cited source count exactly: ${digest.sources.length}.
-- Label counts as "Candidates reviewed" and "Sources cited"; do not collapse them into one ambiguous source count.
+- Do not include a title, date range, candidate count, or source count anywhere in your output — the application prepends these programmatically before your content. Start directly with the first section heading (e.g. "## Watchlist").
 - Preserve the canonical briefing's Watchlist / Focus Areas / Other Items hierarchy when present.
 - Preserve explicit "no meaningful signal" watchlist lines. Do not omit absence reporting for required watchlist topics.
 - Do not replace watchlist or focus sections with generic categories such as "Industry Trends", "Community and Collaboration", "Security and Ethics", or "Additional Notable Mentions".
@@ -444,7 +455,6 @@ Required output:
 - Each bullet must contain exactly one factual item and exactly one direct Markdown source link to the supporting source, such as [Source title](https://example.com).
 - Do not use citation-only links like [1], wiki links, footnotes, reference-style links, or source numbers as the only link text.
 - Do not include a source appendix, source list, bibliography, "Sources" section, "Source Appendix" section, or short URL section.
-- Include the date range and selected source count near the top.
 - Include a short closing "Honest Read" section that identifies the strongest signals and notes when the window is thin, using only claims supported by the canonical briefing.
 - In "Honest Read", separate high-confidence selected signals from low-confidence social signals when both appear.
 - Do not turn one social-source complaint, claim, or discussion into a generalized industry practice.
