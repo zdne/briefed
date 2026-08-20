@@ -119,9 +119,24 @@ export function cleanDigestBody(text: string): string {
   return removeEmptyOptionalDigestSections(
     normalizeDigestHeadings(
       removeTrailingLineWhitespace(
-        removeShortUrlReferenceSection(text)
+        fixBracketedLinkTitles(removeShortUrlReferenceSection(text))
       )
     )
+  );
+}
+
+/**
+ * Repairs markdown links whose title text contains its own square brackets
+ * (e.g. a source titled "[AINews] Memory prices up 500% in 12 months"). Written
+ * unescaped, `[AINews] Memory prices up 500%...](url)` breaks link parsing:
+ * the first `]` closes the link early, leaving "] Memory prices up 500%...]"
+ * as stray text followed by a dangling "(url)". This escapes the embedded
+ * brackets so the whole title renders as the link text.
+ */
+export function fixBracketedLinkTitles(text: string): string {
+  return text.replace(
+    /(?<!\[)\[([^\[\]\n]+)\](\s[^\[\]\n]*)\]\(([^)\n]+)\)/g,
+    (_match, bracketed: string, rest: string, url: string) => `[${escapeLinkText(`[${bracketed}]${rest}`)}](${url})`
   );
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendSectionSourceLinks,
   cleanDigestBody,
+  fixBracketedLinkTitles,
   linkCitations,
   limitDigestCitations,
   renderDigestMarkdown,
@@ -343,6 +344,32 @@ describe("cleanDigestBody", () => {
     expect(cleanDigestBody(
       "## Top Items\n\n- Item.\n\n## Highlighted Focus Areas\n\n### MCP\nNo meaningful new signal found in this window.\n\n### API\n"
     )).toBe("## Top Items\n\n- Item.");
+  });
+});
+
+describe("fixBracketedLinkTitles", () => {
+  it("escapes a bracketed title so the link renders as a single link", () => {
+    expect(fixBracketedLinkTitles(
+      "Prices rose. [AINews] Memory prices up 500% in 12 months](https://www.latent.space/p/ainews-memory-prices-up-500-in-12)"
+    )).toBe(
+      "Prices rose. [\\[AINews\\] Memory prices up 500% in 12 months](https://www.latent.space/p/ainews-memory-prices-up-500-in-12)"
+    );
+  });
+
+  it("leaves well-formed links and citation clusters untouched", () => {
+    expect(fixBracketedLinkTitles(
+      "A [normal link](https://example.com) and a cluster [1][2]."
+    )).toBe(
+      "A [normal link](https://example.com) and a cluster [1][2]."
+    );
+  });
+
+  it("leaves an already double-bracket-wrapped link untouched", () => {
+    expect(fixBracketedLinkTitles(
+      "See [[showcase] MCPay - HTTP 402 payments](https://example.com/mcpay)."
+    )).toBe(
+      "See [[showcase] MCPay - HTTP 402 payments](https://example.com/mcpay)."
+    );
   });
 });
 
