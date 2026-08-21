@@ -38,7 +38,8 @@ import {
   redditRssAuthMode,
   retryAfterFromRateLimit
 } from "./reddit-rss.js";
-import { normalizeEntry } from "./normalize.js";
+import { canonicalizeUrl, normalizeEntry } from "./normalize.js";
+import { isGoogleNewsArticleUrl, resolveGoogleNewsUrl } from "./google-news-resolver.js";
 import {
   buildGmailQuery,
   GmailClient,
@@ -833,10 +834,24 @@ export async function processSourceEntry(
   log: SyncLogger,
   topicEmbeddings?: number[][]
 ): Promise<void> {
-  const sourceType = detectSourceType(entry);
+  const resolvedEntry = await withResolvedGoogleNewsUrl(entry, progress, log);
+  const sourceType = detectSourceType(resolvedEntry);
   const mode = desiredEnrichmentMode(sourceType, config.LIGHTWEIGHT_SOURCE_TYPES);
-  const label = entry.title ?? entry.canonicalUrl ?? `${entry.sourceKey}:${entry.sourceItemId}`;
-  await storeAndProcessEntry(entry, sourceType, mode, ai, result, progress, log, label, topicEmbeddings);
+  const label = resolvedEntry.title ?? resolvedEntry.canonicalUrl ?? `${resolvedEntry.sourceKey}:${resolvedEntry.sourceItemId}`;
+  await storeAndProcessEntry(resolvedEntry, sourceType, mode, ai, result, progress, log, label, topicEmbeddings);
+}
+
+async function withResolvedGoogleNewsUrl(entry: SourceEntry, progress: string, log: SyncLogger): Promise<SourceEntry> {
+  if (!config.GOOGLE_NEWS_RESOLVE_ENABLED || !isGoogleNewsArticleUrl(entry.canonicalUrl)) return entry;
+  const resolved = await resolveGoogleNewsUrl(entry.canonicalUrl!, {
+    userAgent: config.RSS_USER_AGENT,
+    timeoutMs: config.GOOGLE_NEWS_RESOLVE_TIMEOUT_MS
+  });
+  if (!resolved) {
+    log(`${progress} Could not resolve Google News link, keeping wrapper URL`);
+    return entry;
+  }
+  return { ...entry, canonicalUrl: canonicalizeUrl(resolved) };
 }
 
 async function storeAndProcessEntry(

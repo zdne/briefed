@@ -28,6 +28,8 @@ const schema = z.object({
   RSS_MAX_ITEMS_PER_FEED: z.coerce.number().int().min(1).default(50),
   RSS_USER_AGENT: z.string().min(1).default("pnd-rss/0.1"),
   RSS_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1).default(15000),
+  GOOGLE_NEWS_RESOLVE_ENABLED: z.preprocess((v) => v === undefined ? true : v !== "false" && v !== false, z.boolean()).default(true),
+  GOOGLE_NEWS_RESOLVE_TIMEOUT_MS: z.coerce.number().int().min(1).default(8000),
   GMAIL_CLIENT_ID: optionalString(),
   GMAIL_CLIENT_SECRET: optionalString(),
   GMAIL_REFRESH_TOKEN: optionalString(),
