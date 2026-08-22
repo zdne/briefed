@@ -1,5 +1,6 @@
 export default function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("site/style.css");
+  eleventyConfig.addPassthroughCopy("site/CNAME");
 
   eleventyConfig.addFilter("readableDate", (value) => {
     const date = new Date(value);
@@ -8,7 +9,7 @@ export default function (eleventyConfig) {
   });
 
   return {
-    pathPrefix: "/briefed/",
+    pathPrefix: "/",
     dir: {
       input: "site",
       output: "site/_site",
