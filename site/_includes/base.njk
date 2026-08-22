@@ -3,22 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% if title %}{{ title }} · Briefed{% else %}Briefed{% endif %}</title>
-  <meta name="description" content="Daily AI-curated briefing archive">
+  <title>{% if title %}{{ title }} · Paid by Agent{% else %}Paid by Agent{% endif %}</title>
+  <meta name="description" content="Daily briefing on how AI agents pay and get paid">
   <link rel="stylesheet" href="{{ '/style.css' | url }}">
 </head>
 <body>
   <div class="wrap">
     <header>
       <nav class="site-nav">
-        <a class="site-name" href="{{ '/' | url }}">Briefed</a>
+        <a class="site-name" href="{{ '/' | url }}">Paid by Agent</a>
       </nav>
     </header>
     <main>
       {{ content | safe }}
     </main>
     <footer>
-      <p>Daily AI-curated briefing archive &middot; a project by <a href="https://zdne.org">Z</a></p>
+      <p>Daily briefing archive &middot; a project by <a href="https://zdne.org">Z</a></p>
     </footer>
   </div>
 </body>
