@@ -1,6 +1,8 @@
 export default function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("site/style.css");
   eleventyConfig.addPassthroughCopy("site/CNAME");
+  eleventyConfig.addPassthroughCopy("site/favicon.svg");
+  eleventyConfig.addPassthroughCopy("site/favicon.png");
 
   eleventyConfig.addFilter("readableDate", (value) => {
     const date = new Date(value);
