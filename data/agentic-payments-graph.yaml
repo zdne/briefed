@@ -1,0 +1,434 @@
+meta:
+  title: Agentic Payments Knowledge Graph
+  as_of: 2026-07-27
+  schema_version: 1
+  scope:
+    - commerce
+    - machine_payments
+    - treasury
+    - currency
+  relationship_statuses:
+    live: "●"
+    limited: "◐"
+    announced: "○"
+    planned: "~"
+    reference: ""
+  notes:
+    - "The graph records positive, source-backed relationships. It does not treat an absent relationship as a fact."
+    - "Status qualifies a relationship or claim, not necessarily the company or protocol as a whole."
+    - "Company marketing claims are recorded as claims_support_for unless implementation documentation establishes a stronger relationship."
+
+taxonomy:
+  flows:
+    - { id: shared_standards_trust, name: Shared standards and trust }
+    - { id: commerce, name: Agentic commerce }
+    - { id: machine_payments, name: Agentic machine payments }
+    - { id: treasury, name: Agentic treasury }
+    - { id: currency, name: Currency and settlement }
+  memberships:
+    shared_standards_trust: [mcp, agentic_ai_foundation, web_bot_auth, http_message_signatures, ap2, visa_tap, mastercard_agent_pay, sardine, forter, linux_foundation, x402_foundation, anthropic, ietf, fido_alliance, webbotauth_working_group, fido_payments_working_group, cloudflare, aws, akamai]
+    commerce: [acp, ucp, shared_payment_token, chatgpt, gemini, google_ai_mode, shopify_storefront_mcp, shopify_agentic_storefronts, instant_checkout, adyen_agentic, paypal_agent_ready, visa_intelligent_commerce, visa_agentic_ready, mastercard_agent_pay, alchemy_agentcard, marqeta_jit_funding, marqeta_commando_mode, arc_pay, reap, crossmint_agentic_payments, microsoft_dynamics365_commerce_mcp_server, cloudflare_programmable_wallets, axlabs, ax402, openai, stripe, google, shopify, ulta, adyen, paypal, mastercard, american_express, marqeta, alchemy, visa]
+    machine_payments: [x402, mpp, tempo, coinbase_agentic_market, coinbase_agentic_wallets, crossmint_agentic_payments, reap, mastercard_agentic_token_framework, exaai_labs, coinbase]
+    treasury: [meow, griffin, circle_mint, jpmorgan_payments, mirakl]
+    currency: [usdc, open_usd, visa_rail, mastercard_rail, arc_pay, reap, crossmint_agentic_payments, cloudflare_stablecoin_wallet, agentcard_sh, arc_testnet, circle, open_standard, ach, wire_transfer, crossmint]
+
+entity_types:
+  - company
+  - foundation
+  - standards_body
+  - protocol
+  - programme
+  - product
+  - agent_surface
+  - payment_rail
+  - currency
+  - blockchain
+  - concept
+  - financial_institution
+  - merchant
+  - research_organization
+  - actor_role
+
+entities:
+  # Shared standards and trust
+  - { id: mcp, type: protocol, name: Model Context Protocol, aliases: [MCP] }
+  - { id: anthropic, type: company, name: Anthropic }
+  - { id: agentic_ai_foundation, type: foundation, name: Agentic AI Foundation }
+  - { id: web_bot_auth, type: protocol, name: Web Bot Authentication, aliases: [Web Bot Auth, WBA] }
+  - { id: ietf, type: standards_body, name: IETF }
+  - { id: fido_alliance, type: standards_body, name: FIDO Alliance }
+  - { id: ap2, type: protocol, name: Agent Payments Protocol, aliases: [AP2] }
+  - { id: webbotauth_working_group, type: programme, name: IETF Web Bot Authentication Working Group }
+  - { id: fido_payments_working_group, type: programme, name: FIDO Payments Technical Working Group }
+  - { id: http_message_signatures, type: protocol, name: HTTP Message Signatures, aliases: [RFC 9421] }
+  - { id: cloudflare, type: company, name: Cloudflare }
+  - { id: aws, type: company, name: Amazon Web Services, aliases: [AWS] }
+  - { id: akamai, type: company, name: Akamai }
+  - { id: sardine, type: company, name: Sardine }
+  - { id: forter, type: company, name: Forter }
+
+  # Commerce protocols, surfaces, and merchants
+  - { id: acp, type: protocol, name: Agentic Commerce Protocol, aliases: [ACP] }
+  - { id: ucp, type: protocol, name: Universal Commerce Protocol, aliases: [UCP] }
+  - { id: shared_payment_token, type: product, name: Shared Payment Token, aliases: [SPT] }
+  - { id: openai, type: company, name: OpenAI }
+  - { id: stripe, type: company, name: Stripe }
+  - { id: google, type: company, name: Google }
+  - { id: shopify, type: company, name: Shopify }
+  - { id: chatgpt, type: agent_surface, name: ChatGPT }
+  - { id: gemini, type: agent_surface, name: Gemini }
+  - { id: google_ai_mode, type: agent_surface, name: Google AI Mode }
+  - { id: shopify_storefront_mcp, type: product, name: Shopify Storefront MCP server }
+  - { id: shopify_agentic_storefronts, type: product, name: Shopify Agentic Storefronts }
+  - { id: ulta, type: merchant, name: Ulta Beauty }
+  - { id: instant_checkout, type: product, name: Instant Checkout }
+
+  # Merchant acceptance, payment identity, and issuing
+  - { id: adyen, type: company, name: Adyen }
+  - { id: adyen_agentic, type: product, name: Adyen Agentic }
+  - { id: paypal, type: company, name: PayPal }
+  - { id: paypal_agent_ready, type: product, name: PayPal Agent Ready }
+  - { id: jpmorgan_payments, type: company, name: J.P. Morgan Payments }
+  - { id: mirakl, type: company, name: Mirakl }
+  - { id: visa, type: company, name: Visa }
+  - { id: visa_tap, type: programme, name: Visa Trusted Agent Protocol, aliases: [TAP] }
+  - { id: visa_intelligent_commerce, type: programme, name: Visa Intelligent Commerce, aliases: [VIC] }
+  - { id: visa_agentic_ready, type: programme, name: Visa Agentic Ready }
+  - { id: mastercard, type: company, name: Mastercard }
+  - { id: mastercard_agent_pay, type: programme, name: Mastercard Agent Pay }
+  - { id: american_express, type: company, name: American Express, aliases: [Amex] }
+  - { id: marqeta, type: company, name: Marqeta }
+  - { id: marqeta_jit_funding, type: product, name: Marqeta JIT Funding }
+  - { id: marqeta_commando_mode, type: product, name: Marqeta Commando Mode }
+  - { id: alchemy, type: company, name: Alchemy }
+  - { id: alchemy_agentcard, type: product, name: Alchemy AgentCard }
+  - { id: agentcard_sh, type: company, name: Agentcard.sh }
+  - { id: arc_pay, type: product, name: Arc Pay }
+  - { id: arc_testnet, type: blockchain, name: Arc testnet }
+
+  # Machine payments
+  - { id: x402, type: protocol, name: x402 }
+  - { id: coinbase, type: company, name: Coinbase }
+  - { id: x402_foundation, type: foundation, name: x402 Foundation }
+  - { id: linux_foundation, type: foundation, name: Linux Foundation }
+  - { id: mpp, type: protocol, name: Machine Payments Protocol, aliases: [MPP] }
+  - { id: tempo, type: blockchain, name: Tempo }
+  - { id: coinbase_agentic_market, type: product, name: Coinbase Agentic.Market }
+  - { id: coinbase_agentic_wallets, type: product, name: Coinbase Agentic Wallets }
+
+  # Treasury
+  - { id: meow, type: company, name: Meow Technologies, aliases: [Meow] }
+  - { id: griffin, type: financial_institution, name: Griffin }
+  - { id: circle, type: company, name: Circle }
+  - { id: circle_mint, type: product, name: Circle Mint }
+
+  # Currency and rails
+  - { id: usdc, type: currency, name: USD Coin, aliases: [USDC] }
+  - { id: open_usd, type: currency, name: Open USD, aliases: [OUSD] }
+  - { id: open_standard, type: company, name: Open Standard }
+  - { id: visa_rail, type: payment_rail, name: VisaNet }
+  - { id: mastercard_rail, type: payment_rail, name: Mastercard Network }
+  - { id: ach, type: payment_rail, name: ACH }
+  - { id: wire_transfer, type: payment_rail, name: Wire transfer }
+
+  # Additional providers researched after the article map
+  - { id: reap, type: company, name: Reap Technologies, aliases: [Reap] }
+  - { id: crossmint, type: company, name: Crossmint }
+  - { id: crossmint_agentic_payments, type: product, name: Crossmint Agentic Payments }
+
+
+  # Candidates added 2026-08-23 from briefed
+  - { id: mastercard_agentic_token_framework, type: product, name: "Mastercard Agentic Token Framework" }
+  - { id: microsoft_dynamics365_commerce_mcp_server, type: product, name: "Dynamics 365 Commerce MCP Server" }
+  - { id: cloudflare_programmable_wallets, type: product, name: "Cloudflare Programmable Wallets" }
+  - { id: axlabs, type: company, name: "AxLabs" }
+  - { id: ax402, type: product, name: "Ax402 payment gateway" }
+  - { id: exaai_labs, type: company, name: "Exa AI Labs" }
+  - { id: cloudflare_stablecoin_wallet, type: product, name: "Cloudflare Stablecoin Wallet for AI Agents" }
+relationships:
+  # Standards and trust
+  - { subject: mcp, predicate: donated_by, object: anthropic, status: reference, evidence: [anthropic_mcp_foundation] }
+  - { subject: mcp, predicate: stewarded_by, object: agentic_ai_foundation, status: reference, evidence: [anthropic_mcp_foundation] }
+  - { subject: agentic_ai_foundation, predicate: hosted_by, object: linux_foundation, status: reference, evidence: [linux_foundation_aaif] }
+  - { subject: webbotauth_working_group, predicate: working_group_of, object: ietf, status: reference, evidence: [ietf_webbotauth] }
+  - { subject: web_bot_auth, predicate: standardization_work_led_by, object: webbotauth_working_group, status: reference, evidence: [ietf_webbotauth] }
+  - { subject: web_bot_auth, predicate: uses, object: http_message_signatures, status: reference, evidence: [ietf_webbotauth] }
+  - { subject: cloudflare, predicate: supports, object: web_bot_auth, status: live, evidence: [cloudflare_agentic_commerce] }
+  - { subject: aws, predicate: supports, object: web_bot_auth, status: live, evidence: [aws_waf_wba] }
+  - { subject: akamai, predicate: supports, object: web_bot_auth, status: live, evidence: [akamai_wba] }
+  - { subject: openai, predicate: implements, object: web_bot_auth, status: live, evidence: [openai_agent_allowlisting] }
+  - { subject: ap2, predicate: initiated_by, object: google, status: reference, evidence: [ap2_spec] }
+  - { subject: ap2, predicate: governed_by, object: fido_alliance, status: reference, evidence: [fido_ap2] }
+  - { subject: fido_payments_working_group, predicate: working_group_of, object: fido_alliance, status: reference, evidence: [fido_ap2] }
+  - { subject: fido_payments_working_group, predicate: steers, object: ap2, status: reference, evidence: [fido_ap2] }
+  - { subject: visa, predicate: co_chairs, object: fido_payments_working_group, status: reference, evidence: [fido_ap2] }
+  - { subject: mastercard, predicate: co_chairs, object: fido_payments_working_group, status: reference, evidence: [fido_ap2] }
+
+  # Commerce discovery, checkout, and authority
+  - { subject: chatgpt, predicate: operated_by, object: openai, status: reference, evidence: [openai_product_discovery] }
+  - { subject: gemini, predicate: operated_by, object: google, status: reference, evidence: [ulta_gemini_shopping] }
+  - { subject: google_ai_mode, predicate: operated_by, object: google, status: reference, evidence: [ulta_gemini_shopping] }
+  - { subject: shopify_storefront_mcp, predicate: operated_by, object: shopify, status: live, evidence: [google_ucp] }
+  - { subject: shopify_storefront_mcp, predicate: uses, object: mcp, status: live, evidence: [google_ucp] }
+  - { subject: shopify_storefront_mcp, predicate: conforms_to, object: ucp, status: live, evidence: [google_ucp] }
+  - { subject: shopify_agentic_storefronts, predicate: operated_by, object: shopify, status: live, evidence: [shopify_ai_commerce] }
+  - { subject: shopify_agentic_storefronts, predicate: enables_commerce_on, object: chatgpt, status: live, evidence: [shopify_ai_commerce] }
+  - { subject: ulta, predicate: supports_purchases_via, object: ucp, status: live, qualifiers: { surfaces: [google_ai_mode, gemini] }, evidence: [ulta_gemini_shopping] }
+  - { subject: acp, predicate: co_developed_by, object: openai, status: reference, evidence: [acp_spec] }
+  - { subject: acp, predicate: co_developed_by, object: stripe, status: reference, evidence: [acp_spec] }
+  - { subject: acp, predicate: uses, object: shared_payment_token, status: live, evidence: [acp_spec] }
+  - { subject: instant_checkout, predicate: operated_by, object: openai, status: limited, evidence: [openai_product_discovery] }
+  - { subject: instant_checkout, predicate: uses, object: acp, status: limited, evidence: [openai_product_discovery] }
+  - { subject: ucp, predicate: launched_by, object: google, status: live, evidence: [google_ucp] }
+  - { subject: shopify, predicate: launch_partner_of, object: ucp, status: live, evidence: [google_ucp] }
+  - { subject: ucp, predicate: uses_for_authorization, object: ap2, status: live, evidence: [google_ucp, ap2_spec] }
+  - { subject: ucp, predicate: supports_discovery_via, object: mcp, status: live, evidence: [google_ucp] }
+
+  # Merchant acceptance and payment identity
+  - { subject: stripe, predicate: provides, object: shared_payment_token, status: live, evidence: [stripe_spt_payment_methods] }
+  - { subject: adyen_agentic, predicate: operated_by, object: adyen, status: limited, evidence: [adyen_agentic] }
+  - { subject: adyen_agentic, predicate: claims_support_for, object: acp, status: planned, evidence: [adyen_agentic] }
+  - { subject: adyen_agentic, predicate: claims_support_for, object: ucp, status: planned, evidence: [adyen_agentic] }
+  - { subject: adyen_agentic, predicate: claims_support_for, object: ap2, status: planned, evidence: [adyen_agentic] }
+  - { subject: paypal, predicate: payment_provider_for, object: acp, status: live, evidence: [paypal_agentic_commerce] }
+  - { subject: paypal, predicate: announced_support_for, object: ucp, status: planned, qualifiers: { role: payment_option_in_google_ucp_checkout, source_wording: "will soon" }, evidence: [paypal_ucp_support] }
+  - { subject: paypal_agent_ready, predicate: operated_by, object: paypal, status: live, evidence: [paypal_agentic_commerce] }
+  - { subject: jpmorgan_payments, predicate: partners_with, object: mirakl, status: live, qualifiers: { purpose: merchant_payment_infrastructure }, evidence: [jpm_mirakl] }
+  - { subject: visa_tap, predicate: operated_by, object: visa, status: live, evidence: [visa_tap] }
+  - { subject: visa_tap, predicate: uses, object: http_message_signatures, status: live, evidence: [visa_tap_spec] }
+  - { subject: visa_intelligent_commerce, predicate: operated_by, object: visa, status: limited, evidence: [visa_intelligent_commerce] }
+  - { subject: visa_agentic_ready, predicate: operated_by, object: visa, status: limited, evidence: [visa_agentic_ready] }
+  - { subject: mastercard_agent_pay, predicate: operated_by, object: mastercard, status: live, evidence: [mastercard_agent_pay] }
+  - { subject: mastercard_agent_pay, predicate: incorporates, object: web_bot_auth, status: live, evidence: [mastercard_agent_pay] }
+  - { subject: american_express, predicate: announced_support_for, object: web_bot_auth, status: planned, evidence: [cloudflare_agentic_commerce] }
+  - { subject: stripe, predicate: supports_payment_method_of, object: visa_intelligent_commerce, status: live, qualifiers: { mechanism: shared_payment_token }, evidence: [stripe_spt_payment_methods] }
+  - { subject: stripe, predicate: supports_payment_method_of, object: mastercard_agent_pay, status: live, qualifiers: { mechanism: shared_payment_token }, evidence: [stripe_spt_payment_methods] }
+  - { subject: shopify, predicate: supports, object: acp, status: live, evidence: [shopify_ai_commerce] }
+
+  # Issuing, credentials, and alternate settlement
+  - { subject: marqeta_jit_funding, predicate: operated_by, object: marqeta, status: live, evidence: [marqeta_jit] }
+  - { subject: marqeta_commando_mode, predicate: operated_by, object: marqeta, status: live, evidence: [marqeta_commando] }
+  - { subject: alchemy_agentcard, predicate: operated_by, object: alchemy, status: live, evidence: [alchemy_agentcard] }
+  - { subject: alchemy_agentcard, predicate: integrates_with, object: visa_intelligent_commerce, status: live, evidence: [alchemy_agentcard] }
+  - { subject: agentcard_sh, predicate: issues, object: visa_rail, status: live, qualifiers: { product: single_use_virtual_cards }, evidence: [agentcard_terms] }
+  - { subject: arc_pay, predicate: deployed_on, object: arc_testnet, status: limited, evidence: [user_confirmed_arc_pay] }
+  - { subject: arc_testnet, predicate: operated_by, object: circle, status: live, evidence: [circle_arc] }
+  - { subject: arc_pay, predicate: supports, object: acp, status: limited, qualifiers: { deployment: arc_testnet }, evidence: [arc_pay_api, user_confirmed_arc_pay] }
+  - { subject: arc_pay, predicate: supports, object: ucp, status: limited, qualifiers: { deployment: arc_testnet }, evidence: [arc_pay_api, user_confirmed_arc_pay] }
+  - { subject: arc_pay, predicate: settles_in, object: usdc, status: limited, qualifiers: { deployment: arc_testnet }, evidence: [user_confirmed_arc_pay] }
+
+  # Machine payments
+  - { subject: x402, predicate: created_by, object: coinbase, status: live, evidence: [x402_overview] }
+  - { subject: x402, predicate: governed_by, object: x402_foundation, status: live, evidence: [x402_foundation_operational] }
+  - { subject: x402_foundation, predicate: hosted_by, object: linux_foundation, status: live, evidence: [x402_foundation_launch] }
+  - { subject: mpp, predicate: co_developed_by, object: stripe, status: live, evidence: [stripe_mpp] }
+  - { subject: mpp, predicate: co_developed_by, object: tempo, status: live, evidence: [stripe_mpp, tempo_mainnet] }
+  - { subject: mpp, predicate: uses_for_stablecoins, object: tempo, status: live, evidence: [stripe_mpp] }
+  - { subject: mpp, predicate: uses_for_fiat, object: shared_payment_token, status: live, evidence: [stripe_mpp] }
+  - { subject: coinbase_agentic_market, predicate: operated_by, object: coinbase, status: live, evidence: [coinbase_agentic_market] }
+  - { subject: coinbase_agentic_market, predicate: indexes_services_using, object: x402, status: live, evidence: [coinbase_agentic_market] }
+  - { subject: coinbase_agentic_wallets, predicate: operated_by, object: coinbase, status: live, evidence: [coinbase_agentic_wallets] }
+  - { subject: coinbase_agentic_wallets, predicate: supports, object: x402, status: live, evidence: [coinbase_agentic_wallets] }
+  - { subject: x402, predicate: primary_payment_use_case, object: usdc, status: live, evidence: [x402_overview] }
+
+  # Treasury
+  - { subject: meow, predicate: provides, object: mcp, status: live, qualifiers: { capability: cards_and_transfer_drafts, transfer_execution: human_approval_required }, evidence: [meow_mcp_security, meow_mcp_tools] }
+  - { subject: griffin, predicate: provides, object: mcp, status: limited, qualifiers: { deployment: beta, live_key_safeguard: true }, evidence: [griffin_mcp] }
+  - { subject: circle_mint, predicate: operated_by, object: circle, status: live, evidence: [circle_treasury] }
+  - { subject: circle_mint, predicate: moves, object: usdc, status: live, qualifiers: { use_case: intercompany_treasury }, evidence: [circle_treasury] }
+
+  # Currency and settlement
+  - { subject: usdc, predicate: issued_by, object: circle, status: live, evidence: [circle_treasury] }
+  - { subject: visa, predicate: operates, object: visa_rail, status: live, evidence: [visa_network] }
+  - { subject: mastercard, predicate: operates, object: mastercard_rail, status: live, evidence: [mastercard_network] }
+  - { subject: visa, predicate: settles_with, object: usdc, status: limited, qualifiers: { use_case: us_settlement_pilot }, evidence: [visa_usdc_pilot] }
+  - { subject: mastercard, predicate: settles_with, object: usdc, status: limited, qualifiers: { availability: select_markets }, evidence: [mastercard_stablecoin] }
+  - { subject: open_usd, predicate: proposed_by, object: open_standard, status: announced, evidence: [open_usd] }
+  - { subject: open_usd, predicate: intended_to_compete_with, object: usdc, status: announced, qualifiers: { basis: editorial_inference }, evidence: [open_usd] }
+  # Open USD is not live yet. These are founding partners named in Open Standard's launch announcement.
+  - { subject: visa, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: mastercard, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: american_express, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: stripe, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: adyen, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: cloudflare, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: google, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: shopify, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: coinbase, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: tempo, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: meow, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: reap, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: marqeta, predicate: announced_founding_partner_of, object: open_usd, status: announced, evidence: [open_usd] }
+  - { subject: visa, predicate: announced_interoperability_work_with, object: x402, status: announced, evidence: [visa_tap_x402] }
+
+  # Providers researched after the article map: confirmed roles only
+  - { subject: reap, predicate: licensed_partner_of, object: visa_intelligent_commerce, status: live, evidence: [reap_agentic_payments] }
+  - { subject: reap, predicate: settles_collateral_in, object: usdc, status: live, evidence: [reap_agentic_payments] }
+  - { subject: reap, predicate: claims_support_for, object: acp, status: announced, evidence: [reap_agentic_payments] }
+  - { subject: reap, predicate: claims_support_for, object: mpp, status: announced, evidence: [reap_agentic_payments] }
+  - { subject: crossmint_agentic_payments, predicate: operated_by, object: crossmint, status: live, evidence: [crossmint_agentic_payments] }
+  - { subject: crossmint_agentic_payments, predicate: supports, object: x402, status: live, evidence: [crossmint_agentic_payments] }
+  - { subject: crossmint_agentic_payments, predicate: claims_support_for, object: ap2, status: announced, evidence: [crossmint_agentic_payments] }
+
+
+  # Candidates added 2026-08-23 from briefed
+  - { subject: mastercard_agentic_token_framework, predicate: created_by, object: mastercard, status: live, evidence: [mastercard_agentic_token_framework_2025] }
+  - { subject: mastercard_agentic_token_framework, predicate: enables_commerce_on, object: machine_payments, status: live, evidence: [mastercard_agentic_token_framework_2025] }
+  - { subject: microsoft_dynamics365_commerce_mcp_server, predicate: implements, object: mcp, status: live, evidence: [microsoft_dynamics365_commerce_mcp_server_2026] }
+  - { subject: microsoft_dynamics365_commerce_mcp_server, predicate: enables_commerce_on, object: microsoft_dynamics365_commerce_mcp_server, status: live, evidence: [microsoft_dynamics365_commerce_mcp_server_2026] }
+  - { subject: fido_alliance, predicate: planned, object: trusted_ai_agent_interaction_standards, status: planned, evidence: [fido_alliance_ai_agent_standards_2026] }
+  - { subject: cloudflare, predicate: launched_by, object: cloudflare_programmable_wallets, status: live, evidence: [agentic_commerce_frontier_2026_08_11] }
+  - { subject: cloudflare_programmable_wallets, predicate: enables_commerce_on, object: agentic_ai_foundation, status: live, evidence: [agentic_commerce_frontier_2026_08_11] }
+  - { subject: mastercard, predicate: launched_by, object: mastercard_agent_pay, status: live, evidence: [mastercard_agent_pay_launch_20260614] }
+  - { subject: mastercard_agent_pay, predicate: supports_purchases_via, object: machine_payments, status: live, evidence: [mastercard_agent_pay_launch_20260614] }
+  - { subject: axlabs, predicate: launched_by, object: ax402, status: live, evidence: [axlabs_ax402_launch_20260717] }
+  - { subject: ax402, predicate: implements, object: x402, status: live, evidence: [axlabs_ax402_launch_20260717] }
+  - { subject: exaai_labs, predicate: uses, object: mpp, status: live, evidence: [jeff_weinstein_mpp_exaailabs] }
+  - { subject: mpp, predicate: settles_in, object: usdc, status: live, qualifiers: { on: tempo }, evidence: [jeff_weinstein_mpp_exaailabs] }
+  - { subject: coinbase, predicate: uses, object: x402, status: live, evidence: [coinbase_x402_agents] }
+  - { subject: coinbase, predicate: integrates_with, object: x402, status: live, qualifiers: { context: "AI agent trading desk" }, evidence: [coinbase_x402_agents] }
+  - { subject: mastercard_agent_pay, predicate: launched_by, object: mastercard, status: live, evidence: [mastercard_agent_pay_launch] }
+  - { subject: cloudflare_stablecoin_wallet, predicate: integrates_with, object: x402, status: live, evidence: [cloudflare_stablecoin_wallet_x402] }
+claims:
+  - id: keyrock_usdc_share
+    kind: metric
+    subject: usdc
+    predicate: share_of
+    object: tracked_onchain_machine_payment_sample
+    value: 98.6
+    unit: percent
+    qualifiers:
+      payment_count: 176000000
+      period: "2025-05 to 2026-04"
+      scope: "Keyrock tracked on-chain sample; not all agent-payment settlement"
+    evidence: [keyrock_agent_payments]
+    checked_at: 2026-07-27
+
+  - id: visa_stablecoin_run_rate
+    kind: metric
+    subject: visa
+    predicate: annualized_stablecoin_settlement_run_rate
+    value: 7000000000
+    unit: USD
+    qualifiers:
+      scope: "Visa reported stablecoin-settlement activity"
+    evidence: [visa_stablecoin_expansion]
+    checked_at: 2026-07-27
+
+  - id: visa_stablecoin_blockchain_count
+    kind: metric
+    subject: visa
+    predicate: stablecoin_settlement_blockchain_count
+    value: 9
+    unit: blockchains
+    evidence: [visa_stablecoin_expansion]
+    checked_at: 2026-07-27
+
+  - id: mastercard_stablecoin_expansion
+    kind: announced_capability
+    subject: mastercard
+    predicate: settlement_support
+    object: stablecoins
+    qualifiers:
+      stablecoin_count: 6
+      blockchain_count: 8
+      regulatory_availability_required: true
+    status: announced
+    evidence: [mastercard_stablecoin]
+    checked_at: 2026-07-27
+
+  - id: open_usd_partner_count
+    kind: metric
+    subject: open_usd
+    predicate: announced_partner_count
+    value: 140
+    qualifier: at_least
+    evidence: [open_usd]
+    checked_at: 2026-07-27
+
+  - id: crossmint_acp_spt_unconfirmed
+    kind: limitation
+    subject: crossmint
+    predicate: no_public_implementation_evidence_for
+    object: "ACP Shared Payment Token handoff"
+    qualifiers:
+      checked_sources: [crossmint_agentic_payments, crossmint_protocol_comparison]
+    checked_at: 2026-07-27
+
+  - id: reap_ucp_ap2_unconfirmed
+    kind: limitation
+    subject: reap
+    predicate: no_public_implementation_evidence_for
+    object: "UCP checkout or AP2 Payment Mandates"
+    qualifiers:
+      checked_sources: [reap_agentic_payments]
+    checked_at: 2026-07-27
+
+sources:
+  - { id: anthropic_mcp_foundation, publisher: Anthropic, title: "Donating MCP and establishing the Agentic AI Foundation", source_type: primary, url: "https://www.anthropic.com/news/donating-the-model-context-protocol-and-establishing-of-the-agentic-ai-foundation" }
+  - { id: linux_foundation_aaif, publisher: Linux Foundation, title: "Formation of the Agentic AI Foundation", source_type: primary, url: "https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation" }
+  - { id: ietf_webbotauth, publisher: IETF, title: "Web Bot Authentication working group", source_type: primary, url: "https://datatracker.ietf.org/wg/webbotauth/about/" }
+  - { id: cloudflare_agentic_commerce, publisher: Cloudflare, title: "Agentic-commerce collaboration", source_type: primary, url: "https://www.cloudflare.com/press/press-releases/2025/cloudflare-collaborates-with-leading-payments-companies-to-secure-and-enable-agentic-commerce/" }
+  - { id: aws_waf_wba, publisher: AWS, title: "AWS WAF announces Web Bot Auth support", source_type: primary, url: "https://aws.amazon.com/about-aws/whats-new/2025/11/aws-waf-web-bot-auth-support/" }
+  - { id: akamai_wba, publisher: Akamai, title: "Redefine trust with Web Bot Authentication", source_type: primary, url: "https://www.akamai.com/blog/security/redefine-trust-web-bot-authentication" }
+  - { id: openai_agent_allowlisting, publisher: OpenAI, title: "ChatGPT agent allowlisting", source_type: primary, url: "https://help.openai.com/en/articles/11845367-chatgpt-agent-allowlisting" }
+  - { id: ap2_spec, publisher: AP2, title: "AP2 specification", source_type: primary, url: "https://ap2-protocol.org/ap2/specification/" }
+  - { id: fido_ap2, publisher: FIDO Alliance, title: "FIDO Alliance to develop standards for trusted AI agent interactions", source_type: primary, url: "https://fidoalliance.org/fido-alliance-to-develop-standards-for-trusted-ai-agent-interactions/" }
+  - { id: sardine_homepage, publisher: Sardine, title: "Sardine", source_type: primary, url: "https://www.sardine.ai/" }
+  - { id: forter_tacp, publisher: Forter, title: "Trusted Agentic Commerce Protocol", source_type: primary, url: "https://github.com/forter/trusted-agentic-commerce-protocol" }
+  - { id: acp_spec, publisher: Agentic Commerce Protocol, title: "ACP specification", source_type: primary, url: "https://github.com/agentic-commerce-protocol/agentic-commerce-protocol" }
+  - { id: openai_product_discovery, publisher: OpenAI, title: "Powering product discovery in ChatGPT", source_type: primary, url: "https://openai.com/index/powering-product-discovery-in-chatgpt/" }
+  - { id: google_ucp, publisher: Google Developers Blog, title: "Universal Commerce Protocol", source_type: primary, url: "https://developers.googleblog.com/under-the-hood-universal-commerce-protocol-ucp/" }
+  - { id: shopify_ai_commerce, publisher: Shopify, title: "The agentic commerce platform: Shopify connects any merchant to every AI conversation", source_type: primary, url: "https://www.shopify.com/news/ai-commerce-at-scale" }
+  - { id: ulta_gemini_shopping, publisher: Ulta Beauty, title: "Ulta Beauty and Google introduce Gemini-enabled shopping", source_type: primary, url: "https://www.ulta.com/investor/news-events/press-releases/detail/226/ulta-beauty-and-google-introduce-gemini-enabled-shopping" }
+  - { id: stripe_spt_payment_methods, publisher: Stripe, title: "Supporting additional payment methods for agentic commerce", source_type: primary, url: "https://stripe.com/blog/supporting-additional-payment-methods-for-agentic-commerce" }
+  - { id: adyen_agentic, publisher: Adyen, title: "Adyen Agentic", source_type: primary, url: "https://www.adyen.com/press-and-media/adyen-agentic" }
+  - { id: paypal_agentic_commerce, publisher: PayPal, title: "PayPal launches agentic commerce services", source_type: primary, url: "https://newsroom.paypal-corp.com/2025-10-28-PayPal-Launches-Agentic-Commerce-Services-to-Power-AI-Driven-Shopping" }
+  - { id: paypal_ucp_support, publisher: PayPal, title: "PayPal supports trusted AI checkout with Google", source_type: primary, url: "https://newsroom.paypal-corp.com/2025-01-11-From-Search-to-Checkout-PayPal-Supports-Trusted-AI-Checkout-with-Google" }
+  - { id: jpm_mirakl, publisher: J.P. Morgan Payments, title: "Mirakl Nexus and J.P. Morgan Payments enable AI agent checkout", source_type: primary, url: "https://www.jpmorgan.com/payments/newsroom/mirakl-nexus-agentic-commerce" }
+  - { id: visa_tap, publisher: Visa, title: "Trusted Agent Protocol", source_type: primary, url: "https://developer.visa.com/capabilities/trusted-agent-protocol" }
+  - { id: visa_tap_spec, publisher: Visa, title: "TAP specifications", source_type: primary, url: "https://developer.visa.com/capabilities/trusted-agent-protocol/trusted-agent-protocol-specifications" }
+  - { id: visa_intelligent_commerce, publisher: Visa, title: "Visa Intelligent Commerce", source_type: primary, url: "https://developer.visa.com/capabilities/visa-intelligent-commerce" }
+  - { id: visa_agentic_ready, publisher: Visa, title: "Agentic Ready in Europe", source_type: primary, url: "https://www.visa.co.uk/about-visa/newsroom/press-releases.3457328.html" }
+  - { id: mastercard_agent_pay, publisher: Mastercard, title: "Agent Pay framework", source_type: primary, url: "https://www.mastercard.com/us/en/news-and-trends/stories/2025/agentic-commerce-framework.html" }
+  - { id: marqeta_jit, publisher: Marqeta, title: "JIT Funding", source_type: primary, url: "https://www.marqeta.com/platform/jit-funding" }
+  - { id: marqeta_commando, publisher: Marqeta, title: "Commando Mode", source_type: primary, url: "https://www.marqeta.com/docs/core-api/commando-mode" }
+  - { id: alchemy_agentcard, publisher: Alchemy, title: "AgentCard and Visa Intelligent Commerce", source_type: primary, url: "https://www.prnewswire.com/news-releases/alchemy-introduces-agentcard-a-payments-and-identity-platform-for-ai-agents-built-on-visa-intelligent-commerce-302803786.html" }
+  - { id: agentcard_terms, publisher: Agentcard.sh, title: "Terms of Use", source_type: primary, url: "https://www.agentcard.sh/terms" }
+  - { id: arc_pay_api, publisher: Arc Pay, title: "API reference", source_type: primary, url: "https://arcpay.ai/docs/api" }
+  - { id: circle_arc, publisher: Circle, title: "Introducing Arc", source_type: primary, url: "https://www.circle.com/blog/introducing-arc-an-open-layer-1-blockchain-purpose-built-for-stablecoin-finance" }
+  - { id: user_confirmed_arc_pay, publisher: User-provided implementation knowledge, title: "Arc Pay ACP/UCP support on Arc testnet", source_type: user_confirmed, url: null }
+  - { id: x402_overview, publisher: x402, title: "Protocol overview", source_type: primary, url: "https://x402.org/" }
+  - { id: x402_foundation_launch, publisher: Linux Foundation, title: "Launching the x402 Foundation", source_type: primary, url: "https://www.linuxfoundation.org/press/linux-foundation-is-launching-the-x402-foundation-and-welcoming-the-contribution-of-the-x402-protocol" }
+  - { id: x402_foundation_operational, publisher: Linux Foundation, title: "Operational launch of the x402 Foundation", source_type: primary, url: "https://www.linuxfoundation.org/press/linux-foundation-announces-operational-launch-of-x402-foundation-to-standardize-internet-native-payments-for-ai-agents-and-applications" }
+  - { id: stripe_mpp, publisher: Stripe, title: "Introducing the Machine Payments Protocol", source_type: primary, url: "https://stripe.com/blog/machine-payments-protocol" }
+  - { id: tempo_mainnet, publisher: Tempo, title: "Tempo mainnet", source_type: primary, url: "https://tempo.xyz/blog/mainnet/" }
+  - { id: coinbase_agentic_market, publisher: Coinbase, title: "Introducing Agentic.Market", source_type: primary, url: "https://www.coinbase.com/developer-platform/discover/launches/agentic-market" }
+  - { id: coinbase_agentic_wallets, publisher: Coinbase, title: "Agentic Wallets", source_type: primary, url: "https://www.coinbase.com/developer-platform/products/agentic-wallets" }
+  - { id: meow_mcp_security, publisher: Meow, title: "MCP security", source_type: primary, url: "https://developer.meow.com/mcp/security" }
+  - { id: meow_mcp_tools, publisher: Meow, title: "MCP tools", source_type: primary, url: "https://developer.meow.com/mcp/tools" }
+  - { id: griffin_mcp, publisher: Griffin, title: "Griffin MCP server", source_type: primary, url: "https://docs.griffin.com/docs/guides/griffin-mcp-server" }
+  - { id: jpm_treasury, publisher: J.P. Morgan, title: "Proof of Movement", source_type: primary, url: "https://www.jpmorgan.com/payments/newsroom/agentic-ai-corporate-cash-treasury-management" }
+  - { id: circle_treasury, publisher: Circle, title: "Intercompany Treasury Management with USDC", source_type: primary, url: "https://www.circle.com/case-studies/circle-treasury-management" }
+  - { id: visa_stablecoin_expansion, publisher: Visa, title: "Stablecoin settlement expansion", source_type: primary, url: "https://usa.visa.com/about-visa/newsroom/press-releases.releaseId.22336.html" }
+  - { id: visa_usdc_pilot, publisher: Visa, title: "USDC settlement pilot", source_type: primary, url: "https://usa.visa.com/about-visa/newsroom/press-releases.releaseId.21951.html" }
+  - { id: visa_network, publisher: Visa, title: "VisaNet overview", source_type: primary, url: "https://usa.visa.com/dam/VCOM/download/corporate/media/visanet-technology/visa-net-booklet.pdf" }
+  - { id: mastercard_stablecoin, publisher: Mastercard, title: "Mastercard expands settlement capabilities to include stablecoin", source_type: primary, url: "https://www.mastercard.com/us/en/news-and-trends/press/2026/june/mastercard-expands-settlement-capabilities-to-include-stablecoin.html" }
+  - { id: mastercard_network, publisher: Mastercard, title: "Mastercard Network", source_type: primary, url: "https://www.mastercard.com/global/en/business/payments/consumer-payments/network-processing.html" }
+  - { id: open_usd, publisher: Open Standard, title: "Introducing Open USD", source_type: primary, url: "https://joinopenstandard.com/blog/introducing-open-usd" }
+  - { id: visa_tap_x402, publisher: Visa, title: "Trusted Agent Protocol and x402 interoperability", source_type: primary, url: "https://investor.visa.com/news/news-details/2025/Visa-Introduces-Trusted-Agent-Protocol-An-Ecosystem-Led-Framework-for-AI-Commerce/" }
+  - { id: keyrock_agent_payments, publisher: Keyrock, title: "Who pays the agent?", source_type: secondary, url: "https://keyrock.com/who-pays-the-agent/" }
+  - { id: reap_agentic_payments, publisher: Reap, title: "Agentic Payments", source_type: primary, url: "https://reap.global/products/agentic-payments" }
+  - { id: crossmint_agentic_payments, publisher: Crossmint, title: "AI Agent Payments Infrastructure", source_type: primary, url: "https://www.crossmint.com/solutions/agentic-payments" }
+  - { id: crossmint_protocol_comparison, publisher: Crossmint, title: "Agentic payments protocols compared", source_type: company_analysis, url: "https://www.crossmint.com/learn/agentic-payments-protocols-compared" }
+# Candidates added 2026-08-23 from briefed
+  - { id: mastercard_agentic_token_framework_2025, publisher: "Mastercard", title: "Agentic token framework: Driving trusted AI transactions", source_type: primary, url: "https://news.google.com/rss/articles/CBMimAFBVV95cUxPTXRKbmhKWm95Ylp0SmtXZXByc3pPeU9XTG05YUFVajFZUkNkc0NFaWdMSWUxY0V2ZUlTLTJaWVdzbTNvS0w3N0h0aDREeUR5Uk1xN21MYU9PQzdXUVQ3R2UxNUlFb1dxN0pBRUE1XzllZmVlYzZsTGptbUFoMU1ycXdiQkhyMi1jYm9qaEJUUE1aVG5rM2RQWQ?oc=5" }
+  - { id: microsoft_dynamics365_commerce_mcp_server_2026, publisher: "Microsoft", title: "Dynamics 365 Commerce MCP Server for AI Agents and Agentic Commerce - Microsoft", source_type: secondary, url: "https://news.google.com/rss/articles/CBMi9gFBVV95cUxQZURZd2NvcmxCS3JFQUZPTlJlMVd1Qng4bmlmYl80aF9OQTVMTjYzcjU0UnVHVGFLVUlpeFM0YXl3UDlUWVhuSGk3RVdCWnI0TGx4YmN6bjdiT2xSNWw3N09SWGVTSWh5a1BxcDgxY2l1UmU2NmxwSlVnOGZLaXFVbWhSM09fdmd0QVRiR3pQZFZqN0Vfd2JWU29qMzNSZWFTY1lxY0NPWlhydDNsQk00aG1iMlRteVI5c2NhbWZVNDJ2ZzlVeUNabkhOVTFLWHRtc3ppMzVvLVV5SXJieWJ4YUlUTlNXN1hFQmNrY2dPWGpzRi1LT3c?oc=5" }
+  - { id: fido_alliance_ai_agent_standards_2026, publisher: "FIDO Alliance", title: "FIDO Alliance to Develop Standards for Trusted AI Agent Interactions", source_type: secondary, url: "https://news.google.com/rss/articles/CBMiwwFBVV95cUxOZjZ1RmxkSUdpbWdPeG5LZEJxRTgzc1hsRGdqcHBFclRHWFc2RXltSjVIbVF4VTVFbmd3WVZSTjdIUzhROGJZQjg0dEdTNHZLVmFaUFlSOWtvZWZrd0lCcnJTUXdZTFZSWlNCS1Rld1pPcDNmQWhPVnl0akJWaUNjQmdXbTlPTlhpVXBCVXhIUjFzd2kyRGViM1pIWjBGM0picEJUeXdMVmREYVNSbnJnUTZkUnRDSUVkTnRwMU9xZ2N3SGc?oc=5" }
+  - { id: agentic_commerce_frontier_2026_08_11, publisher: "M FARAH", title: "The Agentic Commerce Frontier 📌 | August 4 - August 10", source_type: primary, url: "https://agentcommerce.substack.com/p/the-agentic-commerce-frontier-august-638" }
+  - { id: mastercard_agent_pay_launch_20260614, publisher: "Castle Crypto", title: "Mastercard Launches Agent Pay for Machines to Power AI Commerce", source_type: secondary, url: "https://news.google.com/rss/articles/CBMimAFBVV95cUxPRFpjaHVYV1JyRmlWYW83Y1hjUlFTYnFyQ0RIVVc1ckpwWGpvbVFGdTN3ZFdOU09TcWJrdVNHYjlYWm1VZ2RXMVhDcVJCR0JwNU5SMHNyTlNhMEdsQkE3RzZOZ0ZFRVg3eFhMSGNpbXE3OHg3a2xOSlRLa1I3U3k3YTk2QWY4eGY3ME53SjFuY1RwSUZjekpDcA?oc=5" }
+  - { id: axlabs_ax402_launch_20260717, publisher: "Cryptonews.net", title: "AxLabs launches Ax402 payment gateway for AI agents", source_type: secondary, url: "https://news.google.com/rss/articles/CBMiXEFVX3lxTE5BTE9vT3pIcHFKT0dXRFp6R2pXc185UlpLQl8yVVhRZC1xLXBRS0VENk9FLWZxb3pRN25OUVhWa3ZGbmVkQ2tKNVoxallMcElMaGxTVERsMXZjcWk0?oc=5" }
+  - { id: jeff_weinstein_mpp_exaailabs, publisher: "Twitter", title: "Machine payments for searching, crawling, and researching the web with @ExaAILabs via @mpp.", source_type: primary, url: "https://x.com/jeff_weinstein/status/2085054400209522890" }
+  - { id: coinbase_x402_agents, publisher: "Yellow.com", title: "Coinbase Puts AI Agents On The Trading Desk With x402 Payments", source_type: primary, url: "https://news.google.com/rss/articles/CBMigAFBVV95cUxOTU9wV0dQOGJyWVZLakp3WUZqNVhMaUlLYU4zNEFETnpRck9LUDAxUWdmbTJ6WXBmS2RoazNCSUkxTF9jSDVXWTN0Tl92UmxKdjQzdEN5RmRvemxjZnZDZ2FmWVctci11dEJPdEZrVWRxaFBOUUV2bndtY2Y4Y29GdQ?oc=5" }
+  - { id: mastercard_agent_pay_launch, publisher: "Mastercard", title: "Mastercard launches Agent Pay for Machines to unlock super-fast, always-on payments", source_type: primary, url: "https://news.google.com/rss/articles/CBMisgFBVV95cUxQVkZOelpNWWRxbEhXTmRzQ3RJbU5sWTRSV1RNeHhlc2E4UmJJX2RsMjFWb0psTHUxU1BPNDF5RXp3bUFIdE9Bd1JnVGUwRnMwUGtRc3pYejV4cWVwZXhRdlp5b0pxQlRLTnl2SUNlcWZuOXJvYXhWSEVQUTczaTROYXgyT0hiaUd1bDNXazgwUmppMWNIZ19XYzR6UEZtQ1NZcks4MnQ4VGt2QVoyTHdtZ3l3?oc=5" }
+  - { id: cloudflare_stablecoin_wallet_x402, publisher: "unknown", title: "Cloudflare Launches Stablecoin Wallet for AI Agents, Integrating Coinbase's x402 Protocol", source_type: primary, url: "https://news.google.com/rss/articles/CBMidkFVX3lxTE1DLUpycTlFWV9WaXhsbDdSOEdjYS0wWHdSeDctQXVxcHVVejhGNUFfekhEU3hpaV80NUpsSWJCdzV4M2h4SVp2WldRRENqMlI5cklGeTNnbUJqcEpPVGFIZG1pMUJIMndESEFXdDhWTjk1Q1BBRGc?oc=5" }

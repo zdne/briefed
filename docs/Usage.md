@@ -29,6 +29,8 @@
 | `npm run cli -- clips` | List 10 most recently saved items |
 | `npm run cli -- clips "<query>"` | Search saved items semantically |
 | `npm run cli -- enrich --source reddit --limit 20` | Upgrade embedded-only entries to full enrichment |
+| `npm run cli -- graph-candidates` | Propose data/agentic-payments-graph.yaml updates from the archive, with interactive per-item review |
+| `npm run cli -- graph-candidates --dry-run` | Preview proposals without writing to the graph file |
 | `npm run mcp` | Start the stdio MCP server |
 | `npm run db:migrate` | Apply SQL migrations |
 | `npm test` | Run unit tests |

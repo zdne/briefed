@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Map · Paid by Agent</title>
+  <meta name="description" content="Interactive, source-backed map of the agentic payments ecosystem — companies, protocols, and their documented relationships.">
+  <link rel="icon" href="{{ '/favicon.svg' | url }}" type="image/svg+xml">
+  <link rel="icon" href="{{ '/favicon.png' | url }}" sizes="any">
+  <link rel="stylesheet" href="{{ '/style.css' | url }}">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <style>
+    html, body { height: 100%; }
+    body.map-page { display: flex; flex-direction: column; }
+    .map-page header { padding: 56px 18px 0; margin-bottom: 44px; }
+    .map-page .site-nav { max-width: var(--max); margin: 18px auto 14px; }
+    h1 { max-width: var(--max); font-family: var(--ui-font); font-size: 44px; font-weight: 700; line-height: 1.08; letter-spacing: -0.035em; margin: 0 auto 16px; }
+    .subheader { max-width: var(--max); font-family: var(--prose-font); font-size: 19px; line-height: 1.65; letter-spacing: -0.003em; margin: 0 auto 34px; }
+    .subheader a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    @media (max-width: 600px) { h1 { font-size: 34px; } .subheader { font-size: 18px; } }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 14px; font-size: 12px; color: var(--muted); }
+    .legend-item { display: inline-flex; align-items: center; gap: 5px; }
+    .swatch { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .line-swatch { width: 14px; border-top: 2px solid; display: inline-block; }
+    input, select, button { font: 12px var(--ui-font); padding: 5px 10px; color: var(--fg); border: 1px solid var(--line); border-radius: 5px; background: var(--bg); }
+    input { min-width: 220px; }
+    button { cursor: pointer; }
+    input:focus, select:focus, button:focus { outline: 1px solid var(--link); border-color: var(--link); }
+    .map-page main { display: grid; flex: 1; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; max-width: none; width: 100%; }
+    #chart { min-width: 0; }
+    #chart > svg { display: block; width: 100%; height: 100%; }
+    aside { overflow: auto; padding: 16px; border-left: 1px solid var(--line); font-family: var(--ui-font); }
+    aside h2 { margin: 0 0 10px; font-size: 14px; font-weight: 700; }
+    aside h3 { margin: 20px 0 5px; font-size: 12px; font-weight: 700; }
+    aside p, aside li { font-size: 12px; line-height: 1.4; }
+    .muted { color: var(--muted); }
+    .tag { display: inline; margin-right: 10px; color: var(--muted); font-size: 12px; }
+    .tag + .tag::before { content: '·'; margin-right: 10px; color: var(--line); }
+    .edge { margin: 10px 0; padding: 12px; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; }
+    .node-label { font-size: 11px; fill: var(--muted); pointer-events: none; }
+    .node-label-prominent { font-size: 15px; font-weight: 700; fill: var(--fg); pointer-events: none; }
+    .cluster-label { font-size: 11px; font-weight: 700; pointer-events: none; }
+    @media (max-width: 760px) {
+      .map-page main { grid-template-columns: 1fr; height: auto; }
+      #chart { height: 70vh; }
+      aside { border-left: 0; border-top: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body class="map-page">
+  <header>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a class="site-name" href="{{ '/' | url }}">Paid by Agent</a>
+      <a href="https://zdne.org/articles/agentic-payments/" target="_blank" rel="noreferrer">Primer</a>
+      <a href="{{ '/map/' | url }}" aria-current="page">Map</a>
+    </nav>
+    <h1>Agentic Payments Map</h1>
+    <p class="subheader">An interactive, source-backed map of the agentic payments ecosystem — seeded by <a href="https://zdne.org/articles/agentic-payments/" target="_blank" rel="noreferrer">Agentic Payments: How Agents Move Money</a> and updated from this site's daily briefing archive.</p>
+    <div class="controls">
+      <input id="search" placeholder="Find a company, protocol, or product">
+      <select id="cluster"><option value="">All clusters</option></select>
+      <select id="type"><option value="">All entity types</option></select>
+      <button id="reset">Reset</button>
+    </div>
+    <div class="legend" aria-label="Node colour legend">
+      <span class="legend-item"><i class="swatch" data-swatch="org"></i>company / programme / foundation / standards body</span>
+      <span class="legend-item"><i class="swatch" data-swatch="protocol"></i>protocol</span>
+      <span class="legend-item"><i class="swatch" data-swatch="thing"></i>product / rail / currency / blockchain</span>
+      <span class="legend-item"><i class="swatch" data-swatch="other"></i>surface / merchant / concept</span>
+      <span class="legend-item"><i class="line-swatch" data-line-swatch></i>announced / planned</span>
+    </div>
+  </header>
+  <main>
+    <div id="chart"></div>
+    <aside id="details">
+      <h2>Market map</h2>
+      <p class="muted">Node size reflects type. Dashed links are announced or planned. Click any node to focus its direct relationships.</p>
+    </aside>
+  </main>
+  <script>
+    const data = {{ graph | dump | safe }};
+
+    // Synthetic flower skeleton: a real, clickable "Agentic Payments" root
+    // node plus one real hub node per petal (cluster), connected by real
+    // (but non-YAML, rendering-only) edges — and every real entity gets a
+    // real edge back to its own petal hub, so the grouping is an actual
+    // link the force simulation pulls on, not just an invisible anchor
+    // point (and clicking a hub shows its members in the detail panel).
+    const realEntities = data.entities.slice();
+    const CENTER_ID = '__center__';
+    const CENTER_PREDICATE = 'roots';
+    const HUB_MEMBER_PREDICATE = 'groups';
+    const petalHubId = cluster => `__hub__${cluster}`;
+    data.entities.push({ id: CENTER_ID, type: 'root', name: 'Agentic Payments', cluster: null });
+    data.clusters.forEach(cluster => data.entities.push({ id: petalHubId(cluster), type: 'category', name: cluster, cluster }));
+    data.relationships.push(...data.clusters.map(cluster => ({
+      subject: CENTER_ID, predicate: CENTER_PREDICATE, object: petalHubId(cluster), status: 'reference'
+    })));
+    data.relationships.push(...realEntities.map(entity => ({
+      subject: petalHubId(entity.cluster), predicate: HUB_MEMBER_PREDICATE, object: entity.id, status: 'reference'
+    })));
+
+    const byId = Object.fromEntries(data.entities.map(node => [node.id, node]));
+    const sourceById = Object.fromEntries(data.sources.map(source => [source.id, source]));
+
+    // Categorical palette validated with the dataviz skill's validate_palette.js
+    // against this site's actual light (#ffffff) and dark (#0b0b0b) surfaces,
+    // --pairs all (any two nodes can be adjacent in a force layout): blue/orange/aqua
+    // clear all-pairs CVD separation in both modes. A 4th hue does not, so the
+    // remaining entity types fold into a neutral "other" bucket instead of a 4th hue.
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const ink = isDark ? '#f2f2f2' : '#242424';
+    const muted = isDark ? '#a8a8a8' : '#6b6b6b';
+    const line = isDark ? '#222222' : '#e6e6e6';
+    const accent = isDark ? '#d7e7ff' : '#0000ee';
+    const bg = isDark ? '#0b0b0b' : '#ffffff';
+    const typeHues = { blue: isDark ? '#3987e5' : '#2a78d6', orange: isDark ? '#d95926' : '#eb6834', aqua: isDark ? '#199e70' : '#1baf7a' };
+    const colours = {
+      company: typeHues.blue, programme: typeHues.blue, foundation: typeHues.blue, standards_body: typeHues.blue,
+      protocol: typeHues.orange,
+      product: typeHues.aqua, payment_rail: typeHues.aqua, currency: typeHues.aqua, blockchain: typeHues.aqua, financial_institution: typeHues.aqua,
+      agent_surface: muted, merchant: muted, research_organization: muted, actor_role: muted, concept: muted,
+      root: accent, category: accent
+    };
+    document.querySelector('[data-swatch="org"]').style.background = typeHues.blue;
+    document.querySelector('[data-swatch="protocol"]').style.background = typeHues.orange;
+    document.querySelector('[data-swatch="thing"]').style.background = typeHues.aqua;
+    document.querySelector('[data-swatch="other"]').style.background = muted;
+    document.querySelector('[data-line-swatch]').style.borderColor = ink;
+    document.querySelector('[data-line-swatch]').style.borderTopStyle = 'dashed';
+
+    function subtleNodeStroke(node) { const colour = d3.color(colours[node.type] || ink); colour.opacity = isDark ? .5 : .12; return `${colour}`; }
+    const chart = document.getElementById('chart');
+    const svg = d3.select(chart).append('svg');
+    const viewport = svg.append('g');
+    const layers = { clusters: viewport.append('g'), links: viewport.append('g'), nodes: viewport.append('g'), labelBackgrounds: viewport.append('g'), labels: viewport.append('g'), clusterNameplates: viewport.append('g') };
+    const zoom = d3.zoom().scaleExtent([.2, 3]).on('zoom', event => viewport.attr('transform', event.transform));
+    svg.call(zoom);
+    let selected = null;
+    let simulation;
+
+    const clusterSelect = document.getElementById('cluster');
+    data.clusters.forEach(cluster => clusterSelect.add(new Option(cluster, cluster)));
+    const typeSelect = document.getElementById('type');
+    [...new Set(data.entities.map(node => node.type))].sort().forEach(type => typeSelect.add(new Option(type, type)));
+
+    function sourceLinks(ids) {
+      return ids.map(id => {
+        const source = sourceById[id];
+        return source?.url ? `<a href="${source.url}" target="_blank" rel="noreferrer">${source.publisher}: ${source.title}</a>` : (source ? `${source.publisher}: ${source.title}` : id);
+      }).join('<br>');
+    }
+
+    const DEFAULT_DETAILS_HTML = '<h2>Market map</h2><p class="muted">Node size reflects type. Dashed links are announced or planned. Click any node to focus its direct relationships.</p>';
+    function clearSelection() {
+      selected = null;
+      document.getElementById('details').innerHTML = DEFAULT_DETAILS_HTML;
+    }
+
+    function showNode(node) {
+      const edges = data.relationships.filter(edge => edge.subject === node.id || edge.object === node.id);
+      const claims = data.claims.filter(claim => claim.subject === node.id || claim.object === node.id);
+      document.getElementById('details').innerHTML = `
+        <h2>${node.name}</h2><span class="tag">${node.type}</span>${node.cluster ? `<span class="tag">${node.cluster}</span>` : ''}
+        ${(node.aliases || []).map(alias => `<span class="tag">${alias}</span>`).join('')}
+        <h3>Direct relationships</h3>
+        ${edges.map(edge => { const other = edge.subject === node.id ? byId[edge.object].name : byId[edge.subject].name; return `<div class="edge"><strong>${edge.subject === node.id ? node.name : other}</strong> → ${edge.predicate} → <strong>${edge.subject === node.id ? other : node.name}</strong><br><span class="muted">${edge.status || 'reference'}</span><h3>Sources</h3>${sourceLinks(edge.evidence || [])}</div>`; }).join('') || '<p class="muted">No relationships recorded.</p>'}
+        ${claims.length ? `<h3>Claims</h3>${claims.map(claim => `<div class="edge"><strong>${claim.predicate}</strong><br>${claim.value ?? claim.object ?? ''}<br>${sourceLinks(claim.evidence || [])}</div>`).join('')}` : ''}`;
+    }
+
+    function neighbours(id) {
+      const ids = new Set([id]);
+      data.relationships.forEach(edge => { if (edge.subject === id) ids.add(edge.object); if (edge.object === id) ids.add(edge.subject); });
+      return ids;
+    }
+
+    function nodeLabel(node) {
+      return (node.aliases || []).slice().sort((a, b) => a.length - b.length)[0] || node.name;
+    }
+
+    function isSkeletonNode(node) { return node.type === 'root' || node.type === 'category'; }
+
+    function labelBox(node) {
+      const prominent = isSkeletonNode(node);
+      // node.labelWidth is the real measured text width (set once, right
+      // after the text elements are created); fall back to a rough estimate
+      // only for the brief window before that measurement has run.
+      const textWidth = node.labelWidth ?? Math.max(34, nodeLabel(node).length * (prominent ? 8.5 : 6.3));
+      const radius = node.visualRadius || 8;
+      const height = prominent ? 21 : 16;
+      // Side padding matches the box's own top/bottom padding (height minus
+      // font-size, halved) instead of a separate, larger fixed value.
+      const pad = prominent ? (height - 15) / 2 : (height - 11) / 2;
+      return { x: node.x - textWidth / 2 - pad, y: node.y + radius + (prominent ? 4 : 1), width: textWidth + pad * 2, height };
+    }
+
+    function edgeStyle(edge) {
+      return ({
+        live: { color: ink, dash: null, opacity: .62 },
+        limited: { color: ink, dash: null, opacity: .54 },
+        announced: { color: ink, dash: '5 5', opacity: .62 },
+        planned: { color: ink, dash: '5 10', opacity: .50 },
+        reference: { color: ink, dash: null, opacity: .40 }
+      })[edge.status || 'reference'];
+    }
+
+    // Only the 5 center-to-hub spokes keep the original weight; every other
+    // line (real relationships and the hub-to-member edges) is thinner.
+    function baseStrokeWidth(edge) { return edge.predicate === CENTER_PREDICATE ? 1.1 : .7; }
+
+    function linkDistance(edge) {
+      const tight = new Set(['operated_by', 'co_developed_by', 'created_by', 'initiated_by', 'launched_by', 'governed_by', 'hosted_by', 'working_group_of', 'operates', 'provided_by', 'issued_by', 'stewarded_by', 'donated_by']);
+      const medium = new Set(['uses', 'incorporates', 'integrates_with', 'supports', 'provides', 'conforms_to', 'payment_provider_for', 'fulfills_role', 'settles_with', 'settles_in', 'deployed_on']);
+      if (tight.has(edge.predicate)) return 38;
+      if (medium.has(edge.predicate)) return 62;
+      if (edge.predicate.startsWith('announced_') || edge.predicate.startsWith('claims_')) return 105;
+      return 82;
+    }
+
+    function updateOpacity() {
+      const query = document.getElementById('search').value.trim().toLowerCase();
+      const cluster = clusterSelect.value;
+      const type = typeSelect.value;
+      const focus = selected ? neighbours(selected.id) : null;
+      const matchesFilters = node => (!query || `${node.name} ${(node.aliases || []).join(' ')}`.toLowerCase().includes(query)) && (!cluster || node.cluster === cluster || node.cluster === null) && (!type || node.type === type);
+      // Once a node is selected, show its real connections regardless of
+      // the active search/cluster/type filters — those are for finding a
+      // starting point, not for hiding the neighborhood you clicked into.
+      const visible = node => focus ? focus.has(node.id) : matchesFilters(node);
+      layers.nodes.selectAll('circle')
+        .attr('opacity', node => visible(node) ? 1 : .08)
+        .attr('stroke', node => selected?.id === node.id ? accent : subtleNodeStroke(node))
+        .attr('stroke-width', node => selected?.id === node.id ? 3 : 1);
+      layers.labels.selectAll('text').attr('opacity', node => visible(node) ? 1 : 0);
+      layers.labelBackgrounds.selectAll('rect').attr('opacity', node => visible(node) ? .94 : 0);
+      layers.links.selectAll('line').style('stroke-opacity', edge => {
+        const base = edgeStyle(edge).opacity;
+        const isDirectlySelected = selected && (edge.source.id === selected.id || edge.target.id === selected.id);
+        if (selected) return isDirectlySelected && visible(edge.source) && visible(edge.target) ? base : .08;
+        return visible(edge.source) && visible(edge.target) ? base : .08;
+      }).attr('stroke-width', edge => selected && (edge.source.id === selected.id || edge.target.id === selected.id) ? 2.5 : baseStrokeWidth(edge))
+        .attr('stroke', edge => selected && (edge.source.id === selected.id || edge.target.id === selected.id) ? accent : edgeStyle(edge).color);
+    }
+
+    // Polar helper, angle 0 = 12 o'clock, increasing clockwise. stretchX
+    // widens the flower horizontally for wide containers (the SVG is much
+    // wider than tall) without squashing the node dots themselves.
+    function polarToXY(angle, radius, stretchX = 1) { return [Math.sin(angle) * radius * stretchX, -Math.cos(angle) * radius]; }
+    const petalAngleStep = (2 * Math.PI) / data.clusters.length;
+
+    function draw() {
+      const width = chart.clientWidth, height = chart.clientHeight;
+      svg.attr('viewBox', `0 0 ${width} ${height}`);
+      layers.clusters.selectAll('*').remove(); layers.links.selectAll('*').remove(); layers.nodes.selectAll('*').remove(); layers.labelBackgrounds.selectAll('*').remove(); layers.labels.selectAll('*').remove(); layers.clusterNameplates.selectAll('*').remove();
+
+      const cx = width / 2, cy = height / 2;
+      // No wedges/zones bound nodes to a section anymore — each petal hub is
+      // just a strong gravity well (forceX/forceY below) that its real
+      // entities are pulled toward; charge/collision keep them from
+      // stacking. hubRadius is deliberately most of outerRadius so the
+      // center-to-hub spokes read as the main shape.
+      const outerRadius = Math.max(140, height / 2 - 30);
+      const baseHubRadius = outerRadius * .78 * 2;
+      const stretchX = Math.min(1.7, Math.max(1, (width / 2 - 30) / outerRadius));
+
+      // Petals with more real members sit further out — Commerce (36
+      // entities) needs much more room to breathe than Treasury (5), and a
+      // uniform hub distance gives every petal the same cramped budget
+      // regardless of how crowded it actually is.
+      const memberCounts = {};
+      data.clusters.forEach(name => { memberCounts[name] = realEntities.filter(e => e.cluster === name).length; });
+      const maxMembers = Math.max(1, ...Object.values(memberCounts));
+      const hubRadiusFor = clusterName => baseHubRadius * (.65 + .55 * (memberCounts[clusterName] / maxMembers));
+
+      const domainAnchors = {};
+      data.clusters.forEach((clusterName, i) => {
+        const angleMid = i * petalAngleStep;
+        domainAnchors[clusterName] = polarToXY(angleMid, hubRadiusFor(clusterName), stretchX).map((v, idx) => v + (idx === 0 ? cx : cy));
+      });
+
+      // Pin the root and each petal hub in place every draw (so a resize
+      // re-centers them); real entities are never pinned, only anchored.
+      const centerEntity = byId[CENTER_ID];
+      centerEntity.fx = cx; centerEntity.fy = cy;
+      data.clusters.forEach(clusterName => {
+        const hub = byId[petalHubId(clusterName)];
+        [hub.fx, hub.fy] = domainAnchors[clusterName];
+      });
+      const links = data.relationships.map(edge => ({ ...edge, source: byId[edge.subject], target: byId[edge.object] }));
+      const linkWeight = edge => edge.predicate.startsWith('announced_') || edge.predicate.startsWith('claims_') ? .4 : (['operated_by', 'co_developed_by', 'governed_by', 'hosted_by', 'operates', 'created_by', 'launched_by', 'issued_by', CENTER_PREDICATE, HUB_MEMBER_PREDICATE].includes(edge.predicate) ? 3 : 1);
+      const degree = new Map(data.entities.map(node => [node.id, 0]));
+      links.forEach(edge => { const weight = linkWeight(edge); degree.set(edge.source.id, degree.get(edge.source.id) + weight); degree.set(edge.target.id, degree.get(edge.target.id) + weight); });
+      const typeBonus = node => ({ protocol: 7, programme: 6, company: 4, foundation: 4, standards_body: 4, currency: 3, blockchain: 2 }[node.type] || 0);
+      const score = node => degree.get(node.id) + typeBonus(node);
+      // The center/petal-hub nodes are structural, not "highly connected" in
+      // the sense this ranking means — exclude them so the halo highlights
+      // real, well-connected entities only.
+      const hubs = new Set([...data.entities].filter(node => node.type !== 'root' && node.type !== 'category').sort((a, b) => score(b) - score(a)).slice(0, 12).map(node => node.id));
+      data.entities.forEach(node => { node.isHub = hubs.has(node.id); });
+      // Size tiers, biggest to smallest: root > petal hubs > company-ish >
+      // protocol > product/rail/currency/blockchain > everything else.
+      const nodeRadius = node => ({
+        root: 11,
+        category: 8,
+        company: 5.5, programme: 5.5, foundation: 5.5, standards_body: 5.5,
+        protocol: 4.5,
+        product: 3.5, payment_rail: 3.5, currency: 3.5, blockchain: 3.5
+      }[node.type] || 3);
+      const adjacent = new Map(data.entities.map(node => [node.id, []]));
+      links.forEach(edge => { adjacent.get(edge.source.id).push(edge.target); adjacent.get(edge.target.id).push(edge.source); });
+      const attractor = new Map();
+      data.entities.forEach(node => {
+        if (hubs.has(node.id)) return;
+        const candidates = adjacent.get(node.id).filter(other => score(other) > score(node));
+        if (candidates.length) attractor.set(node.id, candidates.sort((a, b) => score(b) - score(a))[0]);
+      });
+      const hierarchyForce = alpha => {
+        attractor.forEach((target, id) => {
+          const node = byId[id];
+          node.vx += (target.x - node.x) * alpha * .075;
+          node.vy += (target.y - node.y) * alpha * .075;
+        });
+      };
+      const link = layers.links.selectAll('line').data(links).join('line').attr('class', 'link').attr('stroke', edge => edgeStyle(edge).color).attr('stroke-dasharray', edge => edgeStyle(edge).dash).style('stroke-opacity', edge => edgeStyle(edge).opacity).attr('stroke-width', baseStrokeWidth);
+      data.entities.forEach(d => { d.visualRadius = nodeRadius(d); });
+      const node = layers.nodes.selectAll('circle').data(data.entities).join('circle').attr('r', nodeRadius).attr('fill', d => colours[d.type] || ink).attr('stroke', d => subtleNodeStroke(d)).attr('stroke-width', 1).style('cursor', 'pointer')
+        .call(d3.drag().on('start', dragstarted).on('drag', dragged).on('end', dragended))
+        .on('click', (event, d) => { event.stopPropagation(); selected = d; showNode(d); updateOpacity(); });
+      const label = layers.labels.selectAll('text').data(data.entities).join('text')
+        .attr('class', d => isSkeletonNode(d) ? 'node-label-prominent' : 'node-label')
+        .attr('text-anchor', 'middle').attr('dy', d => d.visualRadius + (isSkeletonNode(d) ? 16 : 12)).text(nodeLabel);
+      // Measure each label's actual rendered width once (rather than
+      // estimating from character count, which overshoots badly for long
+      // labels full of narrow characters/spaces) so the background rect
+      // hugs the real text instead of leaving wide side margins.
+      label.each(function (d) { d.labelWidth = this.getComputedTextLength(); });
+      const labelBackground = layers.labelBackgrounds.selectAll('rect').data(data.entities).join('rect').attr('fill', bg).attr('rx', 2).attr('pointer-events', 'none');
+      // Hard exclusion zone: the center node stays clear of every other node
+      // at all times, regardless of what any other force wants — enforced
+      // directly on every tick, not left to gravity/collision.
+      function applyCenterExclusion() {
+        const centerExclusionRadius = Math.max(90, baseHubRadius * .3);
+        data.entities.forEach(node => {
+          if (node.id === CENTER_ID) return;
+          const dx = node.x - cx, dy = node.y - cy;
+          const dist = Math.hypot(dx, dy);
+          if (dist < centerExclusionRadius) {
+            const scale = dist > 0.001 ? centerExclusionRadius / dist : 1;
+            const angle = dist > 0.001 ? Math.atan2(dy, dx) : Math.random() * Math.PI * 2;
+            node.x = cx + (dist > 0.001 ? dx * scale : Math.cos(angle) * centerExclusionRadius);
+            node.y = cy + (dist > 0.001 ? dy * scale : Math.sin(angle) * centerExclusionRadius);
+          }
+        });
+      }
+      function renderPositions() {
+        link.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+        node.attr('cx', d => d.x).attr('cy', d => d.y);
+        labelBackground.attr('x', d => labelBox(d).x).attr('y', d => labelBox(d).y).attr('width', d => labelBox(d).width).attr('height', d => labelBox(d).height);
+        label.attr('x', d => d.x).attr('y', d => d.y);
+      }
+      function fitToGraph(instant) {
+        const padding = 48, xs = data.entities.map(d => d.x), ys = data.entities.map(d => d.y);
+        const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+        const scale = Math.min(1, (width - padding * 2) / Math.max(1, maxX - minX), (height - padding * 2) / Math.max(1, maxY - minY));
+        const translateX = width / 2 - scale * (minX + maxX) / 2, translateY = height / 2 - scale * (minY + maxY) / 2;
+        const transform = d3.zoomIdentity.translate(translateX, translateY).scale(scale);
+        if (instant) svg.call(zoom.transform, transform);
+        else svg.transition().duration(350).call(zoom.transform, transform);
+      }
+
+      simulation?.stop();
+      simulation = d3.forceSimulation(data.entities)
+        .force('link', d3.forceLink(links).id(d => d.id).distance(edge => hubs.has(edge.source.id) || hubs.has(edge.target.id) ? 62 : 44).strength(edge => linkWeight(edge) * .16))
+        .force('charge', d3.forceManyBody().strength(node => hubs.has(node.id) ? -900 : -420))
+        .force('collision', d3.forceCollide(node => nodeRadius(node) + 14).iterations(2))
+        .force('hierarchy', hierarchyForce)
+        // "Gravity": each real entity is pulled toward its own petal hub's
+        // position — no wedge/rectangle bounds at all. Strength is well
+        // above the original rectangle-anchor's .08 since there's no hard
+        // boundary backing it up anymore; this alone has to keep each
+        // petal's entities visually grouped near their hub.
+        .force('domain-x', d3.forceX(node => (domainAnchors[node.cluster] || [cx, cy])[0]).strength(node => node.cluster ? .45 : 0))
+        .force('domain-y', d3.forceY(node => (domainAnchors[node.cluster] || [cx, cy])[1]).strength(node => node.cluster ? .45 : 0))
+        .stop();
+
+      // Fast-forward to a converged layout synchronously — no rendering, no
+      // zoom — before the very first paint, instead of animating from a
+      // bunched-up initial state and only fitting the view correctly once
+      // the simulation naturally reaches equilibrium several seconds later.
+      for (let i = 0; i < 300; i++) {
+        simulation.tick();
+        applyCenterExclusion();
+      }
+      renderPositions();
+      fitToGraph(true);
+
+      simulation.on('tick', () => { applyCenterExclusion(); renderPositions(); })
+        .on('end', () => { fitToGraph(); });
+      function dragstarted(event) { if (!event.active) simulation.alphaTarget(.2).restart(); event.subject.fx = event.subject.x; event.subject.fy = event.subject.y; }
+      function dragged(event) { event.subject.fx = event.x; event.subject.fy = event.y; }
+      function dragended(event) {
+        if (!event.active) simulation.alphaTarget(0);
+        // The root and petal hubs stay exactly where dropped — never handed
+        // back to the simulation's forces. Real entities release as before.
+        if (event.subject.type === 'root' || event.subject.type === 'category') return;
+        event.subject.fx = null; event.subject.fy = null;
+      }
+      svg.on('click', () => { clearSelection(); updateOpacity(); });
+    }
+
+    // Typing a new search or changing a filter exits focus mode — otherwise
+    // a still-selected node's neighborhood keeps overriding the filters,
+    // making it look like the new search/filter isn't doing anything.
+    document.getElementById('search').addEventListener('input', () => { clearSelection(); updateOpacity(); });
+    clusterSelect.addEventListener('change', () => { clearSelection(); updateOpacity(); });
+    typeSelect.addEventListener('change', () => { clearSelection(); updateOpacity(); });
+    document.getElementById('reset').addEventListener('click', () => { clearSelection(); document.getElementById('search').value = ''; clusterSelect.value = ''; typeSelect.value = ''; draw(); });
+    new ResizeObserver(draw).observe(chart);
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => location.reload());
+    draw();
+  </script>
+</body>
+</html>

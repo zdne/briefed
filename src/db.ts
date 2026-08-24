@@ -329,6 +329,26 @@ export async function retrieveRelevant(embedding: number[], limit: number): Prom
     .slice(0, limit);
 }
 
+export async function retrieveRelevantSince(
+  embedding: number[],
+  limit: number,
+  sinceIso: string | null
+): Promise<(RetrievedContent & { collectedAt: string })[]> {
+  const result = await pool.query<RetrievedContent & { collectedAt: string }>(
+    `SELECT id::text, title, canonical_url AS "canonicalUrl", author,
+      published_at::text AS "publishedAt", collected_at::text AS "collectedAt",
+      analyst_summary AS summary, content_text AS "contentText",
+      1 - (embedding <=> $1::vector) AS score
+     FROM content
+     WHERE embedding IS NOT NULL AND enrichment_status = 'complete'
+       AND ($3::timestamptz IS NULL OR collected_at > $3::timestamptz)
+     ORDER BY embedding <=> $1::vector
+     LIMIT $2`,
+    [vectorLiteral(embedding), limit, sinceIso]
+  );
+  return result.rows;
+}
+
 export async function countRecentContent(hours: number, referenceTime = new Date()): Promise<number> {
   const result = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count

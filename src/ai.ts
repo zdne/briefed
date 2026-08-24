@@ -167,18 +167,23 @@ ${formatSources(sources)}`);
     return this.generateText(buildFriendlyDigestPrompt(digest, canonicalMarkdown, style));
   }
 
-  private async generateJson(prompt: string): Promise<unknown> {
-    const text = await this.generateText(`${prompt}\nReturn only valid JSON, with no markdown fences.`);
+  /** Generic "call the LLM, parse JSON back" primitive for any feature that needs structured output. */
+  async generateJson(prompt: string, options: { maxTokens?: number } = {}): Promise<unknown> {
+    const text = await this.generateText(`${prompt}\nReturn only valid JSON, with no markdown fences.`, options);
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error("LLM did not return a JSON object");
-    return JSON.parse(match[0]);
+    try {
+      return JSON.parse(match[0]);
+    } catch (error) {
+      throw new Error(`LLM returned malformed JSON, likely truncated by the output token limit: ${(error as Error).message}`);
+    }
   }
 
-  private async generateText(prompt: string): Promise<string> {
+  private async generateText(prompt: string, options: { maxTokens?: number } = {}): Promise<string> {
     if (config.LLM_PROVIDER === "anthropic") {
       const response = await this.anthropic!.messages.create({
         model: config.ANTHROPIC_LLM_MODEL,
-        max_tokens: 4096,
+        max_tokens: options.maxTokens ?? 4096,
         messages: [{ role: "user", content: prompt }]
       });
       return response.content
@@ -189,6 +194,7 @@ ${formatSources(sources)}`);
 
     const response = await this.openai!.chat.completions.create({
       model: config.OPENAI_LLM_MODEL,
+      max_tokens: options.maxTokens,
       messages: [{ role: "user", content: prompt }]
     });
     return response.choices[0]?.message.content ?? "";
