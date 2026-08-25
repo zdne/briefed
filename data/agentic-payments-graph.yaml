@@ -26,11 +26,11 @@ taxonomy:
     - { id: treasury, name: Agentic treasury }
     - { id: currency, name: Currency and settlement }
   memberships:
-    shared_standards_trust: [mcp, agentic_ai_foundation, web_bot_auth, http_message_signatures, ap2, visa_tap, mastercard_agent_pay, sardine, forter, linux_foundation, x402_foundation, anthropic, ietf, fido_alliance, webbotauth_working_group, fido_payments_working_group, cloudflare, aws, akamai]
-    commerce: [acp, ucp, shared_payment_token, chatgpt, gemini, google_ai_mode, shopify_storefront_mcp, shopify_agentic_storefronts, instant_checkout, adyen_agentic, paypal_agent_ready, visa_intelligent_commerce, visa_agentic_ready, mastercard_agent_pay, alchemy_agentcard, marqeta_jit_funding, marqeta_commando_mode, arc_pay, reap, crossmint_agentic_payments, microsoft_dynamics365_commerce_mcp_server, cloudflare_programmable_wallets, axlabs, ax402, openai, stripe, google, shopify, ulta, adyen, paypal, mastercard, american_express, marqeta, alchemy, visa]
-    machine_payments: [x402, mpp, tempo, coinbase_agentic_market, coinbase_agentic_wallets, crossmint_agentic_payments, reap, mastercard_agentic_token_framework, exaai_labs, coinbase]
+    shared_standards_trust: [mcp, agentic_ai_foundation, web_bot_auth, http_message_signatures, ap2, visa_tap, mastercard_agent_pay, sardine, forter, linux_foundation, x402_foundation, anthropic, ietf, fido_alliance, webbotauth_working_group, fido_payments_working_group, fido_trusted_ai_agent_interaction_standards, cloudflare, aws, akamai]
+    commerce: [acp, ucp, shared_payment_token, chatgpt, gemini, google_ai_mode, shopify_storefront_mcp, shopify_agentic_storefronts, instant_checkout, adyen_agentic, paypal_agent_ready, visa_intelligent_commerce, visa_agentic_ready, mastercard_agent_pay, alchemy_agentcard, marqeta_jit_funding, marqeta_commando_mode, arc_pay, reap, crossmint_agentic_payments, microsoft_dynamics365_commerce_mcp_server, axlabs, ax402, openai, stripe, google, shopify, ulta, adyen, paypal, mastercard, american_express, marqeta, alchemy, visa]
+    machine_payments: [x402, mpp, tempo, coinbase_agentic_market, coinbase_agentic_wallets, crossmint_agentic_payments, reap, mastercard_agentic_token_framework, exaai_labs, coinbase, cloudflare_wallets]
     treasury: [meow, griffin, circle_mint, jpmorgan_payments, mirakl]
-    currency: [usdc, open_usd, visa_rail, mastercard_rail, arc_pay, reap, crossmint_agentic_payments, cloudflare_stablecoin_wallet, agentcard_sh, arc_testnet, circle, open_standard, ach, wire_transfer, crossmint]
+    currency: [usdc, open_usd, visa_rail, mastercard_rail, arc_pay, reap, crossmint_agentic_payments, agentcard_sh, arc_testnet, circle, open_standard, ach, wire_transfer, crossmint]
 
 entity_types:
   - company
@@ -140,11 +140,11 @@ entities:
   # Candidates added 2026-08-23 from briefed
   - { id: mastercard_agentic_token_framework, type: product, name: "Mastercard Agentic Token Framework" }
   - { id: microsoft_dynamics365_commerce_mcp_server, type: product, name: "Dynamics 365 Commerce MCP Server" }
-  - { id: cloudflare_programmable_wallets, type: product, name: "Cloudflare Programmable Wallets" }
+  - { id: cloudflare_wallets, type: product, name: "Cloudflare Wallets" }
   - { id: axlabs, type: company, name: "AxLabs" }
   - { id: ax402, type: product, name: "Ax402 payment gateway" }
   - { id: exaai_labs, type: company, name: "Exa AI Labs" }
-  - { id: cloudflare_stablecoin_wallet, type: product, name: "Cloudflare Stablecoin Wallet for AI Agents" }
+  - { id: fido_trusted_ai_agent_interaction_standards, type: concept, name: "Trusted AI Agent Interaction Standards" }
 relationships:
   # Standards and trust
   - { subject: mcp, predicate: donated_by, object: anthropic, status: reference, evidence: [anthropic_mcp_foundation] }
@@ -273,22 +273,17 @@ relationships:
 
   # Candidates added 2026-08-23 from briefed
   - { subject: mastercard_agentic_token_framework, predicate: created_by, object: mastercard, status: live, evidence: [mastercard_agentic_token_framework_2025] }
-  - { subject: mastercard_agentic_token_framework, predicate: enables_commerce_on, object: machine_payments, status: live, evidence: [mastercard_agentic_token_framework_2025] }
   - { subject: microsoft_dynamics365_commerce_mcp_server, predicate: implements, object: mcp, status: live, evidence: [microsoft_dynamics365_commerce_mcp_server_2026] }
-  - { subject: microsoft_dynamics365_commerce_mcp_server, predicate: enables_commerce_on, object: microsoft_dynamics365_commerce_mcp_server, status: live, evidence: [microsoft_dynamics365_commerce_mcp_server_2026] }
-  - { subject: fido_alliance, predicate: planned, object: trusted_ai_agent_interaction_standards, status: planned, evidence: [fido_alliance_ai_agent_standards_2026] }
-  - { subject: cloudflare, predicate: launched_by, object: cloudflare_programmable_wallets, status: live, evidence: [agentic_commerce_frontier_2026_08_11] }
-  - { subject: cloudflare_programmable_wallets, predicate: enables_commerce_on, object: agentic_ai_foundation, status: live, evidence: [agentic_commerce_frontier_2026_08_11] }
-  - { subject: mastercard, predicate: launched_by, object: mastercard_agent_pay, status: live, evidence: [mastercard_agent_pay_launch_20260614] }
-  - { subject: mastercard_agent_pay, predicate: supports_purchases_via, object: machine_payments, status: live, evidence: [mastercard_agent_pay_launch_20260614] }
-  - { subject: axlabs, predicate: launched_by, object: ax402, status: live, evidence: [axlabs_ax402_launch_20260717] }
-  - { subject: ax402, predicate: implements, object: x402, status: live, evidence: [axlabs_ax402_launch_20260717] }
+  - { subject: fido_alliance, predicate: planned, object: fido_trusted_ai_agent_interaction_standards, status: planned, evidence: [fido_alliance_ai_agent_standards_2026] }
+  - { subject: cloudflare_wallets, predicate: launched_by, object: cloudflare, status: live, evidence: [cloudflare_wallets_2026_08_04] }
+  - { subject: ax402, predicate: launched_by, object: axlabs, status: live, evidence: [ax402_official_site] }
+  - { subject: ax402, predicate: implements, object: x402, status: live, evidence: [ax402_official_site] }
   - { subject: exaai_labs, predicate: uses, object: mpp, status: live, evidence: [jeff_weinstein_mpp_exaailabs] }
   - { subject: mpp, predicate: settles_in, object: usdc, status: live, qualifiers: { on: tempo }, evidence: [jeff_weinstein_mpp_exaailabs] }
-  - { subject: coinbase, predicate: uses, object: x402, status: live, evidence: [coinbase_x402_agents] }
-  - { subject: coinbase, predicate: integrates_with, object: x402, status: live, qualifiers: { context: "AI agent trading desk" }, evidence: [coinbase_x402_agents] }
+  - { subject: coinbase, predicate: uses, object: x402, status: live, evidence: [coinbase_for_agents_2026_06_11] }
+  - { subject: coinbase, predicate: integrates_with, object: x402, status: live, qualifiers: { context: "AI agent trading desk" }, evidence: [coinbase_for_agents_2026_06_11] }
   - { subject: mastercard_agent_pay, predicate: launched_by, object: mastercard, status: live, evidence: [mastercard_agent_pay_launch] }
-  - { subject: cloudflare_stablecoin_wallet, predicate: integrates_with, object: x402, status: live, evidence: [cloudflare_stablecoin_wallet_x402] }
+  - { subject: cloudflare_wallets, predicate: integrates_with, object: x402, status: live, evidence: [cloudflare_wallets_2026_08_04] }
 claims:
   - id: keyrock_usdc_share
     kind: metric
@@ -422,13 +417,11 @@ sources:
   - { id: crossmint_agentic_payments, publisher: Crossmint, title: "AI Agent Payments Infrastructure", source_type: primary, url: "https://www.crossmint.com/solutions/agentic-payments" }
   - { id: crossmint_protocol_comparison, publisher: Crossmint, title: "Agentic payments protocols compared", source_type: company_analysis, url: "https://www.crossmint.com/learn/agentic-payments-protocols-compared" }
 # Candidates added 2026-08-23 from briefed
-  - { id: mastercard_agentic_token_framework_2025, publisher: "Mastercard", title: "Agentic token framework: Driving trusted AI transactions", source_type: primary, url: "https://news.google.com/rss/articles/CBMimAFBVV95cUxPTXRKbmhKWm95Ylp0SmtXZXByc3pPeU9XTG05YUFVajFZUkNkc0NFaWdMSWUxY0V2ZUlTLTJaWVdzbTNvS0w3N0h0aDREeUR5Uk1xN21MYU9PQzdXUVQ3R2UxNUlFb1dxN0pBRUE1XzllZmVlYzZsTGptbUFoMU1ycXdiQkhyMi1jYm9qaEJUUE1aVG5rM2RQWQ?oc=5" }
-  - { id: microsoft_dynamics365_commerce_mcp_server_2026, publisher: "Microsoft", title: "Dynamics 365 Commerce MCP Server for AI Agents and Agentic Commerce - Microsoft", source_type: secondary, url: "https://news.google.com/rss/articles/CBMi9gFBVV95cUxQZURZd2NvcmxCS3JFQUZPTlJlMVd1Qng4bmlmYl80aF9OQTVMTjYzcjU0UnVHVGFLVUlpeFM0YXl3UDlUWVhuSGk3RVdCWnI0TGx4YmN6bjdiT2xSNWw3N09SWGVTSWh5a1BxcDgxY2l1UmU2NmxwSlVnOGZLaXFVbWhSM09fdmd0QVRiR3pQZFZqN0Vfd2JWU29qMzNSZWFTY1lxY0NPWlhydDNsQk00aG1iMlRteVI5c2NhbWZVNDJ2ZzlVeUNabkhOVTFLWHRtc3ppMzVvLVV5SXJieWJ4YUlUTlNXN1hFQmNrY2dPWGpzRi1LT3c?oc=5" }
-  - { id: fido_alliance_ai_agent_standards_2026, publisher: "FIDO Alliance", title: "FIDO Alliance to Develop Standards for Trusted AI Agent Interactions", source_type: secondary, url: "https://news.google.com/rss/articles/CBMiwwFBVV95cUxOZjZ1RmxkSUdpbWdPeG5LZEJxRTgzc1hsRGdqcHBFclRHWFc2RXltSjVIbVF4VTVFbmd3WVZSTjdIUzhROGJZQjg0dEdTNHZLVmFaUFlSOWtvZWZrd0lCcnJTUXdZTFZSWlNCS1Rld1pPcDNmQWhPVnl0akJWaUNjQmdXbTlPTlhpVXBCVXhIUjFzd2kyRGViM1pIWjBGM0picEJUeXdMVmREYVNSbnJnUTZkUnRDSUVkTnRwMU9xZ2N3SGc?oc=5" }
-  - { id: agentic_commerce_frontier_2026_08_11, publisher: "M FARAH", title: "The Agentic Commerce Frontier 📌 | August 4 - August 10", source_type: primary, url: "https://agentcommerce.substack.com/p/the-agentic-commerce-frontier-august-638" }
-  - { id: mastercard_agent_pay_launch_20260614, publisher: "Castle Crypto", title: "Mastercard Launches Agent Pay for Machines to Power AI Commerce", source_type: secondary, url: "https://news.google.com/rss/articles/CBMimAFBVV95cUxPRFpjaHVYV1JyRmlWYW83Y1hjUlFTYnFyQ0RIVVc1ckpwWGpvbVFGdTN3ZFdOU09TcWJrdVNHYjlYWm1VZ2RXMVhDcVJCR0JwNU5SMHNyTlNhMEdsQkE3RzZOZ0ZFRVg3eFhMSGNpbXE3OHg3a2xOSlRLa1I3U3k3YTk2QWY4eGY3ME53SjFuY1RwSUZjekpDcA?oc=5" }
-  - { id: axlabs_ax402_launch_20260717, publisher: "Cryptonews.net", title: "AxLabs launches Ax402 payment gateway for AI agents", source_type: secondary, url: "https://news.google.com/rss/articles/CBMiXEFVX3lxTE5BTE9vT3pIcHFKT0dXRFp6R2pXc185UlpLQl8yVVhRZC1xLXBRS0VENk9FLWZxb3pRN25OUVhWa3ZGbmVkQ2tKNVoxallMcElMaGxTVERsMXZjcWk0?oc=5" }
+  - { id: mastercard_agentic_token_framework_2025, publisher: "Mastercard", title: "Agentic token framework: Driving trusted AI transactions", source_type: primary, url: "https://www.mastercard.com/be/nl/news-and-trends/stories/2025/agentic-commerce-framework.html" }
+  - { id: microsoft_dynamics365_commerce_mcp_server_2026, publisher: "Microsoft", title: "Dynamics 365 Commerce introduces agentic capabilities with Model Context Protocol (MCP)", source_type: primary, url: "https://www.microsoft.com/en-us/dynamics-365/blog/it-professional/2026/06/29/dynamics-365-commerce-introduces-agentic-capabilities-with-model-context-protocol-mcp/" }
+  - { id: fido_alliance_ai_agent_standards_2026, publisher: "FIDO Alliance", title: "FIDO Alliance to Develop Standards for Trusted AI Agent Interactions", source_type: primary, url: "https://www.businesswire.com/news/home/20260427506015/en/FIDO-Alliance-to-Develop-Standards-for-Trusted-AI-Agent-Interactions" }
+  - { id: ax402_official_site, publisher: "AxLabs", title: "Ax402 | Monetize Your Digital Contents with x402 Payments", source_type: primary, url: "https://ax402.io/" }
   - { id: jeff_weinstein_mpp_exaailabs, publisher: "Twitter", title: "Machine payments for searching, crawling, and researching the web with @ExaAILabs via @mpp.", source_type: primary, url: "https://x.com/jeff_weinstein/status/2085054400209522890" }
-  - { id: coinbase_x402_agents, publisher: "Yellow.com", title: "Coinbase Puts AI Agents On The Trading Desk With x402 Payments", source_type: primary, url: "https://news.google.com/rss/articles/CBMigAFBVV95cUxOTU9wV0dQOGJyWVZLakp3WUZqNVhMaUlLYU4zNEFETnpRck9LUDAxUWdmbTJ6WXBmS2RoazNCSUkxTF9jSDVXWTN0Tl92UmxKdjQzdEN5RmRvemxjZnZDZ2FmWVctci11dEJPdEZrVWRxaFBOUUV2bndtY2Y4Y29GdQ?oc=5" }
-  - { id: mastercard_agent_pay_launch, publisher: "Mastercard", title: "Mastercard launches Agent Pay for Machines to unlock super-fast, always-on payments", source_type: primary, url: "https://news.google.com/rss/articles/CBMisgFBVV95cUxQVkZOelpNWWRxbEhXTmRzQ3RJbU5sWTRSV1RNeHhlc2E4UmJJX2RsMjFWb0psTHUxU1BPNDF5RXp3bUFIdE9Bd1JnVGUwRnMwUGtRc3pYejV4cWVwZXhRdlp5b0pxQlRLTnl2SUNlcWZuOXJvYXhWSEVQUTczaTROYXgyT0hiaUd1bDNXazgwUmppMWNIZ19XYzR6UEZtQ1NZcks4MnQ4VGt2QVoyTHdtZ3l3?oc=5" }
-  - { id: cloudflare_stablecoin_wallet_x402, publisher: "unknown", title: "Cloudflare Launches Stablecoin Wallet for AI Agents, Integrating Coinbase's x402 Protocol", source_type: primary, url: "https://news.google.com/rss/articles/CBMidkFVX3lxTE1DLUpycTlFWV9WaXhsbDdSOEdjYS0wWHdSeDctQXVxcHVVejhGNUFfekhEU3hpaV80NUpsSWJCdzV4M2h4SVp2WldRRENqMlI5cklGeTNnbUJqcEpPVGFIZG1pMUJIMndESEFXdDhWTjk1Q1BBRGc?oc=5" }
+  - { id: coinbase_for_agents_2026_06_11, publisher: "Coinbase", title: "Coinbase for Agents: Your AI Agent Can Now Trade and Pay with Coinbase", source_type: primary, url: "https://www.coinbase.com/blog/coinbase-for-agents" }
+  - { id: mastercard_agent_pay_launch, publisher: "Mastercard", title: "Mastercard launches Agent Pay for Machines to unlock super-fast, always-on payments", source_type: primary, url: "https://www.mastercard.com/us/en/news-and-trends/press/2026/june/mastercard-launches-agent-pay-for-machines.html" }
+  - { id: cloudflare_wallets_2026_08_04, publisher: "Cloudflare", title: "Announcing Cloudflare Wallets: The programmable wallet for the agentic Internet", source_type: primary, url: "https://blog.cloudflare.com/wallets/" }

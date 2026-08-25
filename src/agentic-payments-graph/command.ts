@@ -1,11 +1,23 @@
 import type { Command } from "commander";
 import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { AnalystAI } from "../ai.js";
+import { config } from "../config.js";
 import { getSyncCursorForKey, setSyncCursorForKey } from "../db.js";
-import { dedupeProposal, excludeKnownSources, extractCandidates, findCandidateSources, isEmptyProposal } from "./candidates.js";
-import { loadGraphContext } from "./graph-context.js";
+import { resolveGoogleNewsUrl } from "../google-news-resolver.js";
+import { safeHostname } from "./audit-sources.js";
+import {
+  applyUserSuppliedPrimarySource,
+  dedupeProposal,
+  describeSourceForReview,
+  excludeKnownSources,
+  extractCandidates,
+  findCandidateSources,
+  isEmptyProposal,
+  resolveWrapperUrls,
+  type GraphCandidateProposal
+} from "./candidates.js";
+import { GRAPH_YAML_PATH, loadGraphContext } from "./graph-context.js";
 import {
   addToTaxonomyMembership,
   appendToFileEnd,
@@ -19,7 +31,6 @@ import {
 } from "./patchers.js";
 
 const GRAPH_UPDATE_CURSOR_KEY = "graph-update:agentic-payments";
-const GRAPH_YAML_PATH = resolve(process.cwd(), "data/agentic-payments-graph.yaml");
 
 function positiveInteger(value: string, option: string): number {
   const parsed = Number(value);
@@ -43,11 +54,23 @@ export function registerGraphCandidatesCommand(program: Command): void {
       console.log("Loading current graph context...");
       const context = loadGraphContext(GRAPH_YAML_PATH);
 
+      const resolveCache = new Map<string, Promise<string | null>>();
+      function resolveWrapper(url: string): Promise<string | null> {
+        const cached = resolveCache.get(url);
+        if (cached) return cached;
+        const promise = resolveGoogleNewsUrl(url, {
+          userAgent: config.RSS_USER_AGENT,
+          timeoutMs: config.GOOGLE_NEWS_RESOLVE_TIMEOUT_MS
+        });
+        resolveCache.set(url, promise);
+        return promise;
+      }
+
       const ai = new AnalystAI();
       const since = (await getSyncCursorForKey(GRAPH_UPDATE_CURSOR_KEY)) ?? null;
       console.log(`Searching archive for candidates${since ? ` since ${since}` : " (no prior run)"}...`);
       const allSources = await findCandidateSources(ai, since, limit);
-      const newSources = excludeKnownSources(allSources, context);
+      const newSources = await resolveWrapperUrls(excludeKnownSources(allSources, context), resolveWrapper);
       console.log(`${allSources.length} candidate source(s) found, ${newSources.length} not already cataloged.`);
 
       if (newSources.length === 0) {
@@ -79,7 +102,20 @@ export function registerGraphCandidatesCommand(program: Command): void {
         for (const proposal of proposals) {
           const candidateSource = newSources[proposal.sourceIndex];
           console.log(`\n=== ${candidateSource?.title ?? candidateSource?.url ?? "Untitled source"} ===`);
-          console.log(`Source: ${candidateSource?.url ?? "(no url)"}`);
+
+          const display = await describeSourceForReview(proposal.source.url, resolveWrapper);
+          console.log(`Source: ${display.url ?? "(no url)"}`);
+          console.log(`Publisher: ${proposal.source.publisher}`);
+          console.log(`Source type (LLM-proposed): ${proposal.source.source_type}`);
+          if (display.isGoogleNewsWrapper) {
+            const destination = display.resolvedDestination ? safeHostname(display.resolvedDestination) ?? display.resolvedDestination : null;
+            console.log(
+              destination
+                ? `  ⚠ Google News wrapper — resolves to: ${destination}`
+                : "  ⚠ Google News wrapper — could not resolve real destination; treat as unverified"
+            );
+          }
+
           console.log(`Reason: ${proposal.reason}`);
           if (proposal.entities.length > 0) console.log(`New entities: ${proposal.entities.map((e) => e.id).join(", ")}`);
           if (proposal.relationships.length > 0) {
@@ -87,21 +123,37 @@ export function registerGraphCandidatesCommand(program: Command): void {
           }
           if (proposal.claims.length > 0) console.log(`New claims: ${proposal.claims.map((c) => c.id).join(", ")}`);
 
-          const answer = (await rl.question("Include this proposal? [y/N/s(kip all remaining)] ")).trim().toLowerCase();
-          if (answer === "s") break;
-          if (answer !== "y") continue;
+          const acceptProposal = (source: GraphCandidateProposal["source"]) => {
+            acceptedSources.push(formatSourceLine(source));
+            for (const entity of proposal.entities) {
+              acceptedEntities.push(formatEntityLine(entity));
+              acceptedEntityFlows.set(entity.id, entity.flow);
+            }
+            for (const relationship of proposal.relationships) {
+              acceptedRelationships.push(formatRelationshipLine(relationship, proposal.source.id));
+            }
+            for (const claim of proposal.claims) {
+              acceptedClaims.push(formatClaimBlock(claim, proposal.source.id, dateLabel));
+            }
+          };
 
-          acceptedSources.push(formatSourceLine(proposal.source));
-          for (const entity of proposal.entities) {
-            acceptedEntities.push(formatEntityLine(entity));
-            acceptedEntityFlows.set(entity.id, entity.flow);
+          const answer = (
+            await rl.question("Include this proposal? [y]es / [u]ser-supplied primary source / [N]o (skip) / [s]kip all remaining > ")
+          ).trim().toLowerCase();
+
+          if (answer === "s") break;
+          if (answer === "u") {
+            const overrideUrl = (await rl.question("  Primary source URL: ")).trim();
+            if (!overrideUrl) {
+              console.log("  No URL entered; skipping this proposal.");
+              continue;
+            }
+            const overridePublisher = (await rl.question(`  Publisher [${proposal.source.publisher}]: `)).trim();
+            acceptProposal(applyUserSuppliedPrimarySource(proposal.source, { url: overrideUrl, publisher: overridePublisher || null }));
+            continue;
           }
-          for (const relationship of proposal.relationships) {
-            acceptedRelationships.push(formatRelationshipLine(relationship, proposal.source.id));
-          }
-          for (const claim of proposal.claims) {
-            acceptedClaims.push(formatClaimBlock(claim, proposal.source.id, dateLabel));
-          }
+          if (answer !== "y") continue;
+          acceptProposal(proposal.source);
         }
       } finally {
         rl.close();

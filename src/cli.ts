@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { dirname, resolve } from "node:path";
 import { AnalystAI, buildFriendlyDigestHeader } from "./ai.js";
+import { registerGraphAuditSourcesCommand } from "./agentic-payments-graph/audit-command.js";
 import { registerGraphCandidatesCommand } from "./agentic-payments-graph/command.js";
 import { config, requireConfig } from "./config.js";
 import { getDigestForRendering, migrate, pool, resetSyncCursor } from "./db.js";
@@ -600,6 +601,7 @@ program
   });
 
 registerGraphCandidatesCommand(program);
+registerGraphAuditSourcesCommand(program);
 
 program.parseAsync().catch((error) => {
   console.error(error);

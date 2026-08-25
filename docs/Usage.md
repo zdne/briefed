@@ -31,6 +31,8 @@
 | `npm run cli -- enrich --source reddit --limit 20` | Upgrade embedded-only entries to full enrichment |
 | `npm run cli -- graph-candidates` | Propose data/agentic-payments-graph.yaml updates from the archive, with interactive per-item review |
 | `npm run cli -- graph-candidates --dry-run` | Preview proposals without writing to the graph file |
+| `npm run cli -- graph-audit-sources` | Report suspect sourcing in data/agentic-payments-graph.yaml (Google News wrappers, missing publisher, primary/secondary domain mismatches) — report only, never writes |
+| `npm run cli -- graph-audit-sources --no-resolve` | Same, without live Google News resolution attempts |
 | `npm run mcp` | Start the stdio MCP server |
 | `npm run db:migrate` | Apply SQL migrations |
 | `npm test` | Run unit tests |

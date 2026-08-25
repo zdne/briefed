@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { AnalystAI } from "../ai.js";
 import { retrieveRelevantSince } from "../db.js";
+import { isGoogleNewsArticleUrl } from "../google-news-resolver.js";
+import { canonicalizeUrl } from "../normalize.js";
 import { tripleKey, type GraphContext } from "./graph-context.js";
 
 const graphFlowSchema = z.enum(["shared_standards_trust", "commerce", "machine_payments", "treasury", "currency"]);
@@ -54,7 +56,9 @@ const graphProposalHeaderSchema = z.object({
   reason: z.string().min(1),
   source: z.object({
     id: z.string().min(1),
-    publisher: z.string().min(1),
+    publisher: z.string().min(1).refine((value) => value.trim().toLowerCase() !== "unknown", {
+      message: 'publisher must not be the literal "unknown" — omit the source rather than guess'
+    }),
     title: z.string().min(1),
     source_type: z.enum(["primary", "secondary", "company_analysis", "user_confirmed"]),
     url: z.string().nullable()
@@ -114,7 +118,23 @@ function buildGraphCandidatePrompt(
 
 Editorial rules (strict):
 - Only propose something a source explicitly documents. Do not infer a relationship that isn't stated.
-- Prefer primary sources (the company/protocol's own announcement or docs) over news summaries.
+- source_type reflects who owns the URL's domain, not how well-written the piece is:
+  - "primary": the URL's domain is owned/operated by the entity the content is about — the
+    company's own newsroom/blog/docs domain, the protocol's own site, or a standards body
+    publishing its own spec. If you can't tell who owns the domain, do not call it "primary".
+  - "secondary": any outlet, aggregator, or blog reporting on someone else's announcement —
+    including press-release wire services (PR Newswire, Business Wire), general tech/crypto
+    news sites, and news.google.com links, which are secondary regardless of what they link to,
+    even if the wrapper eventually points at the company's own page.
+  - "company_analysis": a company publishing analysis/commentary about the market or a
+    competitor/partner, not its own product announcement.
+  - "user_confirmed": never propose this value yourself; it is reserved for a source a human
+    reviewer has manually supplied.
+  - If the source's domain doesn't obviously belong to the company/protocol/product it's cited
+    as evidence for, classify it "secondary" even if it reads like an announcement.
+- publisher must name the organization that owns the source's domain. Never write "unknown" —
+  if you can't identify the publisher, don't propose the source as "primary" (or at all, if you
+  can't say anything specific and verifiable about it).
 - A company's marketing claim of support for a protocol, without implementation evidence, is predicate "claims_support_for", status "announced" — not "supports"/"live".
 - Use "live" only when the source shows something shipped/operating now; "limited" for pilots/betas/narrow availability; "announced" for a stated intent without evidence of implementation; "planned" for a stated future date/roadmap item; "reference" for background/governance facts (e.g. "governed_by", "hosted_by") that aren't a product capability.
 - A missing relationship is not evidence of its absence — never propose a claim that something does NOT exist or is NOT supported, unless the source explicitly says so (then use claim kind "limitation").
@@ -278,4 +298,65 @@ export function dedupeProposal(proposal: GraphCandidateProposal, context: GraphC
 
 export function isEmptyProposal(proposal: GraphCandidateProposal): boolean {
   return proposal.entities.length === 0 && proposal.relationships.length === 0 && proposal.claims.length === 0;
+}
+
+/**
+ * A reviewer manually confirmed a genuinely primary URL for this proposal
+ * (e.g. found the company's own blog post rather than trusting the LLM's
+ * discovery source) — mirrors what human review did by hand for several
+ * mislabeled "primary" sources found in the 2026-08-23 candidates batch.
+ */
+export function applyUserSuppliedPrimarySource(
+  source: GraphCandidateProposal["source"],
+  override: { url: string; publisher?: string | null }
+): GraphCandidateProposal["source"] {
+  return {
+    ...source,
+    source_type: "user_confirmed",
+    url: override.url,
+    publisher: override.publisher?.trim() ? override.publisher.trim() : source.publisher
+  };
+}
+
+export interface SourceReviewDisplay {
+  url: string | null;
+  isGoogleNewsWrapper: boolean;
+  resolvedDestination: string | null;
+}
+
+/**
+ * Describes a candidate's source URL for the interactive reviewer: whether
+ * it's still an unresolved Google News wrapper, and if so, what it actually
+ * resolves to — the reviewer has no way to judge primary-vs-secondary from
+ * a wrapper link alone. `resolveWrapper` is injected so this stays
+ * unit-testable without touching config/fetch.
+ */
+export async function describeSourceForReview(
+  url: string | null,
+  resolveWrapper: (url: string) => Promise<string | null>
+): Promise<SourceReviewDisplay> {
+  if (!url || !isGoogleNewsArticleUrl(url)) {
+    return { url, isGoogleNewsWrapper: false, resolvedDestination: null };
+  }
+  return { url, isGoogleNewsWrapper: true, resolvedDestination: await resolveWrapper(url) };
+}
+
+/**
+ * Best-effort pre-resolution of Google News wrapper links in candidate
+ * sources before they're shown to the LLM, so source_type classification
+ * (and the human review after it) sees the real publisher domain instead of
+ * a news.google.com wrapper wherever resolution succeeds. Must stay a 1:1
+ * map — command.ts indexes back into this array via proposal.sourceIndex.
+ */
+export async function resolveWrapperUrls(
+  sources: CandidateSource[],
+  resolveWrapper: (url: string) => Promise<string | null>
+): Promise<CandidateSource[]> {
+  return Promise.all(
+    sources.map(async (source) => {
+      if (!source.url || !isGoogleNewsArticleUrl(source.url)) return source;
+      const resolved = await resolveWrapper(source.url);
+      return resolved ? { ...source, url: canonicalizeUrl(resolved) } : source;
+    })
+  );
 }

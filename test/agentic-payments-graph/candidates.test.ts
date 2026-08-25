@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
+  applyUserSuppliedPrimarySource,
   dedupeProposal,
+  describeSourceForReview,
   excludeKnownSources,
   extractCandidates,
   filterValidItems,
   isEmptyProposal,
+  resolveWrapperUrls,
   stripNullClaimFields,
   type CandidateSource,
   type GraphCandidateProposal
@@ -133,10 +136,117 @@ describe("dedupeProposal and isEmptyProposal", () => {
   });
 });
 
+describe("applyUserSuppliedPrimarySource", () => {
+  const source: GraphCandidateProposal["source"] = { id: "src", publisher: "Yellow.com", title: "T", source_type: "primary", url: "https://yellow.com/x" };
+
+  it("forces source_type to user_confirmed and swaps in the given url", () => {
+    const result = applyUserSuppliedPrimarySource(source, { url: "https://coinbase.com/blog/coinbase-for-agents" });
+    expect(result.source_type).toBe("user_confirmed");
+    expect(result.url).toBe("https://coinbase.com/blog/coinbase-for-agents");
+    expect(result.id).toBe("src");
+    expect(result.title).toBe("T");
+  });
+
+  it("keeps the existing publisher when no override is given", () => {
+    expect(applyUserSuppliedPrimarySource(source, { url: "https://coinbase.com/x" }).publisher).toBe("Yellow.com");
+  });
+
+  it("uses the override publisher when a non-blank one is given, trimmed", () => {
+    expect(applyUserSuppliedPrimarySource(source, { url: "https://coinbase.com/x", publisher: "  Coinbase  " }).publisher).toBe("Coinbase");
+  });
+
+  it("ignores a blank override publisher", () => {
+    expect(applyUserSuppliedPrimarySource(source, { url: "https://coinbase.com/x", publisher: "   " }).publisher).toBe("Yellow.com");
+  });
+});
+
+describe("describeSourceForReview", () => {
+  const wrapperUrl = "https://news.google.com/rss/articles/CBMi123?oc=5";
+
+  it("passes a non-wrapper url through without calling the resolver", async () => {
+    const resolveWrapper = vi.fn(async () => "should not be called");
+    const result = await describeSourceForReview("https://coinbase.com/blog/x", resolveWrapper);
+    expect(result).toEqual({ url: "https://coinbase.com/blog/x", isGoogleNewsWrapper: false, resolvedDestination: null });
+    expect(resolveWrapper).not.toHaveBeenCalled();
+  });
+
+  it("passes a null url through without calling the resolver", async () => {
+    const resolveWrapper = vi.fn(async () => "should not be called");
+    expect(await describeSourceForReview(null, resolveWrapper)).toEqual({ url: null, isGoogleNewsWrapper: false, resolvedDestination: null });
+    expect(resolveWrapper).not.toHaveBeenCalled();
+  });
+
+  it("resolves a Google News wrapper url and reports the destination", async () => {
+    const resolveWrapper = vi.fn(async () => "https://www.coinbase.com/blog/coinbase-for-agents");
+    const result = await describeSourceForReview(wrapperUrl, resolveWrapper);
+    expect(result).toEqual({ url: wrapperUrl, isGoogleNewsWrapper: true, resolvedDestination: "https://www.coinbase.com/blog/coinbase-for-agents" });
+    expect(resolveWrapper).toHaveBeenCalledWith(wrapperUrl);
+  });
+
+  it("reports a null destination when resolution fails", async () => {
+    const resolveWrapper = vi.fn(async () => null);
+    const result = await describeSourceForReview(wrapperUrl, resolveWrapper);
+    expect(result).toEqual({ url: wrapperUrl, isGoogleNewsWrapper: true, resolvedDestination: null });
+  });
+});
+
+describe("resolveWrapperUrls", () => {
+  const wrapperUrl = "https://news.google.com/rss/articles/CBMi123?oc=5";
+  const makeSource = (id: string, url: string | null): CandidateSource => ({
+    id, title: `Title ${id}`, url, author: null, publishedAt: null, collectedAt: "2026-08-23T00:00:00Z", summary: null
+  });
+
+  it("preserves array length and order (sourceIndex correctness depends on this)", async () => {
+    const resolveWrapper = vi.fn(async () => "https://www.coinbase.com/blog/coinbase-for-agents");
+    const sources = [makeSource("a", "https://coinbase.com/x"), makeSource("b", wrapperUrl), makeSource("c", null)];
+    const result = await resolveWrapperUrls(sources, resolveWrapper);
+    expect(result.map((s) => s.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("leaves non-wrapper and null urls untouched", async () => {
+    const resolveWrapper = vi.fn(async () => "https://www.coinbase.com/blog/coinbase-for-agents");
+    const sources = [makeSource("a", "https://coinbase.com/x"), makeSource("c", null)];
+    const result = await resolveWrapperUrls(sources, resolveWrapper);
+    expect(result[0]!.url).toBe("https://coinbase.com/x");
+    expect(result[1]!.url).toBeNull();
+    expect(resolveWrapper).not.toHaveBeenCalled();
+  });
+
+  it("replaces a wrapper url with the canonicalized resolved destination", async () => {
+    const resolveWrapper = vi.fn(async () => "https://www.coinbase.com/blog/coinbase-for-agents?utm_source=x");
+    const [result] = await resolveWrapperUrls([makeSource("b", wrapperUrl)], resolveWrapper);
+    expect(result!.url).toBe("https://www.coinbase.com/blog/coinbase-for-agents");
+  });
+
+  it("keeps the original wrapper url when resolution fails", async () => {
+    const resolveWrapper = vi.fn(async () => null);
+    const [result] = await resolveWrapperUrls([makeSource("b", wrapperUrl)], resolveWrapper);
+    expect(result!.url).toBe(wrapperUrl);
+  });
+});
+
 describe("extractCandidates", () => {
   const context = parseGraphContext(FIXTURE_YAML);
   const makeSource = (id: string): CandidateSource => ({
     id, title: `Title ${id}`, url: `https://example.com/${id}`, author: null, publishedAt: null, collectedAt: "2026-08-23T00:00:00Z", summary: null
+  });
+
+  it("drops a proposal whose publisher is the literal \"unknown\"", async () => {
+    const generateJson = vi.fn(async () => ({
+      proposals: [{
+        sourceIndex: 0,
+        reason: "test",
+        source: { id: "new_src", publisher: "unknown", title: "T", source_type: "primary", url: null }
+      }]
+    }));
+    const ai = { generateJson } as unknown as AnalystAI;
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const proposals = await extractCandidates(ai, context, [makeSource("0")]);
+
+    expect(proposals).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("publisher"));
+    warnSpy.mockRestore();
   });
 
   it("keeps proposals from a later batch even when an earlier batch's extraction throws", async () => {
