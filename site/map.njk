@@ -408,10 +408,18 @@
 
       simulation.on('tick', () => { applyCenterExclusion(); renderPositions(); })
         .on('end', () => { fitToGraph(); });
-      function dragstarted(event) { if (!event.active) simulation.alphaTarget(.2).restart(); event.subject.fx = event.subject.x; event.subject.fy = event.subject.y; }
-      function dragged(event) { event.subject.fx = event.x; event.subject.fy = event.y; }
+      // d3-drag fires start/end on a plain click too (zero movement), which
+      // would otherwise reheat the simulation and re-trigger fitToGraph() on
+      // its 'end' event — silently resetting any zoom/pan the user just did
+      // right after selecting a node. Only reheat once real movement happens.
+      let dragMoved = false;
+      function dragstarted(event) { dragMoved = false; event.subject.fx = event.subject.x; event.subject.fy = event.subject.y; }
+      function dragged(event) {
+        if (!dragMoved) { dragMoved = true; simulation.alphaTarget(.2).restart(); }
+        event.subject.fx = event.x; event.subject.fy = event.y;
+      }
       function dragended(event) {
-        if (!event.active) simulation.alphaTarget(0);
+        if (dragMoved) simulation.alphaTarget(0);
         // The root and petal hubs stay exactly where dropped — never handed
         // back to the simulation's forces. Real entities release as before.
         if (event.subject.type === 'root' || event.subject.type === 'category') return;
