@@ -3,6 +3,7 @@ export default function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("site/CNAME");
   eleventyConfig.addPassthroughCopy("site/favicon.svg");
   eleventyConfig.addPassthroughCopy("site/favicon.png");
+  eleventyConfig.addPassthroughCopy("site/og-map.png");
 
   eleventyConfig.addFilter("readableDate", (value) => {
     const date = new Date(value);

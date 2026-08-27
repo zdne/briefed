@@ -4,7 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if title %}{{ title }} · Paid by Agent{% else %}Paid by Agent{% endif %}</title>
-  <meta name="description" content="Daily briefing on how AI agents pay and get paid">
+  {% set pageDescription = summary or "Daily briefing on how AI agents pay and get paid" %}
+  <meta name="description" content="{{ pageDescription }}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://paidbyagent.com{{ page.url }}">
+  <meta property="og:title" content="{% if title %}{{ title }}{% else %}Paid by Agent{% endif %}">
+  <meta property="og:description" content="{{ pageDescription }}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{% if title %}{{ title }}{% else %}Paid by Agent{% endif %}">
+  <meta name="twitter:description" content="{{ pageDescription }}">
   <link rel="icon" href="{{ '/favicon.svg' | url }}" type="image/svg+xml">
   <link rel="icon" href="{{ '/favicon.png' | url }}" sizes="any">
   <link rel="stylesheet" href="{{ '/style.css' | url }}">
