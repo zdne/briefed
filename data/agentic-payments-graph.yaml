@@ -26,8 +26,8 @@ taxonomy:
     - { id: treasury, name: Agentic treasury }
     - { id: currency, name: Currency and settlement }
   memberships:
-    shared_standards_trust: [mcp, agentic_ai_foundation, web_bot_auth, http_message_signatures, ap2, visa_tap, mastercard_agent_pay, sardine, forter, linux_foundation, x402_foundation, anthropic, ietf, fido_alliance, webbotauth_working_group, fido_payments_working_group, fido_trusted_ai_agent_interaction_standards, cloudflare, aws, akamai]
-    commerce: [acp, ucp, shared_payment_token, chatgpt, gemini, google_ai_mode, shopify_storefront_mcp, shopify_agentic_storefronts, instant_checkout, adyen_agentic, paypal_agent_ready, visa_intelligent_commerce, visa_agentic_ready, mastercard_agent_pay, alchemy_agentcard, marqeta_jit_funding, marqeta_commando_mode, arc_pay, reap, crossmint_agentic_payments, microsoft_dynamics365_commerce_mcp_server, axlabs, ax402, openai, stripe, google, shopify, ulta, adyen, paypal, mastercard, american_express, marqeta, alchemy, visa]
+    shared_standards_trust: [mcp, agentic_ai_foundation, web_bot_auth, http_message_signatures, ap2, visa_tap, mastercard_agent_pay, sardine, forter, linux_foundation, x402_foundation, anthropic, ietf, fido_alliance, webbotauth_working_group, fido_payments_working_group, fido_trusted_ai_agent_interaction_standards, cloudflare, aws, akamai, okta_agent_sso, okta]
+    commerce: [acp, ucp, shared_payment_token, chatgpt, gemini, google_ai_mode, shopify_storefront_mcp, shopify_agentic_storefronts, instant_checkout, adyen_agentic, paypal_agent_ready, visa_intelligent_commerce, visa_agentic_ready, mastercard_agent_pay, alchemy_agentcard, marqeta_jit_funding, marqeta_commando_mode, arc_pay, reap, crossmint_agentic_payments, microsoft_dynamics365_commerce_mcp_server, axlabs, ax402, openai, stripe, google, shopify, ulta, adyen, paypal, mastercard, american_express, marqeta, alchemy, visa, payouts_com, casper_association]
     machine_payments: [x402, mpp, tempo, coinbase_agentic_market, coinbase_agentic_wallets, crossmint_agentic_payments, reap, mastercard_agentic_token_framework, exaai_labs, coinbase, cloudflare_wallets]
     treasury: [meow, griffin, circle_mint, jpmorgan_payments, mirakl]
     currency: [usdc, open_usd, visa_rail, mastercard_rail, arc_pay, reap, crossmint_agentic_payments, agentcard_sh, arc_testnet, circle, open_standard, ach, wire_transfer, crossmint]
@@ -145,6 +145,12 @@ entities:
   - { id: ax402, type: product, name: "Ax402 payment gateway" }
   - { id: exaai_labs, type: company, name: "Exa AI Labs" }
   - { id: fido_trusted_ai_agent_interaction_standards, type: concept, name: "Trusted AI Agent Interaction Standards" }
+
+  # Candidates added 2026-08-27 from briefed
+  - { id: okta_agent_sso, type: product, name: "Okta Agent SSO" }
+  - { id: okta, type: company, name: Okta }
+  - { id: payouts_com, type: company, name: "Payouts.com" }
+  - { id: casper_association, type: company, name: "Casper Association" }
 relationships:
   # Standards and trust
   - { subject: mcp, predicate: donated_by, object: anthropic, status: reference, evidence: [anthropic_mcp_foundation] }
@@ -284,6 +290,10 @@ relationships:
   - { subject: coinbase, predicate: integrates_with, object: x402, status: live, qualifiers: { context: "AI agent trading desk" }, evidence: [coinbase_for_agents_2026_06_11] }
   - { subject: mastercard_agent_pay, predicate: launched_by, object: mastercard, status: live, evidence: [mastercard_agent_pay_launch] }
   - { subject: cloudflare_wallets, predicate: integrates_with, object: x402, status: live, evidence: [cloudflare_wallets_2026_08_04] }
+
+  # Candidates added 2026-08-27 from briefed
+  - { subject: okta_agent_sso, predicate: launched_by, object: okta, status: live, evidence: [okta_agent_sso_securitybrief_au] }
+  - { subject: payouts_com, predicate: partners_with, object: casper_association, status: announced, qualifiers: { context: "partnership on AI agent payments" }, evidence: [payouts_com] }
 claims:
   - id: keyrock_usdc_share
     kind: metric
@@ -425,3 +435,6 @@ sources:
   - { id: coinbase_for_agents_2026_06_11, publisher: "Coinbase", title: "Coinbase for Agents: Your AI Agent Can Now Trade and Pay with Coinbase", source_type: primary, url: "https://www.coinbase.com/blog/coinbase-for-agents" }
   - { id: mastercard_agent_pay_launch, publisher: "Mastercard", title: "Mastercard launches Agent Pay for Machines to unlock super-fast, always-on payments", source_type: primary, url: "https://www.mastercard.com/us/en/news-and-trends/press/2026/june/mastercard-launches-agent-pay-for-machines.html" }
   - { id: cloudflare_wallets_2026_08_04, publisher: "Cloudflare", title: "Announcing Cloudflare Wallets: The programmable wallet for the agentic Internet", source_type: primary, url: "https://blog.cloudflare.com/wallets/" }
+# Candidates added 2026-08-27 from briefed
+  - { id: okta_agent_sso_securitybrief_au, publisher: "Okta", title: "Okta launches Agent SSO to manage enterprise AI agent access", source_type: user_confirmed, url: "https://www.okta.com/newsroom/press-releases/okta-brings-first-class-identity-to-ai-agents-with-agent-sso/" }
+  - { id: payouts_com, publisher: "Payouts.com", title: "Payouts.com and Casper Association Partner on AI Agent Payments", source_type: user_confirmed, url: "https://chainwire.org/2026/08/25/payouts-com-and-casper-association-partner-on-ai-agent-payments/" }

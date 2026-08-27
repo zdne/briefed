@@ -305,6 +305,34 @@ export function isEmptyProposal(proposal: GraphCandidateProposal): boolean {
 }
 
 /**
+ * The LLM occasionally references an entity id in a relationship/claim
+ * without ever defining that entity — inventing an object id on the fly
+ * without including a matching entry in the proposal's own "entities" array,
+ * and it isn't in the graph yet either. Left alone, that reference silently
+ * disappears at site-build time (site/_data/graph.js drops relationships/
+ * claims pointing at unknown entities) — after a human already approved it.
+ * Dropping it here, before review, means the reviewer only ever sees
+ * proposals that are actually complete.
+ */
+export function dropDanglingReferences(proposal: GraphCandidateProposal, context: GraphContext): GraphCandidateProposal {
+  const knownIds = new Set(context.entityIds);
+  for (const entity of proposal.entities) knownIds.add(entity.id);
+
+  const relationships = proposal.relationships.filter((relationship) => {
+    const ok = knownIds.has(relationship.subject) && knownIds.has(relationship.object);
+    if (!ok) console.warn(`Dropping relationship with undefined entity reference: ${JSON.stringify(relationship)}`);
+    return ok;
+  });
+  const claims = proposal.claims.filter((claim) => {
+    const ok = knownIds.has(claim.subject) && (!claim.object || knownIds.has(claim.object));
+    if (!ok) console.warn(`Dropping claim with undefined entity reference: ${JSON.stringify(claim)}`);
+    return ok;
+  });
+
+  return { ...proposal, relationships, claims };
+}
+
+/**
  * A reviewer manually confirmed a genuinely primary URL for this proposal
  * (e.g. found the company's own blog post rather than trusting the LLM's
  * discovery source) — mirrors what human review did by hand for several

@@ -4,6 +4,7 @@ import {
   applyUserSuppliedPrimarySource,
   dedupeProposal,
   describeSourceForReview,
+  dropDanglingReferences,
   excludeKnownSources,
   extractCandidates,
   filterValidItems,
@@ -133,6 +134,68 @@ describe("dedupeProposal and isEmptyProposal", () => {
 
   it("does not flag a proposal with genuinely new content as empty", () => {
     expect(isEmptyProposal(dedupeProposal(baseProposal, context))).toBe(false);
+  });
+});
+
+describe("dropDanglingReferences", () => {
+  const context = parseGraphContext(FIXTURE_YAML);
+
+  it("drops a relationship whose object was never defined as an entity", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const proposal: GraphCandidateProposal = {
+      sourceIndex: 0,
+      reason: "test",
+      source: { id: "new_src", publisher: "P", title: "T", source_type: "primary", url: null },
+      entities: [{ id: "new_co", type: "company", name: "New Co", flow: "commerce" }],
+      relationships: [
+        { subject: "new_co", predicate: "supports_payment_method_of", object: "undefined_thing", status: "live" },
+        { subject: "new_co", predicate: "supports", object: "acp", status: "live" }
+      ],
+      claims: []
+    };
+
+    const result = dropDanglingReferences(proposal, context);
+
+    expect(result.relationships).toEqual([{ subject: "new_co", predicate: "supports", object: "acp", status: "live" }]);
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0]?.[0]).toContain("undefined_thing");
+    warnSpy.mockRestore();
+  });
+
+  it("keeps a relationship whose object is one of the proposal's own new entities", () => {
+    const proposal: GraphCandidateProposal = {
+      sourceIndex: 0,
+      reason: "test",
+      source: { id: "new_src", publisher: "P", title: "T", source_type: "primary", url: null },
+      entities: [
+        { id: "new_co", type: "company", name: "New Co", flow: "commerce" },
+        { id: "new_product", type: "product", name: "New Product", flow: "commerce" }
+      ],
+      relationships: [{ subject: "new_co", predicate: "launched", object: "new_product", status: "live" }],
+      claims: []
+    };
+
+    expect(dropDanglingReferences(proposal, context).relationships).toEqual(proposal.relationships);
+  });
+
+  it("drops a claim whose object was never defined, but keeps one with no object", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const proposal: GraphCandidateProposal = {
+      sourceIndex: 0,
+      reason: "test",
+      source: { id: "new_src", publisher: "P", title: "T", source_type: "primary", url: null },
+      entities: [{ id: "new_co", type: "company", name: "New Co", flow: "commerce" }],
+      relationships: [],
+      claims: [
+        { id: "c1", kind: "metric", subject: "new_co", predicate: "share_of", object: "undefined_thing" },
+        { id: "c2", kind: "announced_capability", subject: "new_co", predicate: "does_thing" }
+      ]
+    };
+
+    const result = dropDanglingReferences(proposal, context);
+
+    expect(result.claims.map((c) => c.id)).toEqual(["c2"]);
+    warnSpy.mockRestore();
   });
 });
 

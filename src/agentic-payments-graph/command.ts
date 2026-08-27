@@ -11,6 +11,7 @@ import {
   applyUserSuppliedPrimarySource,
   dedupeProposal,
   describeSourceForReview,
+  dropDanglingReferences,
   excludeKnownSources,
   extractCandidates,
   findCandidateSources,
@@ -127,6 +128,7 @@ export function registerGraphCandidatesCommand(program: Command): void {
       console.log("Extracting proposals with the LLM...");
       const proposals = (await extractCandidates(ai, context, newSources))
         .map((proposal) => dedupeProposal(proposal, context))
+        .map((proposal) => dropDanglingReferences(proposal, context))
         .filter((proposal) => !isEmptyProposal(proposal));
       console.log(`${proposals.length} proposal(s) with new content to review.`);
 
