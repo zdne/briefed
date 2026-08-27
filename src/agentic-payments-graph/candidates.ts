@@ -67,13 +67,17 @@ const graphProposalHeaderSchema = z.object({
 
 const graphCandidateEnvelopeSchema = z.object({ proposals: z.array(z.unknown()) });
 
+export type GraphEntityItem = z.infer<typeof graphEntityItemSchema>;
+export type GraphRelationshipItem = z.infer<typeof graphRelationshipItemSchema>;
+export type GraphClaimItem = z.infer<typeof graphClaimItemSchema>;
+
 export interface GraphCandidateProposal {
   sourceIndex: number;
   reason: string;
   source: z.infer<typeof graphProposalHeaderSchema>["source"];
-  entities: z.infer<typeof graphEntityItemSchema>[];
-  relationships: z.infer<typeof graphRelationshipItemSchema>[];
-  claims: z.infer<typeof graphClaimItemSchema>[];
+  entities: GraphEntityItem[];
+  relationships: GraphRelationshipItem[];
+  claims: GraphClaimItem[];
 }
 
 /**

@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
+import { styleText } from "node:util";
 import { AnalystAI } from "../ai.js";
 import { config } from "../config.js";
 import { getSyncCursorForKey, setSyncCursorForKey } from "../db.js";
@@ -15,9 +16,11 @@ import {
   findCandidateSources,
   isEmptyProposal,
   resolveWrapperUrls,
-  type GraphCandidateProposal
+  type GraphCandidateProposal,
+  type GraphClaimItem,
+  type GraphRelationshipItem
 } from "./candidates.js";
-import { GRAPH_YAML_PATH, loadGraphContext } from "./graph-context.js";
+import { GRAPH_YAML_PATH, loadGraphContext, type GraphContext } from "./graph-context.js";
 import {
   addToTaxonomyMembership,
   appendToFileEnd,
@@ -31,6 +34,48 @@ import {
 } from "./patchers.js";
 
 const GRAPH_UPDATE_CURSOR_KEY = "graph-update:agentic-payments";
+
+const supportsColor = process.stdout.isTTY === true;
+
+function paint(format: Parameters<typeof styleText>[0], text: string): string {
+  return supportsColor ? styleText(format, text) : text;
+}
+
+function sourceTypeFormat(sourceType: string): Parameters<typeof styleText>[0] {
+  switch (sourceType) {
+    case "primary":
+      return "green";
+    case "secondary":
+      return "yellow";
+    case "company_analysis":
+      return "cyan";
+    case "user_confirmed":
+      return "magenta";
+    default:
+      return "white";
+  }
+}
+
+function readablePredicate(predicate: string): string {
+  return predicate.replace(/_/g, " ");
+}
+
+function readableRelationship(relationship: GraphRelationshipItem, nameOf: (id: string) => string): string {
+  return `${nameOf(relationship.subject)} ${readablePredicate(relationship.predicate)} ${nameOf(relationship.object)} ${paint("dim", `[${relationship.status}]`)}`;
+}
+
+function readableClaim(claim: GraphClaimItem, nameOf: (id: string) => string): string {
+  const parts = [nameOf(claim.subject), readablePredicate(claim.predicate)];
+  if (claim.object) parts.push(nameOf(claim.object));
+  if (claim.value !== undefined) parts.push(`= ${claim.value}${claim.unit ? ` ${claim.unit}` : ""}`);
+  return parts.join(" ");
+}
+
+function buildEntityNameLookup(context: GraphContext): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const entity of context.entities) names.set(entity.id, entity.name);
+  return names;
+}
 
 function positiveInteger(value: string, option: string): number {
   const parsed = Number(value);
@@ -96,38 +141,62 @@ export function registerGraphCandidatesCommand(program: Command): void {
       const acceptedRelationships: string[] = [];
       const acceptedClaims: string[] = [];
       const acceptedEntityFlows = new Map<string, string>();
+      const entityNames = buildEntityNameLookup(context);
 
       const rl = createInterface({ input: process.stdin, output: process.stdout });
       try {
-        for (const proposal of proposals) {
+        for (const [index, proposal] of proposals.entries()) {
           const candidateSource = newSources[proposal.sourceIndex];
-          console.log(`\n=== ${candidateSource?.title ?? candidateSource?.url ?? "Untitled source"} ===`);
+          const nameOf = (id: string): string =>
+            proposal.entities.find((entity) => entity.id === id)?.name ?? entityNames.get(id) ?? id;
+
+          console.log(`\n${paint("dim", "─".repeat(72))}`);
+          console.log(
+            `${paint("dim", `[${index + 1}/${proposals.length}]`)} ${paint(["bold"], candidateSource?.title ?? candidateSource?.url ?? "Untitled source")}`
+          );
 
           const display = await describeSourceForReview(proposal.source.url, resolveWrapper);
-          console.log(`Source: ${display.url ?? "(no url)"}`);
-          console.log(`Publisher: ${proposal.source.publisher}`);
-          console.log(`Source type (LLM-proposed): ${proposal.source.source_type}`);
+          console.log(`  ${paint("dim", "Source:")}    ${display.url ?? "(no url)"}`);
+          console.log(`  ${paint("dim", "Publisher:")} ${proposal.source.publisher}`);
+          console.log(
+            `  ${paint("dim", "Type:")}      ${paint(sourceTypeFormat(proposal.source.source_type), proposal.source.source_type)} ${paint("dim", "(LLM-proposed)")}`
+          );
           if (display.isGoogleNewsWrapper) {
             const destination = display.resolvedDestination ? safeHostname(display.resolvedDestination) ?? display.resolvedDestination : null;
             console.log(
               destination
-                ? `  ⚠ Google News wrapper — resolves to: ${destination}`
-                : "  ⚠ Google News wrapper — could not resolve real destination; treat as unverified"
+                ? paint("yellow", `  ⚠ Google News wrapper — resolves to: ${destination}`)
+                : paint("yellow", "  ⚠ Google News wrapper — could not resolve real destination; treat as unverified")
             );
           }
 
-          console.log(`Reason: ${proposal.reason}`);
-          if (proposal.entities.length > 0) console.log(`New entities: ${proposal.entities.map((e) => e.id).join(", ")}`);
-          if (proposal.relationships.length > 0) {
-            console.log(`New relationships: ${proposal.relationships.map((r) => `${r.subject} ${r.predicate} ${r.object} (${r.status})`).join("; ")}`);
+          console.log(`  ${paint("dim", "Reason:")}    ${proposal.reason}`);
+
+          if (proposal.entities.length > 0) {
+            console.log(paint("cyan", "  + Entities"));
+            for (const entity of proposal.entities) {
+              console.log(`      ${entity.name} ${paint("dim", `(${entity.id}, ${entity.flow})`)}`);
+            }
           }
-          if (proposal.claims.length > 0) console.log(`New claims: ${proposal.claims.map((c) => c.id).join(", ")}`);
+          if (proposal.relationships.length > 0) {
+            console.log(paint("cyan", "  + Relationships"));
+            for (const relationship of proposal.relationships) {
+              console.log(`      ${readableRelationship(relationship, nameOf)}`);
+            }
+          }
+          if (proposal.claims.length > 0) {
+            console.log(paint("cyan", "  + Claims"));
+            for (const claim of proposal.claims) {
+              console.log(`      ${readableClaim(claim, nameOf)}`);
+            }
+          }
 
           const acceptProposal = (source: GraphCandidateProposal["source"]) => {
             acceptedSources.push(formatSourceLine(source));
             for (const entity of proposal.entities) {
               acceptedEntities.push(formatEntityLine(entity));
               acceptedEntityFlows.set(entity.id, entity.flow);
+              entityNames.set(entity.id, entity.name);
             }
             for (const relationship of proposal.relationships) {
               acceptedRelationships.push(formatRelationshipLine(relationship, proposal.source.id));
@@ -138,22 +207,30 @@ export function registerGraphCandidatesCommand(program: Command): void {
           };
 
           const answer = (
-            await rl.question("Include this proposal? [y]es / [u]ser-supplied primary source / [N]o (skip) / [s]kip all remaining > ")
+            await rl.question("\n  Include this proposal? [y]es / [u]ser-supplied primary source / [N]o (skip) / [s]kip all remaining > ")
           ).trim().toLowerCase();
 
-          if (answer === "s") break;
+          if (answer === "s") {
+            console.log(paint("dim", "  Skipping all remaining."));
+            break;
+          }
           if (answer === "u") {
             const overrideUrl = (await rl.question("  Primary source URL: ")).trim();
             if (!overrideUrl) {
-              console.log("  No URL entered; skipping this proposal.");
+              console.log(paint("yellow", "  ✗ No URL entered; skipped."));
               continue;
             }
             const overridePublisher = (await rl.question(`  Publisher [${proposal.source.publisher}]: `)).trim();
             acceptProposal(applyUserSuppliedPrimarySource(proposal.source, { url: overrideUrl, publisher: overridePublisher || null }));
+            console.log(paint("green", `  ✔ Accepted with user-confirmed primary source: ${overrideUrl}`));
             continue;
           }
-          if (answer !== "y") continue;
+          if (answer !== "y") {
+            console.log(paint("dim", "  ○ Skipped."));
+            continue;
+          }
           acceptProposal(proposal.source);
+          console.log(paint("green", "  ✔ Accepted."));
         }
       } finally {
         rl.close();
