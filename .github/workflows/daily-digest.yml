@@ -83,6 +83,25 @@ jobs:
         if: ${{ !inputs.skip_sync }}
         run: node .github/scripts/prepare-post.mjs
 
+      - name: Stage post artifact
+        # Grabs the exact file prepare-post.mjs just wrote (it's the only
+        # untracked change under site/posts at this point) so the
+        # publish-to-site-repo job doesn't have to re-derive today's date
+        # itself and risk a UTC-boundary mismatch.
+        if: ${{ !inputs.skip_sync }}
+        run: |
+          FILE=$(git status --porcelain site/posts | awk '{print $2}')
+          mkdir -p /tmp/post-artifact
+          cp "$FILE" /tmp/post-artifact/
+
+      - name: Upload post artifact
+        if: ${{ !inputs.skip_sync }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-post
+          path: /tmp/post-artifact
+          retention-days: 1
+
       - name: Commit archive
         if: ${{ !inputs.skip_sync }}
         run: |
@@ -110,3 +129,39 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # Phase 1 of the briefed/paidbyagent.com split: publishes the day's post to
+  # the new paidbyagent-site repo in addition to (not instead of) the steps
+  # above, so this repo's own live Pages deploy is never put at risk while
+  # the new repo is being tested. Runs independently of `deploy` (both only
+  # depend on `digest`) so a failure here never blocks the existing pipeline.
+  # See docs/HowItWorks.md and the paidbyagent-site repo's README for the
+  # front-matter "content contract" between the two repos.
+  publish-to-site-repo:
+    needs: digest
+    if: ${{ !inputs.skip_sync }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download post artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: daily-post
+          path: incoming-post
+
+      - name: Checkout site repo
+        uses: actions/checkout@v4
+        with:
+          repository: zdne/paidbyagent-site
+          token: ${{ secrets.SITE_REPO_PAT }}
+          path: site-repo
+
+      - name: Publish post to site repo
+        run: |
+          mkdir -p site-repo/site/posts
+          cp incoming-post/*.md site-repo/site/posts/
+          cd site-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add site/posts
+          git diff --cached --quiet || git commit -m "Add briefing for $(date -u +%Y-%m-%d)"
+          git push

@@ -37,6 +37,8 @@
 | `npm run db:migrate` | Apply SQL migrations |
 | `npm test` | Run unit tests |
 
+After `graph-candidates` or `graph-audit-sources` change `data/agentic-payments-graph.yaml`, copy the updated file into a checkout of the [`paidbyagent-site`](https://github.com/zdne/paidbyagent-site) repo and push it there — that's a manual step (not automated by any workflow), and it's what makes the change show up on the Agentic Payments Map. See docs/HowItWorks.md's "Publishing to paidbyagent.com" section.
+
 ## MCP Tools
 
 | Tool | Use for |
