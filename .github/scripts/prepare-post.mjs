@@ -1,5 +1,7 @@
-// Copies the freshly generated friendly digest into site/posts as an Eleventy post.
-// Run right after `tsx src/cli.ts digest --friendly`, before committing.
+// Copies the freshly generated friendly digest into an Eleventy post for the
+// paidbyagent-site repo. Run right after `tsx src/cli.ts digest --friendly`,
+// against a checkout of that repo (SITE_POSTS_DIR, e.g. site-repo/site/posts),
+// before committing/pushing there.
 import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -20,6 +22,7 @@ function formatOrdinalDate(date) {
 }
 
 const briefingsDir = "output/briefings";
+const postsDir = process.env.SITE_POSTS_DIR ?? "site/posts";
 
 const files = (await readdir(briefingsDir))
   .filter((name) => name.endsWith(".md") && !name.includes("-canonical-briefing"))
@@ -52,7 +55,7 @@ const frontMatter = [
   "",
 ].join("\n");
 
-await mkdir("site/posts", { recursive: true });
-await writeFile(join("site/posts", `${date}-briefing.md`), frontMatter + content, "utf8");
+await mkdir(postsDir, { recursive: true });
+await writeFile(join(postsDir, `${date}-briefing.md`), frontMatter + content, "utf8");
 
-console.log(`Wrote site/posts/${date}-briefing.md from ${latest}`);
+console.log(`Wrote ${postsDir}/${date}-briefing.md from ${latest}`);

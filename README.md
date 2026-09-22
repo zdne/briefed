@@ -92,18 +92,15 @@ Use `;` rather than `&&` between sync and digest — `sync` exits non-zero if an
 
 **Automate with GitHub Actions (cloud, no machine required):**
 
-`.github/workflows/daily-digest.yml` runs `sync` + `digest --friendly` on a schedule (default 6am CET/CEST), commits each day's briefing to `site/posts/`, and publishes the archive to GitHub Pages via [Eleventy](https://www.11ty.dev/) — the homepage lists every day's post automatically. Useful when you want briefings to keep generating while your machine is off (e.g. traveling).
-
-Preview the site locally with `npm run site:dev` (serves at `http://localhost:8080`) — no Ruby/Docker needed, it's plain Node.
+`.github/workflows/daily-digest.yml` runs `sync` + `digest --friendly` on a schedule (default 6am CET/CEST) and commits each day's briefing into the [`paidbyagent-site`](https://github.com/zdne/paidbyagent-site) repo, which builds it with [Eleventy](https://www.11ty.dev/) and publishes to GitHub Pages at [paidbyagent.com](https://paidbyagent.com) — the homepage lists every day's post automatically. Useful when you want briefings to keep generating while your machine is off (e.g. traveling). See docs/HowItWorks.md's "Publishing to paidbyagent.com" section for how the two repos connect.
 
 One-time setup:
 
-1. Add every value from your `.env` as a GitHub Actions secret with the same name (Settings → Secrets and variables → Actions), plus one more: `BRIEFED_CONFIG_JSON` containing the full contents of your local `briefed.config.json` (that file and `.env` are both gitignored, so the workflow reconstructs them from secrets).
-2. Settings → Pages → Build and deployment → Source: **GitHub Actions**.
-3. If your Gmail OAuth consent screen is in "Testing" publishing status, the refresh token expires after 7 days regardless of use — the Gmail collector will start failing after about a week (harmlessly; a failed collector doesn't block the digest, see above). Publish the OAuth app or accept the gap.
-4. Trigger the workflow once manually (Actions tab → Daily Digest → Run workflow) to confirm it works end-to-end before relying on the schedule.
+1. Add every value from your `.env` as a GitHub Actions secret with the same name (Settings → Secrets and variables → Actions), plus two more: `BRIEFED_CONFIG_JSON` containing the full contents of your local `briefed.config.json` (that file and `.env` are both gitignored, so the workflow reconstructs them from secrets), and `SITE_REPO_PAT` — a fine-grained PAT scoped to just the `paidbyagent-site` repo with Contents: Read and write, used to push each day's post there.
+2. If your Gmail OAuth consent screen is in "Testing" publishing status, the refresh token expires after 7 days regardless of use — the Gmail collector will start failing after about a week (harmlessly; a failed collector doesn't block the digest, see above). Publish the OAuth app or accept the gap.
+3. Trigger the workflow once manually (Actions tab → Daily Digest → Run workflow) to confirm it works end-to-end before relying on the schedule.
 
-The published site is public and unauthenticated — anyone with the URL can read it. Raw Markdown for every day also lives in `site/_posts/` in the repo as a durable archive independent of Pages.
+Raw Markdown for every day lives in `paidbyagent-site`'s `site/posts/` as a durable archive independent of Pages.
 
 ### MCP (Claude app)
 
