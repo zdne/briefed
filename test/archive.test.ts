@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ArchiveCursorError,
   decodeArchiveCursor,
-  deriveIsPrivateSource,
+  deriveIsGmailSource,
   deriveSourceContentCompleteness,
   encodeArchiveCursor,
   getArchiveItemsInputShape,
@@ -33,16 +33,17 @@ function samplePayload(overrides: Partial<ArchiveCursorPayload> = {}): ArchiveCu
   };
 }
 
-describe("deriveIsPrivateSource", () => {
-  it("flags gmail-sourced records as private", () => {
-    expect(deriveIsPrivateSource("gmail:query:abc123")).toBe(true);
+describe("deriveIsGmailSource", () => {
+  it("flags gmail-sourced records", () => {
+    expect(deriveIsGmailSource("gmail:query:abc123")).toBe(true);
   });
 
-  it("does not flag public collectors as private", () => {
-    expect(deriveIsPrivateSource("rss:feed:abc")).toBe(false);
-    expect(deriveIsPrivateSource("clip:url")).toBe(false);
-    expect(deriveIsPrivateSource("twitterapi:list:9")).toBe(false);
-    expect(deriveIsPrivateSource("feedbin:entry:1")).toBe(false);
+  it("does not flag other collectors as gmail — this is a channel check, not a privacy judgment", () => {
+    expect(deriveIsGmailSource("rss:feed:abc")).toBe(false);
+    expect(deriveIsGmailSource("clip:url")).toBe(false);
+    expect(deriveIsGmailSource("clip:text")).toBe(false);
+    expect(deriveIsGmailSource("twitterapi:list:9")).toBe(false);
+    expect(deriveIsGmailSource("feedbin:entry:1")).toBe(false);
   });
 });
 
@@ -51,14 +52,17 @@ describe("deriveSourceContentCompleteness", () => {
     expect(deriveSourceContentCompleteness("rss:feed:abc")).toBe("excerpt");
   });
 
-  it("labels clip and gmail sources as full", () => {
-    expect(deriveSourceContentCompleteness("clip:url")).toBe("full");
-    expect(deriveSourceContentCompleteness("clip:text")).toBe("full");
+  it("labels gmail sources as full", () => {
     expect(deriveSourceContentCompleteness("gmail:query:abc")).toBe("full");
   });
 
   it("labels tweets as full", () => {
     expect(deriveSourceContentCompleteness("twitterapi:list:9")).toBe("full");
+  });
+
+  it("does not claim completeness for clips — a fetch can be blocked/empty, or the text a partial user note", () => {
+    expect(deriveSourceContentCompleteness("clip:url")).toBe("unknown");
+    expect(deriveSourceContentCompleteness("clip:text")).toBe("unknown");
   });
 
   it("does not assert completeness it hasn't confirmed", () => {

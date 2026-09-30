@@ -21,18 +21,26 @@ function toIso(value: string | undefined | null): string | null {
   return value ? new Date(value).toISOString() : null;
 }
 
+// Distinct from toIso: preserves "omitted" (undefined) rather than collapsing
+// it to null, which matters when validating a request against a cursor —
+// null there means "explicitly cleared," not "not passed."
+function toIsoOrUndefined(value: string | undefined): string | undefined {
+  return value === undefined ? undefined : new Date(value).toISOString();
+}
+
 // --- Provenance derivations --------------------------------------------------
 //
 // Mechanical, documented mappings from the already-stored source_key prefix —
 // not a per-item editorial judgment about sensitivity or page completeness.
 
 /**
- * Per PRIVACY.md, only the Gmail collector reads private mailbox/newsletter
- * content; every other collector reads public web sources. This is the only
- * channel-origin distinction Briefed's privacy policy draws, so it's the only
- * one derived here.
+ * True only when sourceKey indicates the Gmail collector. This reflects
+ * collection *channel*, not a content-sensitivity determination: records
+ * from any source — especially clip:text, which stores arbitrary pasted
+ * text — can still contain sensitive material. Do not treat `false` here as
+ * "safe to treat as public."
  */
-export function deriveIsPrivateSource(sourceKey: string): boolean {
+export function deriveIsGmailSource(sourceKey: string): boolean {
   return sourceKey.startsWith("gmail:");
 }
 
@@ -43,14 +51,16 @@ export type ContentCompleteness = "full" | "excerpt" | "unknown";
  * inspected per item:
  * - rss: (including Reddit/HN RSS) stores feed-provided content only, never
  *   the fetched original page — "excerpt".
- * - clip: (URL or text) stores a full page conversion or verbatim user text — "full".
- * - gmail: stores the full message payload — "full".
- * - twitterapi: stores a tweet's full (inherently short) text — "full".
+ * - gmail: stores the full message payload fetched via the Gmail API — "full".
+ * - twitterapi: stores a tweet's full (inherently short) text via the API — "full".
+ * - clip: is "unknown", not "full" — clip.ts's normalizeUrlClip can store
+ *   empty content_text on a failed fetch or bot-challenge (fetchBlocked), and
+ *   clip:text is exactly whatever the user typed, which may itself be a
+ *   partial note. Neither case is record-specific evidence of completeness.
  * - anything else (e.g. feedbin:) has unconfirmed extraction completeness — "unknown".
  */
 export function deriveSourceContentCompleteness(sourceKey: string): ContentCompleteness {
   if (sourceKey.startsWith("rss:")) return "excerpt";
-  if (sourceKey.startsWith("clip:")) return "full";
   if (sourceKey.startsWith("gmail:")) return "full";
   if (sourceKey.startsWith("twitterapi:")) return "full";
   return "unknown";
@@ -64,7 +74,7 @@ export interface ArchiveRecordMeta {
   title: string | null;
   author: string | null;
   sourceType: string;
-  isPrivateSource: boolean;
+  isGmailSource: boolean;
   sourceContentCompleteness: ContentCompleteness;
   publishedAt: string | null;
   collectedAt: string;
@@ -88,7 +98,7 @@ export function toArchiveRecordMeta(row: ArchiveRecordBase): ArchiveRecordMeta {
     title: row.title,
     author: row.author,
     sourceType: row.sourceType,
-    isPrivateSource: deriveIsPrivateSource(row.sourceKey),
+    isGmailSource: deriveIsGmailSource(row.sourceKey),
     sourceContentCompleteness: deriveSourceContentCompleteness(row.sourceKey),
     publishedAt: row.publishedAt,
     collectedAt: row.collectedAt,
@@ -152,15 +162,15 @@ export function decodeArchiveCursor(cursor: string): ArchiveCursorPayload {
 export function validateCursorAgainstRequest(
   cursor: ArchiveCursorPayload,
   requested: {
-    publishedAfter?: string | null;
-    publishedBefore?: string | null;
-    sourceType?: string | null;
-    sourceKey?: string | null;
-    updatedAfter?: string | null;
-    updatedBefore?: string | null;
+    publishedAfter?: string;
+    publishedBefore?: string;
+    sourceType?: string;
+    sourceKey?: string;
+    updatedAfter?: string;
+    updatedBefore?: string;
   }
 ): void {
-  const checks: Array<[keyof ArchiveCursorFilters, string | null | undefined]> = [
+  const checks: Array<[keyof ArchiveCursorFilters, string | undefined]> = [
     ["publishedAfter", requested.publishedAfter],
     ["publishedBefore", requested.publishedBefore],
     ["sourceType", requested.sourceType],
@@ -174,7 +184,7 @@ export function validateCursorAgainstRequest(
       );
     }
   }
-  if (requested.updatedBefore !== undefined && requested.updatedBefore !== null && requested.updatedBefore !== cursor.boundary) {
+  if (requested.updatedBefore !== undefined && requested.updatedBefore !== cursor.boundary) {
     throw new ArchiveCursorError(
       `"updatedBefore" (${requested.updatedBefore}) does not match the scan boundary this cursor was issued with (${cursor.boundary}).`
     );
@@ -236,12 +246,12 @@ export async function listArchiveItems(rawArgs: ListArchiveItemsArgs): Promise<L
   if (args.cursor) {
     const decoded = decodeArchiveCursor(args.cursor);
     validateCursorAgainstRequest(decoded, {
-      publishedAfter: toIso(args.publishedAfter),
-      publishedBefore: toIso(args.publishedBefore),
+      publishedAfter: toIsoOrUndefined(args.publishedAfter),
+      publishedBefore: toIsoOrUndefined(args.publishedBefore),
       sourceType: args.sourceType ?? undefined,
       sourceKey: args.sourceKey ?? undefined,
-      updatedAfter: toIso(args.updatedAfter),
-      updatedBefore: toIso(args.updatedBefore)
+      updatedAfter: toIsoOrUndefined(args.updatedAfter),
+      updatedBefore: toIsoOrUndefined(args.updatedBefore)
     });
     filters = decoded.filters;
     boundary = decoded.boundary;

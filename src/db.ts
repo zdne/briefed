@@ -20,8 +20,13 @@ export const pool = new Pool({
   max: config.PG_POOL_MAX,
   query_timeout: config.PG_QUERY_TIMEOUT_MS,
   statement_timeout: config.PG_QUERY_TIMEOUT_MS,
-  keepalives: 1,
-  keepalives_idle: 30,
+  // camelCase, not the snake_case libpq names: this project has no pg-native
+  // dependency, so the pure-JS driver is what's live here, and it only reads
+  // keepAlive/keepAliveInitialDelayMillis (see node-pg's connection.js) to call
+  // socket.setKeepAlive() directly. keepalives/keepalives_idle only feed the
+  // native driver's connection string and were silently doing nothing.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 30_000,
 });
 
 // Prevent idle/in-flight connection drops from crashing the process.

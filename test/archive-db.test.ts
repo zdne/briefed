@@ -134,6 +134,34 @@ describe.skipIf(!isLocalTestDb)("archive discovery (local Postgres integration)"
       expect(seen.sort((a, b) => Number(a) - Number(b))).toEqual(ids.slice().sort((a, b) => Number(a) - Number(b)));
     });
 
+    it("continues a scan with a cursor alone, omitting the date filters used on page 1 (regression: omitted must not be treated as a mismatch)", async () => {
+      const ids: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        ids.push(await seed({
+          sourceKey: "rss:feed:a", sourceItemId: String(i), contentText: "x",
+          publishedAt: "2026-02-01T00:00:00Z", updatedAt: `2026-01-0${i + 1}T00:00:00Z`
+        }));
+      }
+
+      const page1 = await archive.listArchiveItems({
+        publishedAfter: "2026-01-15T00:00:00Z",
+        updatedAfter: "2025-01-01T00:00:00Z",
+        updatedBefore: "2026-12-31T00:00:00Z",
+        pageSize: 1
+      });
+      expect(page1.items).toHaveLength(1);
+      expect(page1.nextCursor).not.toBeNull();
+
+      // Page 2 passes only the cursor — no publishedAfter/updatedAfter/updatedBefore —
+      // exactly how a client resuming an interrupted scan is documented to call it.
+      const page2 = await archive.listArchiveItems({ cursor: page1.nextCursor! });
+      expect(page2.items.length).toBeGreaterThan(0);
+
+      const seen = [...page1.items, ...page2.items].map((i) => i.id);
+      expect(new Set(seen).size).toBe(seen.length);
+      for (const id of seen) expect(ids).toContain(id);
+    });
+
     it("rejects a malformed cursor explicitly", async () => {
       await expect(archive.listArchiveItems({ cursor: "!!!not-a-cursor!!!" })).rejects.toThrow();
     });
