@@ -97,6 +97,36 @@ export interface DigestForRendering {
 
 export type FriendlyDigestStyle = "plain" | "warm";
 
+export interface ArchiveRecordBase {
+  id: string;
+  sourceKey: string;
+  sourceItemId: string;
+  canonicalUrl: string | null;
+  title: string | null;
+  author: string | null;
+  sourceType: "article" | "reddit" | "hackernews" | "twitter" | "clip";
+  publishedAt: string | null;
+  collectedAt: string;
+  updatedAt: string;
+  sourceSummary: string | null;
+  analystSummary: string | null;
+  topicTags: string[];
+  entities: unknown;
+  enrichmentStatus: string;
+  enrichmentMode: string;
+  /** sha256 of content_text only — does not cover title/author/dates/other metadata. */
+  contentHash: string;
+}
+
+export interface ArchiveContentRow extends ArchiveRecordBase {
+  contentText: string;
+}
+
+export interface ArchiveSearchRow extends ArchiveRecordBase {
+  score: number;
+  excerpt: string;
+}
+
 export interface QuerySession {
   createdAt: string;
   question: string;

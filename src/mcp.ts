@@ -2,6 +2,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { AnalystAI } from "./ai.js";
+import {
+  getArchiveItems,
+  getArchiveItemsInputShape,
+  listArchiveItems,
+  listArchiveItemsInputShape,
+  searchArchive,
+  searchArchiveInputShape,
+  ArchiveCursorError
+} from "./archive.js";
 import { normalizeClip } from "./clip.js";
 import { config } from "./config.js";
 import {
@@ -239,7 +248,64 @@ server.registerTool(
   async ({ briefing }) => jsonToolResult(await updateBriefingPreferences(briefing))
 );
 
-function jsonToolResult(data: Record<string, unknown>, text = JSON.stringify(data, null, 2), isError = false) {
+server.registerTool(
+  "list_archive_items",
+  {
+    title: "List Archive Items",
+    description:
+      "Enumerate raw archive records — no model or embedding calls, no answer synthesis. For an external idea-discovery pipeline that needs exhaustive, resumable coverage rather than the top-K ranked results `brief`/`search_archive` return. " +
+      "Supports publication-date and update-time bounds and source-type/source-key filters, all applied server-side before pagination. Paginates deterministically via an opaque `cursor` (keyset on updated_at, id — never OFFSET), bound to the filters and a fixed scan-boundary timestamp captured on the first page. " +
+      "Includes records regardless of embedding presence or enrichment status. " +
+      "To resume an interrupted scan, pass the same `cursor` and nothing else. To run a later incremental scan after a completed one, call again with `updatedAfter` set to the prior response's `scanBoundary` and no cursor — see the tool's field descriptions for exact cursor/filter binding rules and the reconciliation caveat for concurrently-updated records.",
+    inputSchema: listArchiveItemsInputShape,
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false }
+  },
+  async (args) => {
+    try {
+      const result = await listArchiveItems(args);
+      return jsonToolResult(result);
+    } catch (error) {
+      if (error instanceof ArchiveCursorError) {
+        return jsonToolResult({ error: error.message }, error.message, true);
+      }
+      throw error;
+    }
+  }
+);
+
+server.registerTool(
+  "search_archive",
+  {
+    title: "Search Archive",
+    description:
+      "Ranked retrieval over stored archive records — not exhaustive enumeration (use list_archive_items for that) and no LLM answer synthesis (use brief for that). " +
+      "Supports explicit publication-date bounds and source-type/source-key filters, applied before result limiting. " +
+      "\"lexical\" mode (default) is Postgres full-text search — no external calls. \"semantic\" mode makes exactly one OpenAI embedding call (requires OPENAI_API_KEY) and ranks by cosine similarity; it does not otherwise call a model. " +
+      "Never boosts clipped records — unlike brief, there is no clip-boost re-ranking here. Returns archive ids, metadata, a bounded excerpt per result, and ranking info (score, mode).",
+    inputSchema: searchArchiveInputShape,
+    annotations: { readOnlyHint: true, openWorldHint: false }
+  },
+  async ({ query, mode, publishedAfter, publishedBefore, sourceType, sourceKey, limit }) => {
+    const embedder = mode === "semantic" ? { embed: (text: string) => new AnalystAI().embed(text) } : undefined;
+    const result = await searchArchive({ query, mode, publishedAfter, publishedBefore, sourceType, sourceKey, limit }, embedder);
+    return jsonToolResult(result);
+  }
+);
+
+server.registerTool(
+  "get_archive_items",
+  {
+    title: "Get Archive Items",
+    description:
+      "Fetch original stored contentText and provenance for a bounded list of archive ids, verbatim — no refetching, no re-enrichment, no clipping, no other mutation. Missing ids are reported explicitly in `missingIds` rather than silently omitted. " +
+      "contentText is never silently truncated: long text is split into fixed-size chunks — check `totalChunks`/`isLastChunk` and re-call with the next `chunkIndex` to read the rest.",
+    inputSchema: getArchiveItemsInputShape,
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false }
+  },
+  async (args) => jsonToolResult(await getArchiveItems(args))
+);
+
+function jsonToolResult<T extends object>(data: T, text = JSON.stringify(data, null, 2), isError = false) {
   return {
     content: [
       {

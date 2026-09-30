@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import pg from "pg";
 import { config } from "./config.js";
 import type {
+  ArchiveContentRow,
+  ArchiveSearchRow,
   ContentForEnrichment,
   DigestCandidate,
   DigestForRendering,
@@ -563,4 +565,144 @@ export async function resolveDigestCitation(
   const row = result.rows[0];
   if (!row || row.contentId === null) return null;
   return { contentId: row.contentId, digestId: row.digestId, title: row.title };
+}
+
+// --- Archive discovery (read-only, no model calls) -------------------------
+//
+// Backs the list_archive_items / search_archive / get_archive_items MCP
+// tools. No function here calls an LLM or embedding API; searchArchiveSemantic
+// takes an already-computed embedding, it never computes one itself.
+
+const ARCHIVE_COLUMNS = `
+  id::text AS id,
+  source_key AS "sourceKey",
+  source_item_id AS "sourceItemId",
+  canonical_url AS "canonicalUrl",
+  title,
+  author,
+  source_type AS "sourceType",
+  published_at::text AS "publishedAt",
+  collected_at::text AS "collectedAt",
+  updated_at::text AS "updatedAt",
+  source_summary AS "sourceSummary",
+  analyst_summary AS "analystSummary",
+  topic_tags AS "topicTags",
+  entities,
+  enrichment_status AS "enrichmentStatus",
+  enrichment_mode AS "enrichmentMode",
+  content_hash AS "contentHash"
+`;
+
+export interface ArchiveFilters {
+  publishedAfter: string | null;
+  publishedBefore: string | null;
+  sourceType: SourceType | null;
+  sourceKey: string | null;
+}
+
+export interface ArchiveListWindow {
+  /** Fixed upper bound on updated_at for the whole scan (inclusive). */
+  boundary: string;
+  /** Keyset floor: only rows with (updated_at, id) strictly greater than this. Null means no floor. */
+  afterUpdatedAt: string | null;
+  afterId: string | null;
+}
+
+// Deliberately includes records with no embedding and incomplete enrichment
+// (unlike retrieveRelevant/recentDigestCandidates) — this is a raw enumeration
+// tool, not a briefing/query candidate pool.
+export async function listArchiveContent(
+  filters: ArchiveFilters,
+  window: ArchiveListWindow,
+  fetchLimit: number
+): Promise<ArchiveContentRow[]> {
+  const result = await pool.query<ArchiveContentRow>(
+    `SELECT ${ARCHIVE_COLUMNS}, content_text AS "contentText"
+     FROM content
+     WHERE ($1::timestamptz IS NULL OR published_at >= $1)
+       AND ($2::timestamptz IS NULL OR published_at < $2)
+       AND ($3::text IS NULL OR source_type = $3)
+       AND ($4::text IS NULL OR source_key = $4)
+       AND updated_at <= $5::timestamptz
+       AND (
+         $6::timestamptz IS NULL
+         OR updated_at > $6::timestamptz
+         OR (updated_at = $6::timestamptz AND id > $7::bigint)
+       )
+     ORDER BY updated_at ASC, id ASC
+     LIMIT $8`,
+    [
+      filters.publishedAfter, filters.publishedBefore, filters.sourceType, filters.sourceKey,
+      window.boundary, window.afterUpdatedAt, window.afterId, fetchLimit
+    ]
+  );
+  return result.rows;
+}
+
+// Requires no model or embedding call — plainto_tsquery runs entirely in Postgres.
+export async function searchArchiveLexical(
+  queryText: string,
+  filters: ArchiveFilters,
+  excerptChars: number,
+  limit: number
+): Promise<ArchiveSearchRow[]> {
+  const result = await pool.query<ArchiveSearchRow>(
+    `SELECT ${ARCHIVE_COLUMNS},
+       ts_rank(search_vector, plainto_tsquery('english', $1)) AS score,
+       left(
+         regexp_replace(
+           coalesce(ts_headline('english', content_text, plainto_tsquery('english', $1),
+             'MaxFragments=1, MinWords=15, MaxWords=60'), ''),
+           '</?b>', '', 'g'
+         ),
+         $6
+       ) AS excerpt
+     FROM content
+     WHERE search_vector @@ plainto_tsquery('english', $1)
+       AND ($2::timestamptz IS NULL OR published_at >= $2)
+       AND ($3::timestamptz IS NULL OR published_at < $3)
+       AND ($4::text IS NULL OR source_type = $4)
+       AND ($5::text IS NULL OR source_key = $5)
+     ORDER BY score DESC, id DESC
+     LIMIT $7`,
+    [queryText, filters.publishedAfter, filters.publishedBefore, filters.sourceType, filters.sourceKey, excerptChars, limit]
+  );
+  return result.rows;
+}
+
+// Takes an already-computed embedding — callers are responsible for the one
+// embedding API call this represents; this function itself makes none.
+export async function searchArchiveSemantic(
+  embedding: number[],
+  filters: ArchiveFilters,
+  excerptChars: number,
+  limit: number
+): Promise<ArchiveSearchRow[]> {
+  const result = await pool.query<ArchiveSearchRow>(
+    `SELECT ${ARCHIVE_COLUMNS},
+       1 - (embedding <=> $1::vector) AS score,
+       left(coalesce(analyst_summary, content_text), $6) AS excerpt
+     FROM content
+     WHERE embedding IS NOT NULL
+       AND ($2::timestamptz IS NULL OR published_at >= $2)
+       AND ($3::timestamptz IS NULL OR published_at < $3)
+       AND ($4::text IS NULL OR source_type = $4)
+       AND ($5::text IS NULL OR source_key = $5)
+     ORDER BY embedding <=> $1::vector
+     LIMIT $7`,
+    [vectorLiteral(embedding), filters.publishedAfter, filters.publishedBefore, filters.sourceType, filters.sourceKey, excerptChars, limit]
+  );
+  return result.rows;
+}
+
+// No refetching, enrichment, or mutation of any kind — a plain read by id.
+export async function getArchiveContentByIds(ids: string[]): Promise<ArchiveContentRow[]> {
+  if (ids.length === 0) return [];
+  const result = await pool.query<ArchiveContentRow>(
+    `SELECT ${ARCHIVE_COLUMNS}, content_text AS "contentText"
+     FROM content
+     WHERE id = ANY($1::bigint[])`,
+    [ids]
+  );
+  return result.rows;
 }

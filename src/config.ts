@@ -73,7 +73,16 @@ const schema = z.object({
   DIGEST_REPEAT_LOOKBACK_HOURS: z.coerce.number().int().min(0).default(72),
   DIGEST_MAX_FOLLOWUPS_PER_EVENT: z.coerce.number().int().min(0).default(1),
   DIGEST_OUTPUT_DIR: z.string().min(1).default("output/briefings"),
-  QUERY_OUTPUT_DIR: z.string().min(1).default("output/queries")
+  QUERY_OUTPUT_DIR: z.string().min(1).default("output/queries"),
+  ARCHIVE_LIST_DEFAULT_PAGE_SIZE: z.coerce.number().int().min(1).default(50),
+  ARCHIVE_LIST_MAX_PAGE_SIZE: z.coerce.number().int().min(1).default(200),
+  ARCHIVE_SEARCH_DEFAULT_LIMIT: z.coerce.number().int().min(1).default(10),
+  ARCHIVE_SEARCH_MAX_LIMIT: z.coerce.number().int().min(1).default(50),
+  ARCHIVE_GET_MAX_IDS: z.coerce.number().int().min(1).default(50),
+  ARCHIVE_ITEM_CHUNK_CHARS: z.coerce.number().int().min(1000).default(20000),
+  ARCHIVE_LIST_EXCERPT_CHARS: z.coerce.number().int().min(50).default(500),
+  ARCHIVE_SEARCH_EXCERPT_CHARS: z.coerce.number().int().min(50).default(600),
+  ARCHIVE_SCAN_BOUNDARY_SAFETY_MARGIN_MS: z.coerce.number().int().min(0).default(120_000)
 });
 
 export type Config = z.infer<typeof schema>;

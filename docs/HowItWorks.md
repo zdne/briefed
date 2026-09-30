@@ -296,8 +296,80 @@ Query output is saved as Markdown under `QUERY_OUTPUT_DIR` by default. Use `--no
 | `update_collectors` | Full-replacement write of the collectors section only |
 | `update_briefing_preferences` | Full-replacement write of requiredTopics + optionalTopics only |
 | `health` | Runs `SELECT 1` and returns DB connectivity status plus the configured pool size |
+| `list_archive_items` | Enumerate raw archive records with filters and resumable keyset pagination — no model calls |
+| `search_archive` | Ranked lexical or semantic search over raw records — no answer synthesis |
+| `get_archive_items` | Fetch original stored `contentText` and provenance by id, verbatim |
 
 All update tools are **full-replacement**: they overwrite the entire section, not individual fields. Always call `get_user_config` first and echo every unchanged field back verbatim. Omitting a feed deletes it.
+
+### Archive discovery tools (read-only)
+
+`list_archive_items`, `search_archive`, and `get_archive_items` back an external idea-discovery pipeline that needs raw records, explicit filters, and resumable enumeration — unlike `brief`, none of them call an LLM, and only `search_archive`'s `semantic` mode calls an embedding model. All three are read-only (`readOnlyHint: true`) and never refetch, enrich, or clip anything.
+
+**Shared record shape.** Each result carries (where available): `id`, `sourceKey`, `sourceItemId`, `canonicalUrl`, `title`, `author`, `sourceType`, `publishedAt`, `collectedAt`, `updatedAt`, `sourceSummary` (source-provided) and `analystSummary` (AI-generated) as separate fields, `topicTags`, `entities`, `enrichmentStatus`/`enrichmentMode`, and `contentHash` (see below). Two fields are mechanically derived from the existing `source_key` prefix — not a per-item judgment call:
+
+- `isPrivateSource` — `true` only when `sourceKey` starts with `gmail:`. Per `PRIVACY.md`, Gmail is the only collector that reads private mailbox/newsletter content; every other collector reads public web sources, so this is the one channel-origin distinction the privacy policy draws. `raw_entry` (which for Gmail includes headers) is never returned by any of these tools.
+- `sourceContentCompleteness` — `"excerpt"` for `rss:`-sourced records (the RSS collector never fetches the original page — see "Direct RSS/Atom" above), `"full"` for `clip:`, `gmail:`, and `twitterapi:`-sourced records, `"unknown"` for anything else (e.g. `feedbin:`, whose extraction completeness isn't confirmed). Stored text is never asserted to be full-page content without this evidence.
+
+**`content_hash`** is a generated Postgres column (`encode(digest(content_text, 'sha256'), 'hex')`, via `pgcrypto`) — it changes if and only if `content_text` changes, so it detects evidence-bearing edits to the source text independent of `updated_at` churn from re-enrichment. It fingerprints `content_text` only: it does **not** cover `title`, `author`, `published_at`, or any other metadata, so an edit to those fields alone leaves the hash unchanged. Do not treat it as a whole-record version hash.
+
+#### `list_archive_items`
+
+Filters: `publishedAfter`/`publishedBefore` (on `published_at`), `sourceType`, `sourceKey`. Pagination is deterministic keyset pagination on `(updated_at, id)` ascending — never `OFFSET` — bounded by `pageSize` (default `ARCHIVE_LIST_DEFAULT_PAGE_SIZE`, max `ARCHIVE_LIST_MAX_PAGE_SIZE`). Includes records regardless of embedding presence or enrichment status. The `(updated_at, id)` index speeds this scan up; it is not required for the pagination's *correctness*, which holds even as a sequential scan plus sort.
+
+Every scan has a **fixed upper boundary** (`scanBoundary`, on `updated_at`) captured on the first page: explicit via `updatedBefore`, or defaulted to `now() - ARCHIVE_SCAN_BOUNDARY_SAFETY_MARGIN_MS` (2 minutes). The opaque `cursor` returned as `nextCursor` binds together the filters, the boundary, and the last-seen `(updated_at, id)`; passing a cursor alongside filter args that don't match what it was issued with is a validation error (`cursor/filter mismatch`), and a malformed/undecodable cursor is also a validation error — neither is ever silently ignored.
+
+**Mutable records and reconciliation.** `updated_at` also changes when enrichment writes a summary/embedding after collection, so a scan is not an atomic snapshot: **this does not give exact-once change capture under concurrent updates.** Because the boundary is fixed at scan start, any write happening during the scan gets a timestamp after the boundary and is simply deferred to the next scan — it can't land in a gap between two already-fetched pages. The remaining risk is a transaction that started before the boundary but hadn't committed (and become visible) by the time a page query ran; the safety margin exists to make this vanishingly unlikely by delaying the boundary behind real time. All of Briefed's own writers (`upsertSourceContent`, `saveEnrichment`, `saveEmbeddedOnly`, `markEnrichmentProcessing`) are short, single-round-trip transactions, so the default 2-minute margin is generous headroom, not a tight bound — enlarge `ARCHIVE_SCAN_BOUNDARY_SAFETY_MARGIN_MS` if writers with longer transactions are ever added. Treat delivery as at-least-once and de-duplicate by `id`/`contentHash` downstream.
+
+**Starting the next incremental scan:** once a scan reports `scanComplete: true`, start the next one with `updatedAfter` set to that scan's `scanBoundary` (and no `cursor`) — this picks up everything committed since, with no gap and no artificial re-fetch of already-seen rows.
+
+#### `search_archive`
+
+Ranked retrieval, not exhaustive enumeration — `resultType: "ranked_retrieval"` makes this explicit in the response. `publishedAfter`/`publishedBefore`/`sourceType`/`sourceKey` filters are applied in the same SQL `WHERE` clause as the ranking `ORDER BY`/`LIMIT`, so filtering always happens before limiting, never after.
+
+- `mode: "lexical"` (default) — Postgres full-text search (`plainto_tsquery`/`ts_rank`/`ts_headline`) over `title`/`content_text`. No external calls.
+- `mode: "semantic"` — exactly one OpenAI embedding call for the query text (requires `OPENAI_API_KEY`), then pgvector cosine-similarity ranking over stored embeddings. `embeddingCallMade` in the response confirms this. Neither mode calls an LLM to generate an answer.
+
+Unlike `brief`, there is **no clip-boost re-ranking** here — clipped records are never silently preferred; `score` is the raw `ts_rank`/cosine-similarity value.
+
+#### `get_archive_items`
+
+Takes a bounded list of `ids` (max `ARCHIVE_GET_MAX_IDS`) and returns each record's original stored `contentText` verbatim plus provenance — no refetching, re-enrichment, or clipping. Ids not found are reported in `missingIds`, never silently dropped.
+
+`contentText` is never silently truncated: it's split into fixed `ARCHIVE_ITEM_CHUNK_CHARS`-character chunks. Check `totalChunks`/`isLastChunk` on the response and re-call with an incremented `chunkIndex` (applies to every id in the call) to read the rest.
+
+#### Examples
+
+**1. Initial bounded scan:**
+```json
+{"pageSize": 100, "updatedBefore": "2026-09-30T00:00:00Z"}
+```
+→ returns up to 100 items, `nextCursor` (if more remain), and `scanBoundary`.
+
+**2. Continuing after interruption** — pass only the cursor:
+```json
+{"cursor": "<nextCursor from the interrupted call>"}
+```
+
+**3. A later incremental scan**, after the prior scan reported `scanComplete: true` with `scanBoundary: "2026-09-30T00:00:00.000Z"`:
+```json
+{"updatedAfter": "2026-09-30T00:00:00.000Z"}
+```
+
+**4. Searching "agentic trust" within explicit dates:**
+```json
+{"query": "agentic trust", "publishedAfter": "2026-09-01", "publishedBefore": "2026-09-30", "mode": "lexical"}
+```
+
+**5. Fetching source text for verification:**
+```json
+{"ids": ["1234"]}
+```
+→ if `totalChunks > 1`, re-call with `{"ids": ["1234"], "chunkIndex": 1}`, etc.
+
+#### Migration
+
+`migrations/009_archive_discovery.sql` adds two generated (`GENERATED ALWAYS AS ... STORED`) columns — `content_hash` (requires `pgcrypto`) and `search_vector` (full-text search over `title`/`content_text`, using the immutable two-argument `to_tsvector(regconfig, text)` form so no trigger is needed) — plus a GIN index on `search_vector` and a `(updated_at, id)` btree index for keyset pagination. `ADD COLUMN ... STORED` rewrites the table, so existing rows are backfilled automatically; no manual `UPDATE` step is required. Apply it the same way as any other migration (`npm run db:migrate`) — it has **not** been applied to the production database as part of this change.
 
 ### `briefed-setup` skill
 
@@ -408,3 +480,12 @@ As a last resort, `src/cli.ts` registers process-level `uncaughtException`/`unha
 | `FEEDBIN_BASE_URL` | `https://api.feedbin.com/v2` | Feedbin API base URL |
 | `USER_CONFIG_PATH` | `briefed.config.json` | Path to user config file |
 | `BRIEFED_CONFIG_PATH` | — | Fallback for `USER_CONFIG_PATH` if that's unset; both unset falls back to `briefed.config.json` |
+| `ARCHIVE_LIST_DEFAULT_PAGE_SIZE` | `50` | Default `list_archive_items` page size |
+| `ARCHIVE_LIST_MAX_PAGE_SIZE` | `200` | Max `list_archive_items` page size |
+| `ARCHIVE_SEARCH_DEFAULT_LIMIT` | `10` | Default `search_archive` result count |
+| `ARCHIVE_SEARCH_MAX_LIMIT` | `50` | Max `search_archive` result count |
+| `ARCHIVE_GET_MAX_IDS` | `50` | Max ids per `get_archive_items` call |
+| `ARCHIVE_ITEM_CHUNK_CHARS` | `20000` | Chunk size for `get_archive_items` `contentText` continuation |
+| `ARCHIVE_LIST_EXCERPT_CHARS` | `500` | `contentExcerpt` length in `list_archive_items` |
+| `ARCHIVE_SEARCH_EXCERPT_CHARS` | `600` | Excerpt length in `search_archive` results |
+| `ARCHIVE_SCAN_BOUNDARY_SAFETY_MARGIN_MS` | `120000` | Default `list_archive_items` scan-boundary delay behind `now()`, guarding against late-committing writes |
