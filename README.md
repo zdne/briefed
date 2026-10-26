@@ -92,7 +92,7 @@ Use `;` rather than `&&` between sync and digest — `sync` exits non-zero if an
 
 **Automate with GitHub Actions (cloud, no machine required):**
 
-`.github/workflows/daily-digest.yml` runs `sync` + `digest --friendly` on a schedule (default 6am CET/CEST) and commits each day's briefing into the [`paidbyagent-site`](https://github.com/zdne/paidbyagent-site) repo, which builds it with [Eleventy](https://www.11ty.dev/) and publishes to GitHub Pages at [paidbyagent.com](https://paidbyagent.com) — the homepage lists every day's post automatically. Useful when you want briefings to keep generating while your machine is off (e.g. traveling). See docs/HowItWorks.md's "Publishing to paidbyagent.com" section for how the two repos connect.
+`.github/workflows/daily-digest.yml` runs `sync` + `digest --friendly` on a schedule (default 6am CET/CEST) and commits each day's briefing into the [`paidbyagent-site`](https://github.com/zdne/paidbyagent-site) repo, which Cloudflare Pages builds with [Eleventy](https://www.11ty.dev/) and publishes at [paidbyagent.com](https://paidbyagent.com) — the homepage lists every day's post automatically. Useful when you want briefings to keep generating while your machine is off (e.g. traveling). See docs/HowItWorks.md's "Publishing to paidbyagent.com" section for how the two repos connect.
 
 One-time setup:
 

@@ -79,7 +79,7 @@ jobs:
 
       # briefed only ever produces the post's Markdown + front matter; all
       # rendering (Eleventy, templates, CSS) happens in paidbyagent-site's
-      # own deploy.yml, triggered by the push below. See docs/HowItWorks.md's
+      # Cloudflare Pages build, triggered by the push below. See docs/HowItWorks.md's
       # "Publishing to paidbyagent.com" section for the content-contract
       # details between the two repos.
       - name: Checkout site repo
