@@ -88,14 +88,30 @@ describe("acceptPrRewrite", () => {
   });
 
   it("collapses a period on both sides of the link", () => {
-    expect(acceptPrRewrite(original, "- Visa and Meshpay launched a stablecoin card. {{0}}."))
-      .toBe(`- Visa and Meshpay launched a stablecoin card ${link}.`);
+    expect(acceptPrRewrite(original, "- Visa and Meshpay launched a stablecoin card for 175 million merchants. {{0}}."))
+      .toBe(`- Visa and Meshpay launched a stablecoin card for 175 million merchants ${link}.`);
   });
 
   it("rejects rewrites that still contain PR wording, invent placeholders, or are empty", () => {
     expect(acceptPrRewrite(original, "- Visa and Meshpay partnered to enhance payments {{0}}.")).toBeNull();
     expect(acceptPrRewrite(original, "- Visa and Meshpay partnered {{0}} {{1}}.")).toBeNull();
     expect(acceptPrRewrite(original, "")).toBeNull();
+  });
+
+  it("rejects rewrites that turn a claim into a fact", () => {
+    const claim = "Low-confidence social signals include x402’s lack of seller vetting, indicating fragmented experimentation.";
+    expect(acceptPrRewrite(claim, "x402 lacks seller vetting.")).toBeNull();
+    expect(acceptPrRewrite(claim, "Low-confidence social signals include a claim that x402 lacks seller vetting."))
+      .toBe("Low-confidence social signals include a claim that x402 lacks seller vetting.");
+    expect(acceptPrRewrite("- PYMNTS reported banks enhanced checks [x](https://e.com).", "- Banks changed checks [x](https://e.com)."))
+      .toBeNull();
+  });
+
+  it("rejects rewrites that lose a number", () => {
+    const original = "- RZLV reported $130 million revenue in H1 2026, leveraging agentic commerce to boost conversions [x](https://e.com).";
+    expect(acceptPrRewrite(original, "- RZLV reported revenue growth [x](https://e.com).")).toBeNull();
+    expect(acceptPrRewrite(original, "- RZLV reported $130 million revenue in H1 2026 [x](https://e.com)."))
+      .toBe("- RZLV reported $130 million revenue in H1 2026 [x](https://e.com).");
   });
 
   it("adds the original prefix when the model drops it", () => {
@@ -153,11 +169,13 @@ describe("enforceNoPrLanguage", () => {
     });
     const result = await enforceNoPrLanguage(markdown, { generateJson });
 
-    // Lines 0 and 4 were rejected, so they are retried once with feedback, then cut or dropped.
-    expect(generateJson).toHaveBeenCalledTimes(2);
+    // Lines 0 and 4 were rejected, so they are retried with feedback, then asked for the
+    // bare fact, then cut or dropped.
+    expect(generateJson).toHaveBeenCalledTimes(3);
     expect(generateJson.mock.calls[0]![0]).toContain("{{0}}");
     expect(generateJson.mock.calls[1]![0]).toContain('"rejected_because": "still contains: to enhance, enhance"');
     expect(generateJson.mock.calls[1]![0]).not.toContain("Visa and Meshpay");
+    expect(generateJson.mock.calls[2]![0]).toContain("write only the single most concrete fact");
     expect(result).toBe([
       "## Watchlist",
       "### Checkout",
@@ -166,6 +184,16 @@ describe("enforceNoPrLanguage", () => {
       "- Stripe launched the Machine Payments Protocol [x](https://e.com)."
     ].join("\n"));
     expect(findPrLines(result)).toEqual([]);
+  });
+
+  it("keeps a fact-carrying line via the bare-fact pass instead of dropping it", async () => {
+    const original = "- RZLV reported $130 million revenue in H1 2026, leveraging AI-driven agentic commerce technology to boost conversions and revenue [x](https://e.com).";
+    const generateJson = vi.fn()
+      .mockResolvedValueOnce({ lines: [{ id: 0, text: "- RZLV reported revenue gains from innovative AI {{0}}." }] })
+      .mockResolvedValueOnce({ lines: [{ id: 0, text: "" }] })
+      .mockResolvedValueOnce({ lines: [{ id: 0, text: "- RZLV reported $130 million revenue in H1 2026 {{0}}." }] });
+    expect(await enforceNoPrLanguage(original, { generateJson }))
+      .toBe("- RZLV reported $130 million revenue in H1 2026 [x](https://e.com).");
   });
 
   it("falls back to cutting when the LLM call fails", async () => {

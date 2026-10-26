@@ -148,6 +148,11 @@ function restoreLinks(original: string, rewrite: string): string | null {
   const { masked, tokens } = maskLinks(original);
   const used = [...rewrite.matchAll(/\{\{(\d+)\}\}/gu)].map((match) => Number(match[1]));
   if (used.length === 0) {
+    // Links echoed literally instead of as placeholders: accept them if they are unchanged.
+    const echoed = maskLinks(rewrite).tokens;
+    if (echoed.length > 0) {
+      return echoed.length === tokens.length && echoed.every((token) => tokens.includes(token)) ? rewrite : null;
+    }
     // Placeholders dropped: re-append them only if they all trailed the original prose.
     const trailing = masked.match(/((?:\s*\uE000\d+\uE001)+)([.\s]*)$/u);
     if (!trailing || trailing[1]!.match(TOKEN_PATTERN)!.length !== tokens.length) return tokens.length === 0 ? rewrite : null;
@@ -161,19 +166,65 @@ function restoreLinks(original: string, rewrite: string): string | null {
   return rewrite.replace(/\.((?:\s*\{\{\d+\}\})+\s*)\./gu, "$1.").replace(/\{\{(\d+)\}\}/gu, (_match, index: string) => tokens[Number(index)]!);
 }
 
-/**
- * Accepts an LLM rewrite only if it is one line, keeps the original prefix and every
- * link, and contains no PR wording. Returns the restored line, or null.
- */
-export function acceptPrRewrite(original: string, rewrite: string): string | null {
+// Attribution and hedging that a rewrite must not lose, keyed by stem so that
+// "claimed" may become "claims". Losing them turns a claim into a stated fact.
+const QUALIFIER_PATTERN = /\b(low-confidence|unverified|reported(?:ly)?|reports?|claim(?:s|ed)?|alleged(?:ly)?|according to|rumou?r(?:s|ed)?|said|says|stated?|states|plans? to|reddit|twitter|hacker news|follow-up)\b/giu;
+
+function qualifierStem(word: string): string {
+  const lower = word.toLowerCase();
+  if (lower.startsWith("report")) return "report";
+  if (lower.startsWith("claim")) return "claim";
+  if (lower.startsWith("alleg")) return "allege";
+  if (lower.startsWith("rumo")) return "rumor";
+  if (lower === "said" || lower === "says") return "say";
+  if (lower.startsWith("stat")) return "state";
+  if (lower.startsWith("plan")) return "plan";
+  return lower;
+}
+
+function proseOf(line: string): string {
+  return maskLinks(line).masked.replace(TOKEN_PATTERN, " ").replace(/\{\{\d+\}\}/gu, " ");
+}
+
+function qualifiers(line: string): Set<string> {
+  return new Set([...proseOf(line).matchAll(QUALIFIER_PATTERN)].map((match) => qualifierStem(match[1]!)));
+}
+
+function numbers(line: string): string[] {
+  return [...new Set(proseOf(line).match(/\d+(?:[.,]\d+)*/gu) ?? [])];
+}
+
+/** Why a rewrite (with links already restored) is not acceptable; empty when it is. */
+export function rewriteProblems(original: string, line: string): string[] {
+  const problems: string[] = [];
+  const phrases = findPrPhrases(line);
+  if (phrases.length > 0) problems.push(`still contains: ${phrases.join(", ")}`);
+  const lostQualifiers = [...qualifiers(original)].filter((stem) => !qualifiers(line).has(stem));
+  if (lostQualifiers.length > 0) problems.push(`must keep attribution or hedging: ${lostQualifiers.join(", ")}`);
+  const rewriteNumbers = new Set(numbers(line));
+  const lostNumbers = numbers(original).filter((value) => !rewriteNumbers.has(value));
+  if (lostNumbers.length > 0) problems.push(`must keep numbers: ${lostNumbers.join(", ")}`);
+  return problems;
+}
+
+function prepareRewrite(original: string, rewrite: string): string | null {
   const trimmed = rewrite.trim();
   if (!trimmed || trimmed.includes("\n")) return null;
   const prefix = original.match(LINE_PREFIX)?.[1] ?? "";
   const indent = prefix.match(/^\s*/u)?.[0] ?? "";
   const withPrefix = prefix.trim() && !trimmed.startsWith(prefix.trim()) ? `${prefix}${trimmed}` : `${indent}${trimmed}`;
-  const line = restoreLinks(original, withPrefix);
+  return restoreLinks(original, withPrefix);
+}
+
+/**
+ * Accepts an LLM rewrite only if it is one line, keeps the original prefix, every link,
+ * every number, and the attribution/hedging, and contains no PR wording.
+ * Returns the restored line, or null.
+ */
+export function acceptPrRewrite(original: string, rewrite: string): string | null {
+  const line = prepareRewrite(original, rewrite);
   if (line === null) return null;
-  return findPrPhrases(line).length === 0 ? line : null;
+  return rewriteProblems(original, line).length === 0 ? line : null;
 }
 
 function dropSentences(line: string): string | null {
@@ -246,13 +297,20 @@ const rewriteSchema = z.object({
   lines: z.array(z.object({ id: z.number(), text: z.string() }))
 });
 
-export function buildPrRewritePrompt(lines: PrFlaggedLine[]): string {
-  return `Rewrite each briefing line below as a plain factual statement.
+export type PrRewriteMode = "rewrite" | "fact";
+
+export function buildPrRewritePrompt(lines: PrFlaggedLine[], mode: PrRewriteMode = "rewrite"): string {
+  const task = mode === "fact"
+    ? `For each briefing line below, write only the single most concrete fact it contains: "<named actor> <past-tense verb> <object>", with its numbers and its attribution or hedging. No other clauses. At most 25 words.`
+    : "Rewrite each briefing line below as a plain factual statement.";
+  return `${task}
 
 Rules:
-- Keep the named actor, the concrete action, and its object, numbers, and names.
+- Keep the named actor, the concrete action, and its object, names, and every number.
+- Keep attribution and hedging: who reported, said, or claimed it, and qualifiers such as "low-confidence", "reportedly", or "claimed". Never turn a claim or a social signal into a plain fact.
 - End the sentence after the concrete action and its object.
 - Delete every goal, purpose, benefit, effect, interpretation, or positioning clause, such as "to enhance…", "to improve…", "aimed at…", ", advancing…", ", highlighting…", "by improving…", or "for digital growth".
+- If that clause is the only description of what a product, tool, or deal does, keep the description in plain words. Example: "Vertice and RSM collaborated to help procurement teams manage and reduce costs of AI SaaS" becomes "Vertice and RSM partnered on tools for managing AI SaaS costs".
 - Do not use promotional or evaluative words such as enhance, advance, seamless, innovative, empower, unlock, transformative, positioning, notable, or trusted (unless part of a product or protocol name).
 - If the line has no concrete action, only a company's strategy, push, or intent, return an empty string for it.
 - Keep every placeholder such as {{0}} exactly once, in the same position; they stand for source links.
@@ -271,17 +329,22 @@ ${JSON.stringify(lines.map((line) => ({
 }
 
 function rejectionReason(original: string, rewrite: string): string {
-  const phrases = findPrPhrases(rewrite.replace(/\{\{\d+\}\}/gu, ""));
-  if (phrases.length > 0) return `still contains: ${phrases.join(", ")}`;
   if (!rewrite.trim()) return "empty; keep the concrete action if the line has one";
-  return `placeholders must match the original exactly: ${toPlaceholderText(original).match(/\{\{\d+\}\}/gu)?.join(" ") ?? "none"}`;
+  const line = prepareRewrite(original, rewrite);
+  if (line === null) {
+    return `placeholders must match the original exactly: ${toPlaceholderText(original).match(/\{\{\d+\}\}/gu)?.join(" ") ?? "none"}`;
+  }
+  return rewriteProblems(original, line).join("; ");
 }
 
 export interface PrRewriter {
   generateJson(prompt: string, options?: { maxTokens?: number }): Promise<unknown>;
 }
 
-/** Full enforcement: one LLM rewrite of flagged lines, then clause cutting, then dropping what still fails. */
+/**
+ * Full enforcement: two LLM rewrites of flagged lines (the second with feedback), then an
+ * LLM "bare fact" pass, then clause cutting, then dropping what still fails.
+ */
 export async function enforceNoPrLanguage(
   markdown: string,
   ai: PrRewriter,
@@ -293,12 +356,15 @@ export async function enforceNoPrLanguage(
   const lines = markdown.split("\n");
   const accepted = new Map<number, string>();
   let pending = flagged;
-  // Two LLM attempts; the second gets each rejected rewrite back as feedback.
-  for (let attempt = 1; attempt <= 2 && pending.length > 0; attempt += 1) {
-    log(`Asking LLM to rewrite ${pending.length} briefing line(s) with PR wording (attempt ${attempt})`);
+  // Each later attempt gets the rejected rewrite and the reason back as feedback; the last
+  // asks only for the line's bare fact, so a fact-carrying line is kept rather than dropped.
+  const attempts: PrRewriteMode[] = ["rewrite", "rewrite", "fact"];
+  for (const [attempt, mode] of attempts.entries()) {
+    if (pending.length === 0) break;
+    log(`Asking LLM to ${mode === "fact" ? "reduce to the bare fact" : "rewrite"} ${pending.length} briefing line(s) with PR wording (attempt ${attempt + 1})`);
     let parsed: z.infer<typeof rewriteSchema>;
     try {
-      parsed = rewriteSchema.parse(await ai.generateJson(buildPrRewritePrompt(pending)));
+      parsed = rewriteSchema.parse(await ai.generateJson(buildPrRewritePrompt(pending, mode)));
     } catch (error) {
       log(`PR rewrite failed (${(error as Error).message}); falling back to cutting clauses`);
       break;
