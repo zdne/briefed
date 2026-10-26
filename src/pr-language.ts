@@ -56,7 +56,8 @@ const FLAG_PATTERN = new RegExp(
 
 // Markdown links, wiki citations, numeric citations, and bare URLs. Source titles are
 // quoted from the source and rendered as link text; they are not checked or edited.
-const LINK_PATTERN = /\[\[[^\]]*\]\([^)]*\)\]|\[\[#[^\]]*\]\]|\[[^\]]*\]\([^)]*\)|\[\d+\]|\(https?:\/\/[^)\s]*\)|https?:\/\/\S+/gu;
+// Link text may contain escaped brackets, e.g. "[\[AINews\] Title](url)".
+const LINK_PATTERN = /\[\[(?:\\.|[^\]\\])*\]\([^)]*\)\]|\[\[#[^\]]*\]\]|\[(?:\\.|[^\]\\])*\]\([^)]*\)|\[\d+\]|\(https?:\/\/[^)\s]*\)|https?:\/\/\S+/gu;
 const TOKEN_PATTERN = /\uE000(\d+)\uE001/gu;
 // Ignores abbreviations such as "U.S." followed by lowercase text.
 const SENTENCE_END = /(?<!\b[A-Z])[.;!?](?=\s+[A-Z\uE000]|\s*$|\uE000)/u;
@@ -67,6 +68,8 @@ export interface PrFlaggedLine {
   index: number;
   text: string;
   phrases: string[];
+  /** A previous LLM rewrite that failed the check, sent back as feedback on retry. */
+  rejected?: string;
 }
 
 interface MaskedLine {
@@ -259,7 +262,19 @@ Rules:
 Return JSON: {"lines":[{"id": number, "text": string}]}
 
 Lines:
-${JSON.stringify(lines.map((line) => ({ id: line.index, text: toPlaceholderText(line.text), problem: line.phrases })), null, 2)}`;
+${JSON.stringify(lines.map((line) => ({
+    id: line.index,
+    text: toPlaceholderText(line.text),
+    problem: line.phrases,
+    ...(line.rejected === undefined ? {} : { rejected_attempt: line.rejected, rejected_because: rejectionReason(line.text, line.rejected) })
+  })), null, 2)}`;
+}
+
+function rejectionReason(original: string, rewrite: string): string {
+  const phrases = findPrPhrases(rewrite.replace(/\{\{\d+\}\}/gu, ""));
+  if (phrases.length > 0) return `still contains: ${phrases.join(", ")}`;
+  if (!rewrite.trim()) return "empty; keep the concrete action if the line has one";
+  return `placeholders must match the original exactly: ${toPlaceholderText(original).match(/\{\{\d+\}\}/gu)?.join(" ") ?? "none"}`;
 }
 
 export interface PrRewriter {
@@ -275,27 +290,35 @@ export async function enforceNoPrLanguage(
   const flagged = findPrLines(markdown);
   if (flagged.length === 0) return markdown;
 
-  log(`Asking LLM to rewrite ${flagged.length} briefing line(s) with PR wording`);
-  const rewrites = new Map<number, string>();
-  try {
-    const parsed = rewriteSchema.parse(await ai.generateJson(buildPrRewritePrompt(flagged)));
-    for (const item of parsed.lines) rewrites.set(item.id, item.text);
-  } catch (error) {
-    log(`PR rewrite failed (${(error as Error).message}); falling back to cutting clauses`);
+  const lines = markdown.split("\n");
+  const accepted = new Map<number, string>();
+  let pending = flagged;
+  // Two LLM attempts; the second gets each rejected rewrite back as feedback.
+  for (let attempt = 1; attempt <= 2 && pending.length > 0; attempt += 1) {
+    log(`Asking LLM to rewrite ${pending.length} briefing line(s) with PR wording (attempt ${attempt})`);
+    let parsed: z.infer<typeof rewriteSchema>;
+    try {
+      parsed = rewriteSchema.parse(await ai.generateJson(buildPrRewritePrompt(pending)));
+    } catch (error) {
+      log(`PR rewrite failed (${(error as Error).message}); falling back to cutting clauses`);
+      break;
+    }
+    const rewrites = new Map(parsed.lines.map((item) => [item.id, item.text]));
+    pending = pending.flatMap((item) => {
+      const rewrite = rewrites.get(item.index);
+      const line = rewrite === undefined ? null : acceptPrRewrite(item.text, rewrite);
+      if (line !== null) {
+        accepted.set(item.index, line);
+        return [];
+      }
+      return [{ ...item, rejected: rewrite ?? "" }];
+    });
   }
 
-  const lines = markdown.split("\n");
   const unfixable: number[] = [];
-  let rewritten = 0;
   let cut = 0;
-  for (const item of flagged) {
-    const rewrite = rewrites.get(item.index);
-    const accepted = rewrite === undefined ? null : acceptPrRewrite(item.text, rewrite);
-    if (accepted) {
-      lines[item.index] = accepted;
-      rewritten += 1;
-      continue;
-    }
+  for (const [index, line] of accepted) lines[index] = line;
+  for (const item of pending) {
     const trimmed = cutPrClauses(item.text);
     if (findPrPhrases(trimmed).length === 0) {
       lines[item.index] = trimmed;
@@ -304,6 +327,7 @@ export async function enforceNoPrLanguage(
       unfixable.push(item.index);
     }
   }
+  const rewritten = accepted.size;
   log(`PR wording: ${rewritten} line(s) rewritten, ${cut} cut, ${unfixable.length} dropped`);
   return dropPrLines(lines.join("\n"), unfixable);
 }

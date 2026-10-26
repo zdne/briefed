@@ -34,6 +34,12 @@ describe("findPrPhrases", () => {
   });
 });
 
+describe("findPrPhrases with escaped link text", () => {
+  it("treats links with escaped brackets as links", () => {
+    expect(findPrPhrases("- OpenAI published 722 math manuscripts [[\\[AINews\\] “the most significant moment”](https://www.latent.space/p/x)].")).toEqual([]);
+  });
+});
+
 describe("cutPrClauses", () => {
   it("cuts purpose and interpretation clauses but keeps links and punctuation", () => {
     expect(cutPrClauses(`- Spreedly appointed Darren Bounds as CFO to support scaling payments infrastructure ${link}.`))
@@ -147,8 +153,11 @@ describe("enforceNoPrLanguage", () => {
     });
     const result = await enforceNoPrLanguage(markdown, { generateJson });
 
-    expect(generateJson).toHaveBeenCalledTimes(1);
+    // Lines 0 and 4 were rejected, so they are retried once with feedback, then cut or dropped.
+    expect(generateJson).toHaveBeenCalledTimes(2);
     expect(generateJson.mock.calls[0]![0]).toContain("{{0}}");
+    expect(generateJson.mock.calls[1]![0]).toContain('"rejected_because": "still contains: to enhance, enhance"');
+    expect(generateJson.mock.calls[1]![0]).not.toContain("Visa and Meshpay");
     expect(result).toBe([
       "## Watchlist",
       "### Checkout",
