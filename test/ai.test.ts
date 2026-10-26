@@ -362,6 +362,15 @@ describe("buildFriendlyDigestPrompt", () => {
     expect(prompt).toContain("Deduplicate repeated claims across sections");
   });
 
+  it("forbids purpose clauses and promotional wording in the summary and bullets", () => {
+    const prompt = buildFriendlyDigestPrompt(digest, "# Briefing", "plain");
+
+    expect(prompt).toContain("\"Summary: <Named actor> <past-tense verb> <object>.\"");
+    expect(prompt).toContain("Wording (applies to the summary, every bullet, and Honest Read):");
+    expect(prompt).toContain("Never add a purpose, benefit, effect, or positioning clause");
+    expect(prompt).toContain("Bad: Target Corporation is advancing its agentic commerce strategy for digital growth.");
+  });
+
   it("distinguishes plain and warm style instructions", () => {
     const plain = buildFriendlyDigestPrompt(digest, "# Briefing", "plain");
     const warm = buildFriendlyDigestPrompt(digest, "# Briefing", "warm");

@@ -2,7 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { z } from "zod";
 import { config, requireConfig } from "./config.js";
+import { cleanFriendlyDigestMarkdown } from "./friendly-digest.js";
 import type { DigestMarkdownResult } from "./markdown.js";
+import { enforceNoPrLanguage } from "./pr-language.js";
 import type {
   DigestCandidate,
   DigestSourceContext,
@@ -56,7 +58,7 @@ export class AnalystAI {
   async enrich(title: string | null, content: string): Promise<Enrichment> {
     const prompt = `Analyze this archive entry.
 Return JSON with:
-- summary: a concise factual summary of at most 120 words
+- summary: a concise factual summary of at most 120 words. State only what happened: who did what, with names, numbers, and dates. Do not repeat the source's stated goals, benefits, positioning, or promotional wording (for example "to enhance…", "advancing agentic commerce", "seamless", "innovative"), and do not add interpretation such as what the item highlights, signals, or positions.
 - topics: 3-8 short lowercase topic tags, never more than 10
 - entities: only the 30 most important named entities as {"name": string, "type": string}
 
@@ -162,9 +164,13 @@ ${formatSources(sources)}`);
   async friendlyDigest(
     digest: DigestMarkdownResult,
     canonicalMarkdown: string,
-    style: FriendlyDigestStyle = "plain"
+    style: FriendlyDigestStyle = "plain",
+    log: (message: string) => void = () => {}
   ): Promise<string> {
-    return this.generateText(buildFriendlyDigestPrompt(digest, canonicalMarkdown, style));
+    const markdown = cleanFriendlyDigestMarkdown(
+      await this.generateText(buildFriendlyDigestPrompt(digest, canonicalMarkdown, style))
+    );
+    return enforceNoPrLanguage(markdown, this, log);
   }
 
   /** Generic "call the LLM, parse JSON back" primitive for any feature that needs structured output. */
@@ -345,6 +351,8 @@ Rules:
 - If a sentence would use one of the forbidden phrases, rewrite it as a concrete observation from the sources.
 - Every factual claim must be grounded in the supplied sources.
 - Treat supplied summaries as input notes, not wording to copy.
+- End each bullet after the concrete action and its object, numbers, and names. Never add a purpose, benefit, effect, or positioning clause such as "to enhance…", "to improve…", "aimed at…", ", advancing…", ", highlighting…", "by enhancing…", or "for digital growth".
+- Do not copy slogans from source titles, such as "Advancing Agentic Commerce" or "for Trusted Agentic Commerce".
 - Do not repeat source-summary interpretation such as what an item may transform, improve, enhance, signal, or drive.
 - Prefer the smallest concrete claim: who reported/published/asked what.
 - Do not infer adoption, trust, market maturity, or ecosystem momentum unless a source explicitly states it.
@@ -474,7 +482,8 @@ Use only the supplied canonical briefing body and source metadata. Do not use ou
 Required output:
 - Return only Markdown.
 - Do not include a title, date range, candidate count, or source count anywhere in your output — the application prepends these programmatically before your content.
-- The first line of your output must be a one-sentence summary in this exact form: "Summary: <sentence>". Maximum 15 words. Plain factual tone, no adjectives, no marketing language.
+- The first line of your output must be a one-sentence summary in this exact form: "Summary: <Named actor> <past-tense verb> <object>." Maximum 15 words. Plain factual tone, no adjectives, no marketing language.
+- The summary sentence ends right after the object. It must not contain a purpose or effect clause ("to enhance…", "for digital growth", ", advancing…") and must not name the watchlist theme (such as "agentic commerce") unless it is part of a product or organization name.
 - The summary must report one specific, concrete fact from today's bullets — name the actual company, protocol, product, or person involved. Do not describe the general theme of the watchlist (e.g. never write something like "Agentic commerce continues to grow" or "AI payments are evolving") — that's true every day and tells the reader nothing new.
 - After the summary line, leave one blank line, then start the sections (e.g. "## Watchlist").
 - Preserve the canonical briefing's Watchlist / Focus Areas / Other Items hierarchy when present.
@@ -492,6 +501,20 @@ Required output:
 - Do not promote weakly related general-news items above watchlist or focus-area items.
 - Deduplicate repeated claims across sections; keep the strongest placement and source link.
 
+Wording (applies to the summary, every bullet, and Honest Read):
+- End each sentence after the concrete action and its object, numbers, and names.
+- Never add a purpose, benefit, effect, or positioning clause: no "to enhance…", "to improve…", "to streamline…", "aimed at…", ", advancing…", ", enabling…", ", highlighting…", ", underscoring…", "by enhancing…", or "for digital growth".
+- Do not use promotional or evaluative words: enhance, advance, seamless, innovative, empower, unlock, transformative, strategy push, notable player, new era.
+- Do not copy slogans from source titles into your own sentences; the title is already shown as the link text.
+- Bad: American Express introduced an Intent Intelligence Framework to enhance trusted agentic commerce.
+  Better: American Express published an Intent Intelligence Framework.
+- Bad: Target Corporation is advancing its agentic commerce strategy for digital growth.
+  Better: leave it out unless the source reports a concrete action, then state that action.
+- Bad: L Catterton invested in Glance, an AI-powered shopping assistant, advancing agentic commerce.
+  Better: L Catterton invested in Glance, an AI shopping assistant.
+- Bad: Spreedly appointed Darren Bounds as CFO to support scaling payments infrastructure for enterprise and agentic commerce.
+  Better: Spreedly appointed Darren Bounds as CFO.
+
 Style:
 ${friendlyDigestStyleInstructions(style)}
 
@@ -506,7 +529,7 @@ function friendlyDigestStyleInstructions(style: FriendlyDigestStyle): string {
   if (style === "warm") {
     return `- Use a slightly warmer newsletter tone.
 - Emoji headings are allowed when they improve scanning.
-- Keep the phrasing polished but concise.`;
+- Keep the phrasing concise; warmth must not add promotional wording.`;
   }
 
   return `- Use a concise plain-newsletter tone.

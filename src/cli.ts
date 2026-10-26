@@ -9,7 +9,7 @@ import { createDigest } from "./digest.js";
 import { FeedbinClient } from "./feedbin.js";
 import { formatGmailRefreshTokenEnv, runGmailAuthFlow } from "./gmail-auth.js";
 import { GmailClient } from "./gmail.js";
-import { cleanFriendlyDigestMarkdown, friendlyDigestStyle } from "./friendly-digest.js";
+import { friendlyDigestStyle } from "./friendly-digest.js";
 import { renderDigestMarkdown, renderQueryMarkdown, type DigestMarkdownResult } from "./markdown.js";
 import {
   digestOutputPath,
@@ -523,7 +523,7 @@ digestCommand
     const ai = new AnalystAI();
     log("Requesting friendly briefing rewrite from LLM");
     const markdown = buildFriendlyDigestHeader(result)
-      + cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));
+      + await ai.friendlyDigest(result, canonicalMarkdown, style, log);
     log("Received friendly briefing rewrite");
     const outputPath = options.output ?? friendlyDigestOutputPath(
       config.DIGEST_OUTPUT_DIR,
@@ -731,7 +731,7 @@ async function createDigestAction(options: {
 
   log("Requesting friendly briefing rewrite from LLM");
   const markdown = buildFriendlyDigestHeader(result)
-    + cleanFriendlyDigestMarkdown(await ai.friendlyDigest(result, canonicalMarkdown, style));
+    + await ai.friendlyDigest(result, canonicalMarkdown, style, log);
   log("Received friendly briefing rewrite");
   const outputPath = options.output ?? friendlyDigestOutputPath(config.DIGEST_OUTPUT_DIR, createdAt, { style });
   const path = await writeMarkdownFile(outputPath, markdown);

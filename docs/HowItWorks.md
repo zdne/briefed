@@ -231,9 +231,18 @@ The briefing command:
 
 1. Loads candidates and runs topic-aware selection.
 2. Sends selected entries to the configured LLM for a canonical source-grounded briefing.
-3. Stores the canonical briefing in the `digests` table.
-4. Writes the canonical Markdown file to `DIGEST_OUTPUT_DIR`.
-5. Generates a friendly Markdown rewrite too, if `--friendly` was passed.
+3. Removes press-release wording from the canonical body (see below).
+4. Stores the canonical briefing in the `digests` table.
+5. Writes the canonical Markdown file to `DIGEST_OUTPUT_DIR`.
+6. Generates a friendly Markdown rewrite too, if `--friendly` was passed, and removes press-release wording from it the same way.
+
+**No press-release wording (`src/pr-language.ts`):** briefings must not carry PR phrasing such as "to enhance trusted agentic commerce", ", advancing agentic commerce", or "strategy for digital growth". The LLM copies this from source headlines and enrichment summaries, so the prompts (enrichment, canonical, friendly) forbid purpose/benefit/positioning clauses and promotional words, and `enforceNoPrLanguage` then enforces it in code on both the canonical body and the friendly rewrite:
+
+1. Every prose line (summary line, bullets, Honest Read paragraphs; not headings, link text, or URLs) is checked against two pattern sets: trailing purpose/interpretation clauses (`to enhance|improve|advance|enable…`, `aimed at…`, `, advancing|highlighting|positioning…`, `by enhancing…`) and promotional words (`seamless`, `innovative`, `enhance*`, `advancing`, `digital growth`, `trusted agentic commerce`, `robust`, `significant`…).
+2. Flagged lines go to the LLM in one extra call, with links replaced by `{{n}}` placeholders. A rewrite is accepted only if it keeps every link (restored in code) and passes the same check.
+3. If a rewrite is missing or rejected, the offending clause is cut deterministically; if the line still fails, it is dropped: the `Summary:` line is removed (the post is published without a `summary:`), a bullet is removed with its continuation lines, or the offending sentence is removed from a paragraph. An emptied watchlist subsection gets the standard "No meaningful new signal found in this window." line; other emptied sections are removed.
+
+The run logs how many lines were rewritten, cut, and dropped. When nothing is flagged, no extra LLM call is made.
 
 **Output modes:**
 

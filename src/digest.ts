@@ -12,6 +12,7 @@ import {
   selectDigestSources
 } from "./digest-selection.js";
 import type { DigestCandidate, TopicClassification } from "./types.js";
+import { enforceNoPrLanguage } from "./pr-language.js";
 import { loadUserConfig } from "./user-config.js";
 
 export type DigestLogger = (message: string) => void;
@@ -120,7 +121,7 @@ export async function createDigest(
   );
 
   log(`Generating briefing with ${sources.length} sources using the configured LLM`);
-  const body = await ai.digest(sources, hours, {
+  const rawBody = await ai.digest(sources, hours, {
     requiredTopics: userConfig.briefing.requiredTopics,
     optionalTopics: userConfig.briefing.optionalTopics,
     sourceContexts: selection.selectedSources.map((selectedSource) => ({
@@ -129,6 +130,7 @@ export async function createDigest(
       signalLabel: selectedSource.signalLabel
     }))
   });
+  const body = await enforceNoPrLanguage(rawBody, ai, log);
   log("Briefing generation complete; storing result");
   const id = await saveDigest(start, end, sources.map((source) => source.id), body);
   log(`Stored briefing ${id}`);
