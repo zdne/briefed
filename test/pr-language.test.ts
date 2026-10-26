@@ -27,16 +27,32 @@ describe("findPrPhrases", () => {
     expect(findPrPhrases("- Example Corp reported a model update [[#Source 1|1]].")).toEqual([]);
   });
 
+  it("does not treat a stated plan or agreement as a purpose clause", () => {
+    expect(findPrPhrases("- YES Bank plans to expand its UPI payment business after MDR fees were removed [x](https://e.com).")).toEqual([]);
+    expect(findPrPhrases("- Visa agreed to acquire BioCatch for $2.4 billion [x](https://e.com).")).toEqual([]);
+    expect(findPrPhrases("- Visa acquired BioCatch to enhance fraud detection [x](https://e.com).")).toContain("to enhance");
+  });
+
   it("does not flag factual wording", () => {
     expect(findPrPhrases("- Circle's Chief Strategy Officer said USDC settles agent payments.")).toEqual([]);
     expect(findPrPhrases("- OpenAI paused advanced models after a sandbox escape.")).toEqual([]);
     expect(findPrPhrases("- Forter published the Trusted Agentic Commerce Protocol.")).toEqual([]);
+    expect(findPrPhrases("- Stable unlocked 100 billion tokens.")).toEqual([]);
+    expect(findPrPhrases("- Stable unlocked new value for users.")).toContain("unlocked");
   });
 });
 
 describe("findPrPhrases with escaped link text", () => {
   it("treats links with escaped brackets as links", () => {
     expect(findPrPhrases("- OpenAI published 722 math manuscripts [[\\[AINews\\] “the most significant moment”](https://www.latent.space/p/x)].")).toEqual([]);
+  });
+});
+
+describe("names and quoted titles", () => {
+  it("does not flag capitalized names or quoted titles", () => {
+    expect(findPrPhrases("- BigGo Finance covered the Linux Foundation's Agentic AI Innovation Fund adding four projects [x](https://e.com).")).toEqual([]);
+    expect(findPrPhrases('- Gladstone et al. published "Explorative Modeling: Unlocking a Third Pretraining Axis" [x](https://e.com).')).toEqual([]);
+    expect(findPrPhrases("- Auth0 launched new identity innovations [x](https://e.com).")).toEqual(["innovations"]);
   });
 });
 
@@ -115,8 +131,25 @@ describe("acceptPrRewrite", () => {
   });
 
   it("adds the original prefix when the model drops it", () => {
-    expect(acceptPrRewrite("Summary: Skyfire and Forter partnered to improve checkout.", "Skyfire and Forter partnered."))
-      .toBe("Summary: Skyfire and Forter partnered.");
+    expect(acceptPrRewrite("Summary: Skyfire and Forter partnered to improve checkout.", "Skyfire and Forter partnered on checkout fraud prevention."))
+      .toBe("Summary: Skyfire and Forter partnered on checkout fraud prevention.");
+  });
+
+  it("rejects rewrites that stop on their verb", () => {
+    expect(acceptPrRewrite("Summary: Skyfire and Forter partnered to improve checkout.", "Skyfire and Forter partnered.")).toBeNull();
+    expect(acceptPrRewrite(
+      "- A marketplace for MCP servers, raegentai.com, was created to enable discovery, renting, and monetization [x](https://e.com).",
+      "- A marketplace for MCP servers, raegentai.com, was created {{0}}."
+    )).toBeNull();
+    expect(acceptPrRewrite("- A project aims to generate MCP servers for e-commerce platforms [x](https://e.com).", "- A project {{0}}.")).toBeNull();
+  });
+
+  it("rejects rewrites that drop most of what the line is about, except in bare-fact mode", () => {
+    const original = "- Visa agreed to acquire BioCatch for $2.4 billion to enhance upstream payment fraud detection using behavioral intelligence during digital banking sessions [x](https://e.com).";
+    expect(acceptPrRewrite(original, "- Visa agreed to acquire BioCatch for $2.4 billion {{0}}.")).toBeNull();
+    expect(acceptPrRewrite(original, "- Visa agreed to acquire BioCatch, which detects payment fraud using behavioral intelligence in digital banking sessions, for $2.4 billion {{0}}."))
+      .not.toBeNull();
+    expect(acceptPrRewrite(original, "- Visa agreed to acquire BioCatch for $2.4 billion {{0}}.", "fact")).not.toBeNull();
   });
 });
 
@@ -145,6 +178,13 @@ describe("dropPrLines", () => {
       "## Honest Read",
       "Strongest selected signals came from Visa."
     ].join("\n"));
+  });
+});
+
+describe("dropPrLines for multi-sentence bullets", () => {
+  it("keeps the sentences without PR wording", () => {
+    const markdown = "- FetchSandbox MCP provides sandbox twins of APIs like Stripe. It is a seamless tool. It addresses duplicate charges from non-idempotent webhooks.";
+    expect(dropPrLines(markdown, [0])).toBe("- FetchSandbox MCP provides sandbox twins of APIs like Stripe. It addresses duplicate charges from non-idempotent webhooks.");
   });
 });
 
